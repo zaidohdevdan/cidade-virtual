@@ -33,7 +33,36 @@ Inicialização e indexação da estrutura base do monorepo Nx/Turbo conforme co
 - `nx run-many -t lint --all`: Executado com sucesso (8/8 projetos passaram).
 - `nx run-many -t test --all`: Executado com sucesso (8/8 projetos passaram).
 
+---
+
+## Task ID: 1-mvp-rua-central
+- **Data:** 2026-10-13
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Operacional (Passo 1 do MVP — Ambiente 3D em Three.js)
+
+### 1. Resumo Executivo
+Implementação do ambiente 3D interativo da Rua Central no `apps/web` com Three.js, contendo a infraestrutura física e semiótica solicitada por Daniel para aprendizado e observação dos agentes.
+
+### 2. Elementos Construídos
+- **Rua & Infraestrutura:** Asfalto escuro (120m), faixas amarelas tracejadas centrais, guias brancas e calçadas elevadas de concreto com meio-fio em ambos os lados.
+- **Faixa de Pedestres:** Pintura transversal com 10 listras brancas reflexivas no centro da via para travessia segura.
+- **Semáforo Funcional:** Poste e braço metálico com 3 lâmpadas volumétricas (Vermelho, Amarelo, Verde) com ciclo dinâmico automático e controle manual God Mode.
+- **Placa "PROIBIDO JOGAR LIXO":** Textura procedural 2D Canvas em alta definição (1024x1400) com moldura de advertência, pictograma internacional de proibição, tipografia clara e citação legal (Lei 12.305/10), voltada para os pedestres.
+- **Lixeira Pública Municipal:** Instalada na calçada logo à frente da placa, criando a contraparte funcional da regra de descarte.
+- **Ambientação Urbana:** Postes de iluminação pública com lâmpadas quentes, árvores com copas volumétricas e prédios estilizados em ambos os lados da via.
+- **Avatar Jogável (Daniel):** Modelo 3D com indicador direcional/halo, movimentação em WASD, sprint com Shift, animação procedural de passos e física de colisão nos limites da calçada.
+- **Câmera:** Alternância suave entre 3ª Pessoa (órbita com mouse e zoom) e 1ª Pessoa (tecla C).
+- **HUD Glassmorphism (God Mode):**
+  - **Sensor de Observação Semântica:** Detecta proximidade de objetos (Placa de lixo, Semáforo, Faixa, Lixeira) e exibe o *Script Social Emergente* que orientará o RAG dos NPCs.
+  - Controles God Mode de ciclo de semáforo e iluminação (Dia / Pôr do Sol / Noite).
+  - Modal integrado com retorno JSON fiel à Tool `getSceneSnapshot`.
+
+### 3. Validação de Aceite
+- `nx run-many -t build --all`: 8/8 projetos passaram sem erro.
+- `nx run-many -t lint --all`: 8/8 projetos passaram sem erro.
+- Dev Server Vite executando localmente em `http://127.0.0.1:3000/`.
+
 ### 4. Próximos Passos Sugeridos
-1. **Passo 1 do Roadmap MVP:** Desenvolver ambiente fechado em Three.js (`apps/web`) com uma rua/praça renderizada e movimentação WASD para o avatar de Daniel.
-2. **Integração de WebSocket:** Implementar gateway Socket.io em `apps/api` para streaming de posições de avatares e broadcast de eventos.
-3. **Persistência Qdrant (Passo 2 do MVP):** Conectar `packages/memory` a uma instância local do Qdrant (Docker) para persistência real de embeddings e memórias.
+1. **Passo 2 do MVP:** Popular a cena com 3 a 5 NPCs iniciais em Fase Meta de Consciência.
+2. **Integração de Memória:** Conectar os scripts sociais observados pelos NPCs ao Qdrant para recuperação via RAG.

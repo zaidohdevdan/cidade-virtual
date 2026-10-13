@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cidade Virtual de IAs Humanizadas — Rua Central (Passo 1 MVP)</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <!-- Container 3D Three.js -->
+    <div id="canvas-container"></div>
+
+    <!-- Interface HUD Overlay (God Mode) -->
+    <div class="hud-overlay" id="hud-root">
+      <!-- Barra Superior -->
+      <header class="top-bar">
+        <div class="brand-card" id="brand-card">
+          <div class="brand-title">
+            <span>CIDADE VIRTUAL DE IAS HUMANIZADAS</span>
+            <span class="badge-tag" id="badge-mvp">MVP Passo 1</span>
+          </div>
+          <div class="brand-subtitle" id="brand-subtitle">
+            Cenário: Rua Central | Avatar: Daniel (God Mode) | Observação & Semiótica
+          </div>
+        </div>
+
+        <!-- Painel de Controles Rápidos do God Mode -->
+        <div class="tools-panel" id="tools-panel">
+          <button class="action-btn" id="btn-traffic-light" title="Alternar ciclo do semáforo">
+            🚦 Semáforo: VERMELHO
+          </button>
+          <button class="action-btn" id="btn-time-cycle" title="Alternar iluminação e hora">
+            ☀️ Clima/Hora: Dia
+          </button>
+          <button class="action-btn" id="btn-snapshot" title="Executar Tool getSceneSnapshot">
+            📸 Snapshot da Cena
+          </button>
+        </div>
+      </header>
+
+      <!-- Painel Central: Sensor de Observação Semântica (Simulação de Percepção de NPC) -->
+      <div class="observation-container" id="observation-container" style="opacity: 0;">
+        <div class="observation-card" id="observation-card">
+          <div class="obs-header">
+            <div class="obs-tag">
+              <span>👁️ PERCEPÇÃO SEMÂNTICA DO AGENTE</span>
+            </div>
+            <div class="obs-weight" id="obs-weight">Peso Emocional: 85%</div>
+          </div>
+          <div class="obs-title" id="obs-title">Placa: Proibido Jogar Lixo</div>
+          <div class="obs-desc" id="obs-desc">
+            Placa de sinalização vertical proibindo o descarte de resíduos na calçada sob pena de multa.
+          </div>
+          <div class="obs-rule-box">
+            <div class="obs-rule-label">Script Social Emergente (Memória RAG)</div>
+            <div class="obs-rule-text" id="obs-rule-text">
+              Não descartar resíduos no chão. Guardar o lixo até encontrar uma lixeira pública.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra Inferior -->
+      <footer class="bottom-bar">
+        <!-- Ajuda de Teclas -->
+        <div class="controls-help" id="controls-help">
+          <div><span class="key-badge">W</span> <span class="key-badge">A</span> <span class="key-badge">S</span> <span class="key-badge">D</span> Mover</div>
+          <div><span class="key-badge">Shift</span> Correr</div>
+          <div><span class="key-badge">Mouse Drag</span> Girar Câmera</div>
+          <div><span class="key-badge">C</span> Alternar Visão (<span id="camera-mode-text">3ª Pessoa</span>)</div>
+        </div>
+
+        <!-- Telemetria do Avatar -->
+        <div class="telemetry-card" id="telemetry-card">
+          <div>Posição: <span class="telemetry-val" id="telemetry-coords">X: -8.0m | Z: 2.0m</span></div>
+          <div>Velocidade: <span class="telemetry-val" id="telemetry-speed">0.0 km/h</span></div>
+          <div>Ambiente: <span class="telemetry-val">Praça / Rua Central</span></div>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Modal de Inspeção da Tool getSceneSnapshot -->
+    <div class="modal-backdrop" id="snapshot-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title">Retorno da Tool: getSceneSnapshot()</h2>
+          <button class="modal-close-btn" id="modal-close">&times;</button>
+        </div>
+        <p style="font-size: 13px; color: #94a3b8; margin-bottom: 14px;">
+          Este é o JSON estruturado recuperado pelo Agente Antigravity para tomar decisões contextuais e orientar o comportamento dos NPCs no cenário:
+        </p>
+        <pre class="json-viewer"><code id="snapshot-json"></code></pre>
+      </div>
+    </div>
+
+    <!-- Script de Inicialização -->
+    <script type="module" src="./src/index.ts"></script>
+  </body>
+</html>
