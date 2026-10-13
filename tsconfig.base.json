@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@cidade-virtual/types": ["packages/types/index.ts"],
+      "@cidade-virtual/tools": ["packages/tools/index.ts"],
+      "@cidade-virtual/tools/schemas": ["packages/tools/schemas.ts"],
+      "@cidade-virtual/tools/*": ["packages/tools/*"],
+      "@cidade-virtual/memory": ["packages/memory/index.ts"],
+      "@cidade-virtual/memory/*": ["packages/memory/*"],
+      "@cidade-virtual/agents": ["packages/agents/index.ts"],
+      "@cidade-virtual/agents/*": ["packages/agents/*"],
+      "@cidade-virtual/config": ["packages/config/index.ts"],
+      "@cidade-virtual/config/*": ["packages/config/*"],
+      "@cidade-virtual/api": ["apps/api/src/main.ts"],
+      "@cidade-virtual/api/tools": ["apps/api/src/tools/index.ts"],
+      "@cidade-virtual/api/services": ["apps/api/src/services/index.ts"],
+      "@cidade-virtual/api/*": ["apps/api/src/*"],
+      "@cidade-virtual/web": ["apps/web/src/index.ts"],
+      "@cidade-virtual/admin": ["apps/admin/src/index.ts"]
+    }
+  }
+}

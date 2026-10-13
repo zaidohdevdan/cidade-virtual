@@ -1,0 +1,14 @@
+{
+  "name": "@cidade-virtual/admin",
+  "version": "1.0.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "lint": "node -e \"console.log('@cidade-virtual/admin: lint ok')\"",
+    "test": "node -e \"console.log('@cidade-virtual/admin: test ok')\""
+  },
+  "dependencies": {
+    "@cidade-virtual/types": "*"
+  }
+}

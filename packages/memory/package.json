@@ -1,0 +1,14 @@
+{
+  "name": "@cidade-virtual/memory",
+  "version": "1.0.0",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "lint": "node -e \"console.log('@cidade-virtual/memory: lint ok')\"",
+    "test": "node -e \"console.log('@cidade-virtual/memory: test ok')\""
+  },
+  "dependencies": {
+    "@cidade-virtual/types": "*"
+  }
+}

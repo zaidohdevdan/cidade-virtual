@@ -1,0 +1,21 @@
+{
+  "name": "@cidade-virtual/agents",
+  "version": "1.0.0",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "lint": "node -e \"console.log('@cidade-virtual/agents: lint ok')\"",
+    "test": "node -e \"console.log('@cidade-virtual/agents: test ok')\""
+  },
+  "dependencies": {
+    "@cidade-virtual/types": "*",
+    "@cidade-virtual/tools": "*",
+    "@cidade-virtual/memory": "*",
+    "@cidade-virtual/api": "*",
+    "@langchain/core": "^0.3.15",
+    "langchain": "^0.3.5",
+    "@langchain/openai": "^0.3.11",
+    "zod": "^3.23.8"
+  }
+}
