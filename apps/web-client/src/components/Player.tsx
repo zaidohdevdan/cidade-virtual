@@ -4,10 +4,13 @@ import * as THREE from 'three';
 import { DanielAvatar, MovementInput } from '../avatars/daniel-avatar';
 import { InteractiveObject, ObstacleCollider } from '../scenes/city-scene';
 
+import { VehicleAgent } from '../vehicles/vehicle-agent';
+
 interface PlayerProps {
   player: DanielAvatar;
   cameraAngleY: number;
   colliders: ObstacleCollider[];
+  vehicles?: VehicleAgent[];
   interactiveObjects: InteractiveObject[];
   onTelemetryUpdate: (x: number, z: number, speedKmH: number) => void;
   onObservationUpdate: (obs: InteractiveObject | null) => void;
@@ -17,6 +20,7 @@ export const Player: React.FC<PlayerProps> = ({
   player,
   cameraAngleY,
   colliders,
+  vehicles,
   interactiveObjects,
   onTelemetryUpdate,
   onObservationUpdate,
@@ -91,8 +95,18 @@ export const Player: React.FC<PlayerProps> = ({
   useFrame((_, delta) => {
     const clampedDelta = Math.min(delta, 0.1);
 
+    // Reúne colisores estáticos da cidade e dinâmicos dos veículos em movimento
+    const dynamicColliders = colliders.slice();
+    if (vehicles && vehicles.length > 0) {
+      for (const v of vehicles) {
+        for (const c of v.getColliders()) {
+          dynamicColliders.push(c);
+        }
+      }
+    }
+
     // Atualiza avatar com resposta de colisão e animação de marcha
-    player.update(clampedDelta, inputRef.current, cameraAngleY, colliders);
+    player.update(clampedDelta, inputRef.current, cameraAngleY, dynamicColliders);
 
     // Atualiza telemetria
     onTelemetryUpdate(player.position.x, player.position.z, player.speed * 3.6);

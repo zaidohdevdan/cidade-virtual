@@ -134,9 +134,15 @@ export function createSynapseCity(): {
       if (btn) btn.innerHTML = `🚦 Semáforo: ${tlStates[tlIdx].toUpperCase()}`;
     }
 
-    // Player com resposta física a todos os obstáculos da cena
+    // Player com resposta física a todos os obstáculos da cena (estáticos + veículos dinâmicos)
     avatar_update: {
-      player.update(delta, controls.input, controls.cameraAngleY, city.colliders);
+      const activeColliders = city.colliders.slice();
+      for (const v of vehicles) {
+        for (const c of v.getColliders()) {
+          activeColliders.push(c);
+        }
+      }
+      player.update(delta, controls.input, controls.cameraAngleY, activeColliders);
     }
 
     // Agents (Cidadãos Estelares)

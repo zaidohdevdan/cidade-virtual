@@ -174,6 +174,7 @@ export const App: React.FC = () => {
               player={player}
               cameraAngleY={cameraAngleY}
               colliders={city.colliders}
+              vehicles={vehicles}
               interactiveObjects={city.interactiveObjects}
               onTelemetryUpdate={handleTelemetryUpdate}
               onObservationUpdate={handleObservationUpdate}

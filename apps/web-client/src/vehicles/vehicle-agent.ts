@@ -1,6 +1,6 @@
 // apps/web-client/src/vehicles/vehicle-agent.ts
 import * as THREE from 'three';
-import { TrafficLightRef } from '../scenes/city-scene';
+import { ObstacleCollider, TrafficLightRef } from '../scenes/city-scene';
 
 export type VehicleType = 'sedan' | 'suv' | 'hatch' | 'coupe';
 
@@ -26,8 +26,54 @@ export interface VehicleConfig {
   startRotationY: number;
   routeAxis: 'NS' | 'EW'; // Eixo principal de circulação
   routeDirection: 1 | -1; // 1 = sentido positivo (+Z ou +X), -1 = sentido negativo (-Z ou -X)
-  canPark?: boolean;
-  parkingSpot?: THREE.Vector3;
+  canPark?: boolean; // Pode estacionar junto ao meio-fio
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GEOMETRIA VIÁRIA (mão direita conforme CTB)
+// ─────────────────────────────────────────────────────────────────────────────
+// Avenida Central (eixo Z):  sentido Norte (-Z) em x = +3.5 | sentido Sul (+Z) em x = -3.5
+// Rua Transversal (eixo X):  sentido Leste (+X) em z = +3.5 | sentido Oeste (-X) em z = -3.5
+const LANE_OFFSET = 3.5;
+const CURB_PARK_OFFSET = 2.5; // deslocamento da faixa até a vaga junto ao meio-fio (x/z = ±6.0)
+const INTERSECTION_HALF = 8.0; // caixa de conflito do cruzamento
+const STOP_CENTER_DIST = 15.0; // centro do carro quando o para-choque encosta na linha de retenção (12.5m)
+const SIGNAL_LOOKAHEAD = 40.0;
+const TURN_START_DIST = 9.5;
+const TURN_EXIT_DIST = 9.0;
+const CAR_HALF_LENGTH = 2.3;
+
+// Limites de cada via (o Super Market ocupa z < -38.5 no extremo norte da Avenida Central)
+const ROAD_END = {
+  NS_NORTH: -30,
+  NS_SOUTH: 44,
+  EW: 44,
+};
+
+// Dinâmica longitudinal
+const MAX_ACCEL = 2.2; // m/s²
+const COMFORT_DECEL = 2.6; // m/s²
+const MAX_DECEL = 6.5; // m/s² (frenagem de emergência)
+
+type Axis = 'NS' | 'EW';
+type Dir = 1 | -1;
+type TurnIntent = 'STRAIGHT' | 'LEFT' | 'RIGHT';
+type SignalLamp = 'OFF' | 'LEFT' | 'RIGHT' | 'HAZARD';
+type ObstacleKind = 'none' | 'pedestrian' | 'player' | 'vehicle';
+
+interface BezierPath {
+  p0: THREE.Vector3;
+  p1: THREE.Vector3;
+  p2: THREE.Vector3;
+  p3: THREE.Vector3;
+  length: number;
+  reverse: boolean;
+}
+
+interface Perception {
+  kind: ObstacleKind;
+  gap: number; // distância livre entre para-choque e obstáculo
+  leaderSpeed: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -71,8 +117,22 @@ class VehicleAudioEngine {
   }
 }
 
+function wrapAngle(a: number): number {
+  return THREE.MathUtils.euclideanModulo(a + Math.PI, Math.PI * 2) - Math.PI;
+}
+
+function laneAngle(axis: Axis, dir: Dir): number {
+  if (axis === 'NS') return dir === 1 ? 0 : Math.PI;
+  return dir === 1 ? Math.PI / 2 : -Math.PI / 2;
+}
+
+/** Coordenada lateral do centro da faixa (mão direita). */
+function laneLateral(axis: Axis, dir: Dir): number {
+  return axis === 'NS' ? -dir * LANE_OFFSET : dir * LANE_OFFSET;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// AGENTE DE VEÍCULO AUTÔNOMO HIPER-REALISTA
+// AGENTE DE VEÍCULO AUTÔNOMO
 // ─────────────────────────────────────────────────────────────────────────────
 export class VehicleAgent {
   public mesh: THREE.Group;
@@ -94,37 +154,54 @@ export class VehicleAgent {
   private leftTurnSignalMat!: THREE.MeshStandardMaterial;
   private rightTurnSignalMat!: THREE.MeshStandardMaterial;
 
-  // Dinâmica de Suspensão (Pitch, Roll e Heave amortecidos)
+  // Dinâmica de suspensão
   private currentPitch: number = 0;
-  private targetPitch: number = 0;
   private currentRoll: number = 0;
-  private targetRoll: number = 0;
   private steeringAngle: number = 0;
   private targetSteeringAngle: number = 0;
+  private prevSpeed: number = 0;
+  private prevRotationY: number = 0;
+  private measuredAccel: number = 0;
+  private measuredYawRate: number = 0;
 
-  // Lógica de trânsito e navegação
-  private currentAxis: 'NS' | 'EW';
-  private currentDirection: 1 | -1;
+  // Navegação
+  private currentAxis: Axis;
+  private currentDirection: Dir;
   private targetSpeed: number = 0;
-  private obstacleTimer: number = 0;
-  private honkedAtObstacle: boolean = false;
-  private uTurnStep: number = 0;
-  private uTurnTimer: number = 0;
-  private parkTimer: number = 0;
 
-  // Trajetória Bézier Cúbica para curvas naturais de 90°
-  private bezierProgress: number = 0;
-  private bezierP0 = new THREE.Vector3();
-  private bezierP1 = new THREE.Vector3();
-  private bezierP2 = new THREE.Vector3();
-  private bezierP3 = new THREE.Vector3();
-  private bezierDuration: number = 3.2;
+  // Intenções latched (sorteadas UMA vez por aproximação, nunca por frame)
+  private turnIntent: TurnIntent = 'STRAIGHT';
+  private turnIntentRolled = false;
+  private parkIntent = false;
+  private parkIntentRolled = false;
+  private parkCooldown = 8;
+  private yellowDecision: 'GO' | 'STOP' | null = null;
 
-  // Controle de Setas e Pisca-Alerta
-  private turnSignalState: 'OFF' | 'LEFT' | 'RIGHT' | 'HAZARD' = 'OFF';
+  // Manobras por trajetória Bézier parametrizada por comprimento de arco
+  private path: BezierPath | null = null;
+  private pathS = 0;
+  private pathMaxSpeed = 3.5;
+  private pendingAxis: Axis = 'NS';
+  private pendingDir: Dir = 1;
+  private uTurnReverseRemaining = 0;
+
+  // Temporizadores
+  private blockedTimer = 0;
+  private honked = false;
+  private parkTimer = 0;
+  private parkDuration = 12;
+
+  // Sinalização
+  private turnSignalState: SignalLamp = 'OFF';
   private blinkTimer: number = 0;
 
-  // Distância entre eixos para modelo cinemático Ackermann (~2.7m)
+  // Colisores dinâmicos para o avatar (3 círculos ao longo da carroceria)
+  private readonly colliderCache: ObstacleCollider[] = [
+    { type: 'cylinder', cx: 0, cz: 0, radius: 1.05, name: '' },
+    { type: 'cylinder', cx: 0, cz: 0, radius: 1.05, name: '' },
+    { type: 'cylinder', cx: 0, cz: 0, radius: 1.05, name: '' },
+  ];
+
   private readonly wheelbase = 2.7;
 
   constructor(config: VehicleConfig) {
@@ -132,13 +209,18 @@ export class VehicleAgent {
     this.mesh = new THREE.Group();
     this.position = this.mesh.position;
     this.position.copy(config.startPosition);
-    this.rotationY = config.startRotationY;
-    this.mesh.rotation.y = this.rotationY;
 
     this.currentAxis = config.routeAxis;
     this.currentDirection = config.routeDirection;
+    this.rotationY = laneAngle(this.currentAxis, this.currentDirection);
+    this.mesh.rotation.y = this.rotationY;
+    this.prevRotationY = this.rotationY;
+
     this.targetSpeed = config.cruiseSpeed;
     this.speed = config.cruiseSpeed * 0.4;
+    this.prevSpeed = this.speed;
+
+    for (const c of this.colliderCache) c.name = `Veículo (${config.name})`;
 
     this.bodyGroup = new THREE.Group();
     this.mesh.add(this.bodyGroup);
@@ -287,7 +369,7 @@ export class VehicleAgent {
     }
 
     // Setas indicadoras de direção (dianteiras e traseiras nos cantos)
-    // Lado esquerdo (+X local se frente for +Z):
+    // Lado esquerdo do motorista (+X local quando a frente é +Z):
     const frontLeftBlinker = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.08), this.leftTurnSignalMat);
     frontLeftBlinker.position.set(0.92, 0.52, carLength / 2 + 0.06);
     this.bodyGroup.add(frontLeftBlinker);
@@ -378,7 +460,21 @@ export class VehicleAgent {
     this.mesh.add(shadowMesh);
   }
 
-  // ──────────────────── LOOP PRINCIPAL DE FÍSICA E ATUALIZAÇÃO ────────────────────
+  // ──────────────────── COLISORES DINÂMICOS (para o avatar) ────────────────────
+  /** Três círculos ao longo do eixo do carro, atualizados com a pose atual. */
+  public getColliders(): ObstacleCollider[] {
+    const fx = Math.sin(this.rotationY);
+    const fz = Math.cos(this.rotationY);
+    const offsets = [-1.45, 0, 1.45];
+    for (let i = 0; i < 3; i++) {
+      const c = this.colliderCache[i];
+      c.cx = this.position.x + fx * offsets[i];
+      c.cz = this.position.z + fz * offsets[i];
+    }
+    return this.colliderCache;
+  }
+
+  // ──────────────────── LOOP PRINCIPAL ────────────────────
   public update(
     delta: number,
     trafficLights: TrafficLightRef[],
@@ -386,487 +482,616 @@ export class VehicleAgent {
     playerPos: THREE.Vector3,
     otherVehicles: VehicleAgent[]
   ): void {
-    // 1. Checagem de Obstáculos com modelo IDM (Intelligent Driver Model)
-    const { obstacleAhead, obstacleDist, relativeSpeed } = this.checkObstacleAhead(playerPos, pedestrianPositions, otherVehicles);
+    if (delta <= 0) return;
+    this.parkCooldown = Math.max(0, this.parkCooldown - delta);
 
-    // 2. Avaliação Semafórica
-    const signalState = this.checkTrafficSignalAhead(trafficLights);
+    const perception = this.perceive(playerPos, pedestrianPositions, otherVehicles);
 
-    // 3. Máquina de Estados e Decisão de Trânsito
-    this.updateStateMachine(delta, obstacleAhead, signalState, obstacleDist, relativeSpeed);
+    switch (this.state) {
+      case 'CRUISING':
+      case 'APPROACHING_INTERSECTION':
+      case 'WAITING_SIGNAL':
+      case 'OBSTACLE_BRAKING':
+        this.updateLaneFollowing(delta, perception, trafficLights, otherVehicles);
+        break;
+      case 'TURNING':
+      case 'PARKING_MANEUVER':
+      case 'UNPARKING_MANEUVER':
+      case 'U_TURN_MANEUVER':
+        this.updateManeuver(delta, perception);
+        break;
+      case 'PARKED':
+        this.updateParked(delta, otherVehicles);
+        break;
+    }
 
-    // 4. Integração Cinemática Ackermann & Atualização de Trajetória
-    this.integrateMotion(delta);
-
-    // 5. Dinâmica de Suspensão com Amortecimento (Pitch, Roll e Esterçamento)
+    this.integrateSpeed(delta, perception);
+    this.applyMotion(delta);
     this.updateSuspensionPhysics(delta);
 
-    // 6. Rotação das Rodas no Eixo X (Rolagem proporcional à velocidade)
     const wheelCircumference = Math.PI * 2 * 0.36;
     const wheelRotSpeed = (this.speed / wheelCircumference) * Math.PI * 2;
     for (const wheel of this.rollingWheels) {
       wheel.rotation.x += wheelRotSpeed * delta;
     }
 
-    // 7. Atualização das Luzes de Freio, Ré e Pisca-Alerta/Setas
     this.updateVehicleLighting(delta);
   }
 
-  // ──────────────────── DETECÇÃO DE OBSTÁCULOS & DISTÂNCIA ────────────────────
-  private checkObstacleAhead(
-    playerPos: THREE.Vector3,
-    pedestrians: THREE.Vector3[],
-    otherVehicles: VehicleAgent[]
-  ): { obstacleAhead: boolean; obstacleDist: number; relativeSpeed: number } {
-    const forward = new THREE.Vector3(Math.sin(this.rotationY), 0, Math.cos(this.rotationY));
-    const maxCheckDist = 9.0;
-    const laneHalfWidth = 1.45;
-    let closestDist = maxCheckDist;
-    let closestRelSpeed = 0;
-    let found = false;
+  // ──────────────────── HELPERS DE GEOMETRIA ────────────────────
+  private forward(): THREE.Vector3 {
+    return new THREE.Vector3(Math.sin(this.rotationY), 0, Math.cos(this.rotationY));
+  }
 
-    // Jogador Daniel
-    const toPlayer = playerPos.clone().sub(this.position);
-    const playerDist = toPlayer.dot(forward);
-    if (playerDist > 0.6 && playerDist < maxCheckDist) {
-      const lateralDist = Math.abs(toPlayer.x * forward.z - toPlayer.z * forward.x);
-      if (lateralDist < laneHalfWidth) {
-        found = true;
-        closestDist = Math.min(closestDist, playerDist);
-      }
+  /** Vetor para o lado direito do motorista. */
+  private rightVec(): THREE.Vector3 {
+    return new THREE.Vector3(-Math.cos(this.rotationY), 0, Math.sin(this.rotationY));
+  }
+
+  private along(): number {
+    return this.currentAxis === 'NS' ? this.position.z : this.position.x;
+  }
+
+  private headingTowardCenter(): boolean {
+    return this.along() * this.currentDirection < 0;
+  }
+
+  private static inIntersection(p: THREE.Vector3): boolean {
+    return Math.abs(p.x) < INTERSECTION_HALF && Math.abs(p.z) < INTERSECTION_HALF;
+  }
+
+  // ──────────────────── PERCEPÇÃO FRONTAL ────────────────────
+  private perceive(playerPos: THREE.Vector3, pedestrians: THREE.Vector3[], others: VehicleAgent[]): Perception {
+    const reversing = this.speed < -0.05 || (this.path?.reverse ?? false) || this.uTurnReverseRemaining > 0;
+    const fwd = this.forward();
+    if (reversing) fwd.negate();
+
+    const result: Perception = { kind: 'none', gap: Infinity, leaderSpeed: 0 };
+    const tmp = new THREE.Vector3();
+
+    const test = (p: THREE.Vector3, radius: number, range: number): number | null => {
+      tmp.set(p.x - this.position.x, 0, p.z - this.position.z);
+      const lon = tmp.dot(fwd);
+      if (lon <= 0.5 || lon > range) return null;
+      const lat = Math.abs(tmp.x * fwd.z - tmp.z * fwd.x);
+      if (lat > 1.1 + radius) return null;
+      return lon - CAR_HALF_LENGTH - radius;
+    };
+
+    const gp = test(playerPos, 0.45, 14);
+    if (gp !== null && gp < result.gap) {
+      result.kind = 'player';
+      result.gap = gp;
+      result.leaderSpeed = 0;
     }
 
-    // 7 Cidadãos Pedestres
     for (const ped of pedestrians) {
-      const toPed = ped.clone().sub(this.position);
-      const pedDist = toPed.dot(forward);
-      if (pedDist > 0.6 && pedDist < maxCheckDist) {
-        const lateralDist = Math.abs(toPed.x * forward.z - toPed.z * forward.x);
-        if (lateralDist < laneHalfWidth) {
-          found = true;
-          closestDist = Math.min(closestDist, pedDist);
+      const g = test(ped, 0.4, 14);
+      if (g !== null && g < result.gap) {
+        result.kind = 'pedestrian';
+        result.gap = g;
+        result.leaderSpeed = 0;
+      }
+    }
+
+    const meInBox = VehicleAgent.inIntersection(this.position);
+    for (const other of others) {
+      if (other === this) continue;
+      const otherFwd = new THREE.Vector3(Math.sin(other.rotationY), 0, Math.cos(other.rotationY));
+      const alignment = fwd.dot(otherFwd);
+
+      // Prioridade no cruzamento para fluxos perpendiculares (evita travamento mútuo):
+      // quem já está dentro da caixa tem preferência; empate resolvido por id determinístico.
+      if (Math.abs(alignment) < 0.5) {
+        const otherInBox = VehicleAgent.inIntersection(other.position);
+        if (meInBox && !otherInBox) continue;
+        if (meInBox && otherInBox && this.config.id < other.config.id) continue;
+      }
+
+      const g = test(other.position, 1.0, 18);
+      if (g !== null) {
+        // gap entre para-choques: desconta metade do comprimento do outro carro (radius=1.0 já descontado)
+        const bumperGap = g - (CAR_HALF_LENGTH - 1.0) * Math.abs(alignment);
+        if (bumperGap < result.gap) {
+          result.kind = 'vehicle';
+          result.gap = bumperGap;
+          result.leaderSpeed = Math.max(0, other.speed * alignment);
         }
       }
     }
 
-    // Outros Carros
-    for (const other of otherVehicles) {
-      if (other.config.id === this.config.id) continue;
-      const toOther = other.position.clone().sub(this.position);
-      const otherDist = toOther.dot(forward);
-      if (otherDist > 1.2 && otherDist < maxCheckDist + 1.5) {
-        const lateralDist = Math.abs(toOther.x * forward.z - toOther.z * forward.x);
-        if (lateralDist < laneHalfWidth + 0.4) {
-          found = true;
-          if (otherDist < closestDist) {
-            closestDist = otherDist;
-            closestRelSpeed = this.speed - other.speed;
-          }
-        }
-      }
-    }
-
-    return { obstacleAhead: found, obstacleDist: closestDist, relativeSpeed: closestRelSpeed };
+    return result;
   }
 
-  // ──────────────────── AVALIAÇÃO DO SEMÁFORO ────────────────────
-  private checkTrafficSignalAhead(trafficLights: TrafficLightRef[]): 'GREEN' | 'STOP' | 'NONE' {
-    const distToCenter = this.currentAxis === 'NS' ? Math.abs(this.position.z) : Math.abs(this.position.x);
-    const isApproaching = distToCenter > 12.8 && distToCenter < 21.0;
+  /** Velocidade máxima segura para não colidir com o obstáculo percebido. */
+  private obstacleSpeedLimit(p: Perception): number {
+    if (p.kind === 'none') return Infinity;
+    const minGap = p.kind === 'vehicle' ? 2.0 : 1.6;
+    const free = Math.max(0, p.gap - minGap);
+    const brakingEnvelope = Math.sqrt(2 * COMFORT_DECEL * free);
+    const follow = p.leaderSpeed * THREE.MathUtils.clamp(free / 4, 0, 1);
+    return brakingEnvelope + follow;
+  }
 
-    const isHeadingTowardCenter =
-      (this.currentAxis === 'NS' && ((this.position.z > 0 && this.currentDirection === -1) || (this.position.z < 0 && this.currentDirection === 1))) ||
-      (this.currentAxis === 'EW' && ((this.position.x > 0 && this.currentDirection === -1) || (this.position.x < 0 && this.currentDirection === 1)));
+  // ──────────────────── SINALIZAÇÃO SEMAFÓRICA ────────────────────
+  private signalSpeedLimit(trafficLights: TrafficLightRef[]): number {
+    if (!this.headingTowardCenter()) {
+      this.yellowDecision = null;
+      return Infinity;
+    }
+    const dist = Math.abs(this.along());
+    // Já passou da linha de retenção: segue (não para dentro do cruzamento)
+    if (dist < STOP_CENTER_DIST - 0.6 || dist > SIGNAL_LOOKAHEAD) {
+      this.yellowDecision = null;
+      return Infinity;
+    }
 
-    if (!isApproaching || !isHeadingTowardCenter) return 'NONE';
+    let id: string;
+    if (this.currentAxis === 'NS') id = this.position.z > 0 ? 'tl-sul' : 'tl-norte';
+    else id = this.position.x > 0 ? 'tl-leste' : 'tl-oeste';
 
-    let targetLightId = '';
-    if (this.currentAxis === 'NS') {
-      targetLightId = this.position.z > 0 ? 'tl-sul' : 'tl-norte';
+    const tl = trafficLights.find((t) => t.id === id);
+    if (!tl || tl.state === 'green') {
+      this.yellowDecision = null;
+      return Infinity;
+    }
+
+    const distToLine = Math.max(0, dist - STOP_CENTER_DIST);
+
+    if (tl.state === 'yellow') {
+      // Zona de dilema: decide UMA vez se consegue parar com conforto; senão atravessa
+      if (this.yellowDecision === null) {
+        const v = Math.max(0, this.speed);
+        const stoppingDist = (v * v) / (2 * COMFORT_DECEL * 1.3);
+        this.yellowDecision = stoppingDist > distToLine + 0.5 ? 'GO' : 'STOP';
+      }
+      if (this.yellowDecision === 'GO') return Infinity;
     } else {
-      targetLightId = this.position.x > 0 ? 'tl-leste' : 'tl-oeste';
+      this.yellowDecision = null;
     }
 
-    const tl = trafficLights.find((t) => t.id === targetLightId);
-    if (!tl) return 'NONE';
-
-    return tl.state === 'red' || tl.state === 'yellow' ? 'STOP' : 'GREEN';
+    return Math.sqrt(2 * COMFORT_DECEL * distToLine);
   }
 
-  // ──────────────────── MÁQUINA DE ESTADOS & TOMADA DE DECISÃO ────────────────────
-  private updateStateMachine(
+  // ──────────────────── SEGUIMENTO DE FAIXA ────────────────────
+  private updateLaneFollowing(
     delta: number,
-    obstacleAhead: boolean,
-    signalState: 'GREEN' | 'STOP' | 'NONE',
-    obstacleDist: number,
-    relativeSpeed: number
+    perception: Perception,
+    trafficLights: TrafficLightRef[],
+    others: VehicleAgent[]
   ): void {
-    switch (this.state) {
-      case 'CRUISING': {
-        if (obstacleAhead) {
-          this.state = 'OBSTACLE_BRAKING';
-          this.obstacleTimer = 0;
-          this.honkedAtObstacle = false;
-          this.turnSignalState = 'HAZARD';
-          return;
-        }
+    const along = this.along();
+    const dist = Math.abs(along);
+    const toward = this.headingTowardCenter();
+    const cruise = this.config.cruiseSpeed;
 
-        if (signalState === 'STOP') {
-          this.state = 'WAITING_SIGNAL';
-          this.turnSignalState = 'OFF';
-          return;
-        }
-
-        this.targetSpeed = this.config.cruiseSpeed;
-        this.targetSteeringAngle = 0;
-        this.turnSignalState = 'OFF';
-
-        // Avaliar oportunidade de conversão Bézier de 90° ao ingressar no cruzamento
-        this.evaluateTurnDecision();
-
-        // Oportunidade de estacionar na vaga do mercado
-        if (this.config.canPark && this.config.parkingSpot) {
-          const distToPark = this.position.distanceTo(this.config.parkingSpot);
-          if (distToPark < 14 && Math.random() < 0.005) {
-            this.state = 'PARKING_MANEUVER';
-            this.parkTimer = 0;
-            this.turnSignalState = 'LEFT';
-            return;
-          }
-        }
-        break;
-      }
-
-      case 'WAITING_SIGNAL': {
-        this.targetSpeed = 0;
-        this.targetSteeringAngle = 0;
-        this.turnSignalState = 'OFF';
-        if (signalState === 'GREEN' || signalState === 'NONE') {
-          this.state = 'CRUISING';
-        }
-        break;
-      }
-
-      case 'OBSTACLE_BRAKING': {
-        // Modelo IDM para desaceleração progressiva e suave
-        const safeDistance = 3.0;
-        if (obstacleDist < safeDistance) {
-          this.targetSpeed = 0;
-        } else {
-          // Desaceleração proporcional à proximidade e velocidade relativa
-          const idmTarget = Math.max(0, (obstacleDist - safeDistance) * 1.5 - relativeSpeed * 0.5);
-          this.targetSpeed = Math.min(this.config.cruiseSpeed * 0.4, idmTarget);
-        }
-
-        this.obstacleTimer += delta;
-
-        // Se o obstáculo persistir por 2.0s, toca buzina automotiva de advertência!
-        if (this.obstacleTimer > 2.0 && !this.honkedAtObstacle) {
-          VehicleAudioEngine.playHorn(0.14);
-          this.honkedAtObstacle = true;
-        }
-
-        // Se o caminho for liberado, retoma viagem
-        if (!obstacleAhead) {
-          this.state = 'CRUISING';
-          this.obstacleTimer = 0;
-          this.turnSignalState = 'OFF';
-          return;
-        }
-
-        // Se permanecer bloqueado por mais de 3.5 segundos, executa manobra de retorno em U (U-Turn)!
-        if (this.obstacleTimer > 3.5) {
-          this.state = 'U_TURN_MANEUVER';
-          this.uTurnStep = 1;
-          this.uTurnTimer = 0;
-          this.turnSignalState = 'HAZARD';
-        }
-        break;
-      }
-
-      case 'U_TURN_MANEUVER': {
-        this.uTurnTimer += delta;
-        this.turnSignalState = 'HAZARD';
-
-        if (this.uTurnStep === 1) {
-          // Passo 1: Ré com volante totalmente esterçado
-          this.targetSpeed = -2.2;
-          this.targetSteeringAngle = -0.55; // Esterça rodas em marcha a ré
-          this.rotationY += delta * 0.5;
-          this.mesh.rotation.y = this.rotationY;
-
-          if (this.uTurnTimer > 1.8) {
-            this.uTurnStep = 2;
-            this.uTurnTimer = 0;
-          }
-        } else if (this.uTurnStep === 2) {
-          // Passo 2: Acelera virando para a faixa contrária desimpedida
-          this.targetSpeed = 3.0;
-          this.targetSteeringAngle = 0.55;
-          const targetRot = (this.rotationY + Math.PI) % (Math.PI * 2);
-          this.rotationY = THREE.MathUtils.lerp(this.rotationY, targetRot, delta * 2.5);
-          this.mesh.rotation.y = this.rotationY;
-
-          if (this.uTurnTimer > 2.0) {
-            this.currentDirection = this.currentDirection === 1 ? -1 : 1;
-            if (this.currentAxis === 'NS') {
-              this.position.x = this.currentDirection === 1 ? 3.5 : -3.5;
-            } else {
-              this.position.z = this.currentDirection === 1 ? -3.5 : 3.5;
-            }
-            this.rotationY = this.calculateLaneAngle();
-            this.mesh.rotation.y = this.rotationY;
-            this.targetSteeringAngle = 0;
-            this.state = 'CRUISING';
-            this.turnSignalState = 'OFF';
-            this.obstacleTimer = 0;
-          }
-        }
-        break;
-      }
-
-      case 'TURNING': {
-        // Trajetória em Curva de Bézier Cúbica
-        this.bezierProgress += delta / this.bezierDuration;
-        this.targetSpeed = 3.4; // Velocidade confortável e realista de conversão
-
-        if (this.bezierProgress >= 1.0) {
-          this.position.copy(this.bezierP3);
-          this.rotationY = this.calculateLaneAngle();
-          this.mesh.rotation.y = this.rotationY;
-          this.targetSteeringAngle = 0;
-          this.turnSignalState = 'OFF';
-          this.state = 'CRUISING';
-          this.bezierProgress = 0;
-        } else {
-          const t = this.bezierProgress;
-          // Equação de Bézier Cúbica: B(t) = (1-t)³P0 + 3(1-t)²tP1 + 3(1-t)t²P2 + t³P3
-          const invT = 1 - t;
-          const pos = new THREE.Vector3()
-            .addScaledVector(this.bezierP0, invT * invT * invT)
-            .addScaledVector(this.bezierP1, 3 * invT * invT * t)
-            .addScaledVector(this.bezierP2, 3 * invT * t * t)
-            .addScaledVector(this.bezierP3, t * t * t);
-          this.position.copy(pos);
-
-          // Vetor tangente dB/dt para calcular o ângulo natural da carroceria
-          const tangent = new THREE.Vector3()
-            .addScaledVector(this.bezierP1.clone().sub(this.bezierP0), 3 * invT * invT)
-            .addScaledVector(this.bezierP2.clone().sub(this.bezierP1), 6 * invT * t)
-            .addScaledVector(this.bezierP3.clone().sub(this.bezierP2), 3 * t * t);
-
-          if (tangent.lengthSq() > 0.001) {
-            const desiredHeading = Math.atan2(tangent.x, tangent.z);
-            const headingDiff = THREE.MathUtils.euclideanModulo(desiredHeading - this.rotationY + Math.PI, Math.PI * 2) - Math.PI;
-            this.rotationY += headingDiff * delta * 8.0;
-            this.mesh.rotation.y = this.rotationY;
-
-            // Esterçamento dinâmico proporcional à curvatura
-            this.targetSteeringAngle = THREE.MathUtils.clamp(headingDiff * 2.5, -0.55, 0.55);
-          }
-        }
-        break;
-      }
-
-      case 'PARKING_MANEUVER': {
-        if (!this.config.parkingSpot) {
-          this.state = 'CRUISING';
-          return;
-        }
-        this.targetSpeed = 1.8;
-        this.targetSteeringAngle = 0.4;
-        this.turnSignalState = 'RIGHT';
-
-        const dirToSpot = this.config.parkingSpot.clone().sub(this.position);
-        const dist = dirToSpot.length();
-
-        if (dist < 0.5) {
-          this.position.copy(this.config.parkingSpot);
-          this.rotationY = 0;
-          this.mesh.rotation.y = 0;
-          this.speed = 0;
-          this.targetSpeed = 0;
-          this.targetSteeringAngle = 0;
-          this.turnSignalState = 'OFF';
-          this.state = 'PARKED';
-          this.parkTimer = 0;
-        } else {
-          this.position.lerp(this.config.parkingSpot, delta * 1.6);
-        }
-        break;
-      }
-
-      case 'PARKED': {
-        this.targetSpeed = 0;
-        this.targetSteeringAngle = 0;
-        this.turnSignalState = 'OFF';
-        this.parkTimer += delta;
-
-        // Estacionado por 12 segundos e depois inicia desestacionamento
-        if (this.parkTimer > 12.0) {
-          this.state = 'UNPARKING_MANEUVER';
-          this.parkTimer = 0;
-          this.turnSignalState = 'HAZARD';
-        }
-        break;
-      }
-
-      case 'UNPARKING_MANEUVER': {
-        this.parkTimer += delta;
-        this.targetSpeed = -2.0;
-        this.targetSteeringAngle = -0.45;
-        this.turnSignalState = 'HAZARD';
-
-        const forward = new THREE.Vector3(Math.sin(this.rotationY), 0, Math.cos(this.rotationY));
-        this.position.addScaledVector(forward, this.targetSpeed * delta);
-
-        if (this.parkTimer > 2.6) {
-          this.currentAxis = 'NS';
-          this.currentDirection = -1;
-          this.position.x = -3.5;
-          this.rotationY = Math.PI;
-          this.mesh.rotation.y = this.rotationY;
-          this.targetSteeringAngle = 0;
-          this.turnSignalState = 'OFF';
-          this.state = 'CRUISING';
-          this.parkTimer = 0;
-        }
-        break;
-      }
+    // 1. Intenção de conversão sorteada UMA vez ao entrar na zona de aproximação
+    if (toward && dist < 32 && !this.turnIntentRolled) {
+      this.turnIntentRolled = true;
+      const r = Math.random();
+      this.turnIntent = r < 0.2 ? 'RIGHT' : r < 0.35 ? 'LEFT' : 'STRAIGHT';
     }
-  }
-
-  // ──────────────────── AVALIAR DECISÃO DE CURVA BÉZIER ────────────────────
-  private evaluateTurnDecision(): void {
-    const atEntry =
-      (this.currentAxis === 'NS' && Math.abs(this.position.z) < 6.8 && Math.abs(this.position.z) > 4.8) ||
-      (this.currentAxis === 'EW' && Math.abs(this.position.x) < 6.8 && Math.abs(this.position.x) > 4.8);
-
-    if (atEntry && this.state === 'CRUISING' && Math.random() < 0.4) {
-      this.initiateBezierTurn();
+    if (!toward && dist > TURN_EXIT_DIST + 1) {
+      this.turnIntentRolled = false;
+      this.turnIntent = 'STRAIGHT';
     }
-  }
 
-  private initiateBezierTurn(): void {
-    this.state = 'TURNING';
-    this.bezierProgress = 0;
-    this.bezierP0.copy(this.position);
+    // 2. Intenção de estacionar sorteada UMA vez ao sair do cruzamento
+    if (!toward && dist > 12 && dist < 16 && !this.parkIntentRolled) {
+      this.parkIntentRolled = true;
+      this.parkIntent = !!this.config.canPark && this.parkCooldown <= 0 && Math.random() < 0.6;
+    }
+    if (toward) this.parkIntentRolled = false;
 
-    // Vetor de entrada tangente
-    const inForward = new THREE.Vector3(Math.sin(this.rotationY), 0, Math.cos(this.rotationY));
-    this.bezierP1.copy(this.bezierP0).addScaledVector(inForward, 4.0);
+    // 3. Velocidade alvo = mínimo entre limites (cruzeiro, curva, semáforo, obstáculo)
+    let limit = cruise;
+    if (toward && this.turnIntent !== 'STRAIGHT' && dist < 26) {
+      limit = Math.min(limit, this.turnIntent === 'RIGHT' ? 3.2 : 4.2);
+    }
+    const signalLimit = this.signalSpeedLimit(trafficLights);
+    const obstacleLimit = this.obstacleSpeedLimit(perception);
+    this.targetSpeed = Math.min(limit, signalLimit, obstacleLimit);
 
-    if (this.currentAxis === 'NS') {
-      this.currentAxis = 'EW';
-      this.currentDirection = this.position.x < 0 ? 1 : -1;
-      this.bezierP3.set(
-        this.currentDirection === 1 ? 8.5 : -8.5,
-        this.position.y,
-        this.currentDirection === 1 ? -3.5 : 3.5
-      );
-      this.turnSignalState = this.currentDirection === 1 ? 'LEFT' : 'RIGHT';
+    // 4. Setas: acionadas com antecedência antes da conversão
+    this.turnSignalState = toward && this.turnIntent !== 'STRAIGHT' && dist < 32 ? this.turnIntent : 'OFF';
+
+    // 5. Rótulo de estado (derivado continuamente — não há transições bruscas)
+    const stopped = this.speed < 0.3;
+    if (obstacleLimit < Math.min(limit, signalLimit) && perception.kind !== 'none') {
+      this.state = 'OBSTACLE_BRAKING';
+    } else if (signalLimit < limit) {
+      this.state = 'WAITING_SIGNAL';
+    } else if (toward && dist < 32) {
+      this.state = 'APPROACHING_INTERSECTION';
     } else {
-      this.currentAxis = 'NS';
-      this.currentDirection = this.position.z < 0 ? 1 : -1;
-      this.bezierP3.set(
-        this.currentDirection === 1 ? 3.5 : -3.5,
-        this.position.y,
-        this.currentDirection === 1 ? 8.5 : -8.5
-      );
-      this.turnSignalState = this.currentDirection === 1 ? 'RIGHT' : 'LEFT';
+      this.state = 'CRUISING';
     }
 
-    // Vetor de saída tangente
-    const outAngle = this.calculateLaneAngle();
-    const outForward = new THREE.Vector3(Math.sin(outAngle), 0, Math.cos(outAngle));
-    this.bezierP2.copy(this.bezierP3).addScaledVector(outForward, -4.0);
+    // 6. Bloqueio persistente por pedestre/avatar → buzina e, se insistir, retorno em U.
+    //    Veículos parados à frente (fila) NUNCA disparam retorno: o carro apenas aguarda.
+    const blockedByPerson =
+      this.state === 'OBSTACLE_BRAKING' && stopped && (perception.kind === 'pedestrian' || perception.kind === 'player');
+    if (blockedByPerson) {
+      this.blockedTimer += delta;
+    } else {
+      this.blockedTimer = Math.max(0, this.blockedTimer - delta * 2); // decaimento (robusto a oscilações)
+      if (this.blockedTimer === 0) this.honked = false;
+    }
+    if (this.blockedTimer > 2.0 && !this.honked) {
+      VehicleAudioEngine.playHorn(0.14);
+      this.honked = true;
+    }
+    const nearIntersection = dist < 18;
+    if (this.blockedTimer > 6.0 && !nearIntersection && this.oppositeLaneClear(others)) {
+      this.startUTurn(true);
+      return;
+    }
+
+    // 7. Conversão no cruzamento
+    if (toward && this.turnIntent !== 'STRAIGHT' && dist <= TURN_START_DIST && dist > TURN_START_DIST - 2.5) {
+      this.startTurn(this.turnIntent);
+      return;
+    }
+
+    // 8. Estacionamento junto ao meio-fio
+    if (this.parkIntent && !toward && dist >= 18 && dist <= 22 && this.roomToParkAhead() && this.curbSpotFree(others)) {
+      this.startParking();
+      return;
+    }
+
+    // 9. Fim da via → retorno em U (sem teletransporte)
+    if (this.reachedRoadEnd()) {
+      this.targetSpeed = Math.min(this.targetSpeed, 2.5);
+      this.turnSignalState = 'LEFT';
+      if (this.oppositeLaneClear(others)) {
+        this.startUTurn(false);
+      } else {
+        this.targetSpeed = 0;
+      }
+    }
   }
 
-  // ──────────────────── INTEGRAÇÃO CINEMÁTICA ACKERMANN ────────────────────
-  private integrateMotion(delta: number): void {
-    const accelRate = this.targetSpeed > this.speed ? 4.0 : 7.0;
-    this.speed = THREE.MathUtils.lerp(this.speed, this.targetSpeed, delta * accelRate);
-
-    if (this.state === 'CRUISING') {
-      // Modelo de bicicleta cinemática: rotação proporcional ao ângulo de esterçamento
-      if (Math.abs(this.steeringAngle) > 0.01) {
-        const turnRadius = this.wheelbase / Math.tan(this.steeringAngle);
-        const angularVel = this.speed / turnRadius;
-        this.rotationY += angularVel * delta;
-        this.mesh.rotation.y = this.rotationY;
-      }
-
-      const forward = new THREE.Vector3(Math.sin(this.rotationY), 0, Math.cos(this.rotationY));
-      this.position.addScaledVector(forward, this.speed * delta);
-
-      // Limites da cidade e retorno de pista
-      const roadLimit = 46.0;
-      if (this.currentAxis === 'NS') {
-        if (this.position.z > roadLimit && this.currentDirection === 1) {
-          this.currentDirection = -1;
-          this.position.x = -3.5;
-          this.rotationY = Math.PI;
-          this.mesh.rotation.y = this.rotationY;
-        } else if (this.position.z < -roadLimit && this.currentDirection === -1) {
-          this.currentDirection = 1;
-          this.position.x = 3.5;
-          this.rotationY = 0;
-          this.mesh.rotation.y = this.rotationY;
-        }
-      } else {
-        if (this.position.x > roadLimit && this.currentDirection === 1) {
-          this.currentDirection = -1;
-          this.position.z = 3.5;
-          this.rotationY = -Math.PI / 2;
-          this.mesh.rotation.y = this.rotationY;
-        } else if (this.position.x < -roadLimit && this.currentDirection === -1) {
-          this.currentDirection = 1;
-          this.position.z = -3.5;
-          this.rotationY = Math.PI / 2;
-          this.mesh.rotation.y = this.rotationY;
-        }
-      }
+  private reachedRoadEnd(): boolean {
+    const a = this.along();
+    if (this.currentAxis === 'NS') {
+      return (this.currentDirection === -1 && a <= ROAD_END.NS_NORTH) || (this.currentDirection === 1 && a >= ROAD_END.NS_SOUTH);
     }
+    return a * this.currentDirection >= ROAD_END.EW;
+  }
+
+  /** Entrada (9m) + saída da vaga (9m) precisam caber antes do fim da via. */
+  private roomToParkAhead(): boolean {
+    const finalAlong = this.along() + this.currentDirection * 19;
+    if (this.currentAxis === 'NS') {
+      return finalAlong > ROAD_END.NS_NORTH && finalAlong < ROAD_END.NS_SOUTH;
+    }
+    return Math.abs(finalAlong) < ROAD_END.EW;
+  }
+
+  private oppositeLaneClear(others: VehicleAgent[]): boolean {
+    const oppDir: Dir = this.currentDirection === 1 ? -1 : 1;
+    const oppLat = laneLateral(this.currentAxis, oppDir);
+    const myAlong = this.along();
+    for (const o of others) {
+      if (o === this) continue;
+      const lat = this.currentAxis === 'NS' ? o.position.x : o.position.z;
+      const al = this.currentAxis === 'NS' ? o.position.z : o.position.x;
+      if (Math.abs(lat - oppLat) < 2.5 && Math.abs(al - myAlong) < 16) return false;
+    }
+    return true;
+  }
+
+  private curbSpotFree(others: VehicleAgent[]): boolean {
+    const target = this.position.clone().addScaledVector(this.forward(), 9).addScaledVector(this.rightVec(), CURB_PARK_OFFSET);
+    return others.every((o) => o === this || o.position.distanceTo(target) > 6);
+  }
+
+  // ──────────────────── CONSTRUÇÃO DE MANOBRAS ────────────────────
+  private buildPath(p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3, reverse: boolean): BezierPath {
+    let length = 0;
+    const prev = p0.clone();
+    const cur = new THREE.Vector3();
+    for (let i = 1; i <= 24; i++) {
+      this.bezierPoint(p0, p1, p2, p3, i / 24, cur);
+      length += cur.distanceTo(prev);
+      prev.copy(cur);
+    }
+    return { p0, p1, p2, p3, length: Math.max(length, 0.01), reverse };
+  }
+
+  private bezierPoint(p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3, t: number, out: THREE.Vector3): THREE.Vector3 {
+    const u = 1 - t;
+    return out
+      .set(0, 0, 0)
+      .addScaledVector(p0, u * u * u)
+      .addScaledVector(p1, 3 * u * u * t)
+      .addScaledVector(p2, 3 * u * t * t)
+      .addScaledVector(p3, t * t * t);
+  }
+
+  private bezierTangent(p: BezierPath, t: number, out: THREE.Vector3): THREE.Vector3 {
+    const u = 1 - t;
+    return out
+      .set(0, 0, 0)
+      .addScaledVector(p.p1.clone().sub(p.p0), 3 * u * u)
+      .addScaledVector(p.p2.clone().sub(p.p1), 6 * u * t)
+      .addScaledVector(p.p3.clone().sub(p.p2), 3 * t * t);
+  }
+
+  private beginPath(path: BezierPath, maxSpeed: number, state: VehicleBehaviorState, axis: Axis, dir: Dir): void {
+    this.path = path;
+    this.pathS = 0;
+    this.pathMaxSpeed = maxSpeed;
+    this.pendingAxis = axis;
+    this.pendingDir = dir;
+    this.state = state;
+  }
+
+  private startTurn(intent: TurnIntent): void {
+    const d = this.currentDirection;
+    let newAxis: Axis;
+    let newDir: Dir;
+    if (this.currentAxis === 'NS') {
+      newAxis = 'EW';
+      newDir = (intent === 'RIGHT' ? -d : d) as Dir;
+    } else {
+      newAxis = 'NS';
+      newDir = (intent === 'RIGHT' ? d : -d) as Dir;
+    }
+
+    const p0 = this.position.clone();
+    const exitLat = laneLateral(newAxis, newDir);
+    const exitAlong = newDir * TURN_EXIT_DIST;
+    const p3 = newAxis === 'NS' ? new THREE.Vector3(exitLat, p0.y, exitAlong) : new THREE.Vector3(exitAlong, p0.y, exitLat);
+
+    const handle = 0.39 * p0.distanceTo(p3); // corda = R·√2 → alça ≈ 0.552·R (arco de 90°)
+    const inF = this.forward();
+    const outAng = laneAngle(newAxis, newDir);
+    const outF = new THREE.Vector3(Math.sin(outAng), 0, Math.cos(outAng));
+    const p1 = p0.clone().addScaledVector(inF, handle);
+    const p2 = p3.clone().addScaledVector(outF, -handle);
+
+    this.turnSignalState = intent === 'LEFT' ? 'LEFT' : 'RIGHT';
+    this.beginPath(this.buildPath(p0, p1, p2, p3, false), intent === 'RIGHT' ? 3.2 : 4.2, 'TURNING', newAxis, newDir);
+  }
+
+  /** Retorno em U para a faixa oposta. withReverse = dá ré antes (obstáculo à frente). */
+  private startUTurn(withReverse: boolean): void {
+    this.state = 'U_TURN_MANEUVER';
+    this.path = null;
+    this.uTurnReverseRemaining = withReverse ? 3.5 : 0;
+    if (!withReverse) this.buildUTurnArc();
+  }
+
+  private buildUTurnArc(): void {
+    const oppDir: Dir = this.currentDirection === 1 ? -1 : 1;
+    const p0 = this.position.clone();
+    const f = this.forward();
+    const oppLat = laneLateral(this.currentAxis, oppDir);
+    const p3 = this.currentAxis === 'NS' ? new THREE.Vector3(oppLat, p0.y, p0.z) : new THREE.Vector3(p0.x, p0.y, oppLat);
+    const p1 = p0.clone().addScaledVector(f, 4.0);
+    const p2 = p3.clone().addScaledVector(f, 4.0);
+    this.turnSignalState = 'LEFT';
+    this.beginPath(this.buildPath(p0, p1, p2, p3, false), 2.8, 'U_TURN_MANEUVER', this.currentAxis, oppDir);
+  }
+
+  private startParking(): void {
+    const f = this.forward();
+    const r = this.rightVec();
+    const p0 = this.position.clone();
+    const p3 = p0.clone().addScaledVector(f, 9).addScaledVector(r, CURB_PARK_OFFSET);
+    const p1 = p0.clone().addScaledVector(f, 3.5);
+    const p2 = p3.clone().addScaledVector(f, -3.5);
+    this.turnSignalState = 'RIGHT';
+    this.parkIntent = false;
+    this.beginPath(this.buildPath(p0, p1, p2, p3, false), 2.4, 'PARKING_MANEUVER', this.currentAxis, this.currentDirection);
+  }
+
+  private startUnparking(): void {
+    const f = this.forward();
+    const r = this.rightVec();
+    const p0 = this.position.clone();
+    const p3 = p0.clone().addScaledVector(f, 9).addScaledVector(r, -CURB_PARK_OFFSET);
+    const p1 = p0.clone().addScaledVector(f, 3.5);
+    const p2 = p3.clone().addScaledVector(f, -3.5);
+    this.turnSignalState = 'LEFT';
+    this.beginPath(this.buildPath(p0, p1, p2, p3, false), 3.0, 'UNPARKING_MANEUVER', this.currentAxis, this.currentDirection);
+  }
+
+  // ──────────────────── EXECUÇÃO DE MANOBRAS ────────────────────
+  private updateManeuver(_delta: number, perception: Perception): void {
+    // Fase de ré do retorno em U
+    if (this.state === 'U_TURN_MANEUVER' && this.uTurnReverseRemaining > 0) {
+      this.turnSignalState = 'HAZARD';
+      // Perfil de ré que desacelera até zero exatamente ao fim do recuo
+      this.targetSpeed = -Math.min(1.8, Math.sqrt(2 * COMFORT_DECEL * this.uTurnReverseRemaining));
+      return;
+    }
+
+    if (!this.path) {
+      this.finishManeuver();
+      return;
+    }
+
+    // Mesmo em manobra, respeita obstáculos (pedestre cruzando a curva, etc.)
+    this.targetSpeed = Math.min(this.pathMaxSpeed, this.obstacleSpeedLimit(perception));
+  }
+
+  private finishManeuver(): void {
+    const endState = this.state;
+    if (this.path) this.position.copy(this.path.p3);
+    this.path = null;
+    this.pathS = 0;
+    this.currentAxis = this.pendingAxis;
+    this.currentDirection = this.pendingDir;
+    this.rotationY = laneAngle(this.currentAxis, this.currentDirection);
+    this.mesh.rotation.y = this.rotationY;
+    this.targetSteeringAngle = 0;
+    this.turnSignalState = 'OFF';
+    this.blockedTimer = 0;
+    this.honked = false;
+
+    if (endState === 'PARKING_MANEUVER') {
+      this.state = 'PARKED';
+      this.parkTimer = 0;
+      this.parkDuration = 10 + Math.random() * 8;
+      this.targetSpeed = 0;
+      this.speed = 0;
+      return;
+    }
+    if (endState === 'UNPARKING_MANEUVER') {
+      this.parkCooldown = 30;
+    }
+    this.turnIntentRolled = false;
+    this.turnIntent = 'STRAIGHT';
+    this.state = 'CRUISING';
+  }
+
+  private updateParked(delta: number, others: VehicleAgent[]): void {
+    this.targetSpeed = 0;
+    this.targetSteeringAngle = 0;
+    this.parkTimer += delta;
+    this.turnSignalState = this.parkTimer > this.parkDuration - 2.5 ? 'LEFT' : 'OFF';
+
+    if (this.parkTimer > this.parkDuration && this.laneBehindClear(others)) {
+      this.startUnparking();
+    }
+  }
+
+  /** Antes de sair da vaga, confere o retrovisor: nenhum carro se aproximando na faixa. */
+  private laneBehindClear(others: VehicleAgent[]): boolean {
+    const lat = laneLateral(this.currentAxis, this.currentDirection);
+    const myAlong = this.along();
+    for (const o of others) {
+      if (o === this) continue;
+      const oLat = this.currentAxis === 'NS' ? o.position.x : o.position.z;
+      const oAlong = this.currentAxis === 'NS' ? o.position.z : o.position.x;
+      const rel = (oAlong - myAlong) * this.currentDirection; // >0 à frente, <0 atrás
+      if (Math.abs(oLat - lat) < 2.2 && rel > -18 && rel < 10) return false;
+    }
+    return true;
+  }
+
+  // ──────────────────── DINÂMICA LONGITUDINAL ────────────────────
+  private integrateSpeed(delta: number, perception: Perception): void {
+    const diff = this.targetSpeed - this.speed;
+    const emergency = perception.kind !== 'none' && perception.gap < 2.5 && this.speed > 0.5;
+    const decel = emergency ? MAX_DECEL : COMFORT_DECEL * 1.6;
+    const step = THREE.MathUtils.clamp(diff, -decel * delta, MAX_ACCEL * delta);
+    this.speed += step;
+    if (Math.abs(this.speed) < 0.02 && Math.abs(this.targetSpeed) < 0.02) this.speed = 0;
+  }
+
+  private applyMotion(delta: number): void {
+    // Ré do retorno em U (em linha reta pela faixa)
+    if (this.state === 'U_TURN_MANEUVER' && this.uTurnReverseRemaining > 0) {
+      const ds = this.speed * delta; // negativo
+      this.position.addScaledVector(this.forward(), ds);
+      // Piso mínimo mantém a fase ativa até o carro parar de fato antes de engatar a frente
+      this.uTurnReverseRemaining = Math.max(0.001, this.uTurnReverseRemaining - Math.abs(ds));
+      this.targetSteeringAngle = 0;
+      if (this.uTurnReverseRemaining < 0.05 && Math.abs(this.speed) < 0.15) {
+        this.uTurnReverseRemaining = 0;
+        this.speed = 0;
+        this.buildUTurnArc();
+      }
+      return;
+    }
+
+    if (this.path) {
+      this.advanceAlongPath(delta);
+      return;
+    }
+
+    if (this.state === 'PARKED') return;
+
+    // Seguimento de faixa: avança e corrige suavemente qualquer desvio lateral residual
+    const ds = Math.max(0, this.speed) * delta;
+    const heading = laneAngle(this.currentAxis, this.currentDirection);
+    this.position.x += Math.sin(heading) * ds;
+    this.position.z += Math.cos(heading) * ds;
+
+    const lat = laneLateral(this.currentAxis, this.currentDirection);
+    const k = Math.min(1, delta * 2.5);
+    let lateralError: number;
+    if (this.currentAxis === 'NS') {
+      lateralError = lat - this.position.x;
+      this.position.x += lateralError * k;
+    } else {
+      lateralError = lat - this.position.z;
+      this.position.z += lateralError * k;
+    }
+    this.rotationY = heading;
+    this.mesh.rotation.y = heading;
+    this.targetSteeringAngle = THREE.MathUtils.clamp(lateralError * 0.15, -0.2, 0.2);
+  }
+
+  private advanceAlongPath(delta: number): void {
+    const path = this.path!;
+    const ds = Math.abs(this.speed) * delta;
+    this.pathS += ds;
+    const t = Math.min(1, this.pathS / path.length);
+
+    const pos = this.bezierPoint(path.p0, path.p1, path.p2, path.p3, t, new THREE.Vector3());
+    this.position.set(pos.x, this.position.y, pos.z);
+
+    const tan = this.bezierTangent(path, t, new THREE.Vector3());
+    if (tan.lengthSq() > 1e-6) {
+      const heading = path.reverse ? Math.atan2(-tan.x, -tan.z) : Math.atan2(tan.x, tan.z);
+      const dHeading = wrapAngle(heading - this.rotationY);
+      // Ângulo de esterçamento coerente com a curvatura (modelo bicicleta: δ = atan(L·κ))
+      if (ds > 1e-4) {
+        const curvature = dHeading / ds;
+        this.targetSteeringAngle = THREE.MathUtils.clamp(Math.atan(this.wheelbase * curvature), -0.6, 0.6);
+      }
+      this.rotationY = heading;
+      this.mesh.rotation.y = heading;
+    }
+
+    if (t >= 1) this.finishManeuver();
   }
 
   // ──────────────────── DINÂMICA DE SUSPENSÃO (PITCH & ROLL) ────────────────────
   private updateSuspensionPhysics(delta: number): void {
-    // 1. Esterçamento das Rodas Dianteiras
-    this.steeringAngle = THREE.MathUtils.lerp(this.steeringAngle, this.targetSteeringAngle, delta * 6.5);
+    // Aceleração e taxa de guinada medidas (não estimadas a partir do alvo)
+    const rawAccel = (this.speed - this.prevSpeed) / delta;
+    const rawYaw = wrapAngle(this.rotationY - this.prevRotationY) / delta;
+    this.measuredAccel = THREE.MathUtils.lerp(this.measuredAccel, rawAccel, Math.min(1, delta * 6));
+    this.measuredYawRate = THREE.MathUtils.lerp(this.measuredYawRate, rawYaw, Math.min(1, delta * 6));
+    this.prevSpeed = this.speed;
+    this.prevRotationY = this.rotationY;
+
+    // Esterçamento das rodas dianteiras
+    this.steeringAngle = THREE.MathUtils.lerp(this.steeringAngle, this.targetSteeringAngle, Math.min(1, delta * 6.5));
     for (const pivot of this.frontWheelPivots) {
       pivot.rotation.y = this.steeringAngle;
     }
 
-    // 2. Pitch da Carroceria (Afundamento na frenagem / Empinamento na arrancada)
-    const acceleration = (this.targetSpeed - this.speed) * 4.0;
-    // Se estiver freando (acceleration < 0), pitch é negativo (mergulho frontal)
-    this.targetPitch = THREE.MathUtils.clamp(-acceleration * 0.018, -0.05, 0.035);
-    this.currentPitch = THREE.MathUtils.lerp(this.currentPitch, this.targetPitch, delta * 8.0);
+    // Pitch: frenagem (accel<0) afunda a dianteira; arrancada empina levemente
+    const targetPitch = THREE.MathUtils.clamp(-this.measuredAccel * 0.012, -0.03, 0.045);
+    this.currentPitch = THREE.MathUtils.lerp(this.currentPitch, targetPitch, Math.min(1, delta * 8));
     this.bodyGroup.rotation.x = this.currentPitch;
 
-    // 3. Roll da Carroceria (Inclinação lateral centrífuga em curvas)
-    const lateralG = (this.speed * this.speed * Math.sin(this.steeringAngle)) / this.wheelbase;
-    this.targetRoll = THREE.MathUtils.clamp(-lateralG * 0.008, -0.06, 0.06);
-    this.currentRoll = THREE.MathUtils.lerp(this.currentRoll, this.targetRoll, delta * 7.0);
+    // Roll: aceleração lateral (v·ω) inclina a cabine para fora da curva
+    const lateralAccel = this.speed * this.measuredYawRate;
+    const targetRoll = THREE.MathUtils.clamp(lateralAccel * 0.02, -0.06, 0.06);
+    this.currentRoll = THREE.MathUtils.lerp(this.currentRoll, targetRoll, Math.min(1, delta * 7));
     this.bodyGroup.rotation.z = this.currentRoll;
   }
 
   // ──────────────────── ILUMINAÇÃO & PISCAS ────────────────────
   private updateVehicleLighting(delta: number): void {
-    // Luzes de freio reativas
-    const isBraking =
-      this.speed < this.targetSpeed * 0.6 ||
-      this.state === 'WAITING_SIGNAL' ||
-      this.state === 'OBSTACLE_BRAKING';
-    this.brakeLightMat.emissiveIntensity = isBraking ? 2.6 : 0.4;
+    const parked = this.state === 'PARKED';
+    const isBraking = !parked && (this.measuredAccel < -0.6 || (Math.abs(this.speed) < 0.3 && this.targetSpeed < 0.3));
+    this.brakeLightMat.emissiveIntensity = isBraking ? 2.6 : parked ? 0.1 : 0.4;
     this.brakeLightMat.color.setHex(isBraking ? 0xff0000 : 0x991111);
+    this.headlightMat.emissiveIntensity = parked ? 0.15 : 2.0;
 
-    // Luz de ré
-    const isReversing = (this.state === 'U_TURN_MANEUVER' && this.uTurnStep === 1) || this.state === 'UNPARKING_MANEUVER';
+    const isReversing = this.speed < -0.05;
     this.reverseLightMat.emissiveIntensity = isReversing ? 2.2 : 0;
     this.reverseLightMat.emissive.setHex(isReversing ? 0xffffff : 0x000000);
 
-    // Pisca-pisca das setas de direção a 2 Hz (~0.25s ligado, ~0.25s desligado)
+    // Pisca-pisca a ~2 Hz
     this.blinkTimer += delta * 4.0;
     const isBlinkOn = Math.floor(this.blinkTimer) % 2 === 0;
 
@@ -878,17 +1103,10 @@ export class VehicleAgent {
     this.rightTurnSignalMat.emissiveIntensity = rightActive ? 2.5 : 0;
     this.rightTurnSignalMat.emissive.setHex(rightActive ? 0xff8800 : 0x000000);
   }
-
-  private calculateLaneAngle(): number {
-    if (this.currentAxis === 'NS') {
-      return this.currentDirection === 1 ? 0 : Math.PI;
-    }
-    return this.currentDirection === 1 ? Math.PI / 2 : -Math.PI / 2;
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FROTA DE VEÍCULOS AUTÔNOMOS DA CIDADE VIRTUAL
+// FROTA DE VEÍCULOS AUTÔNOMOS DA CIDADE VIRTUAL (mão direita — CTB)
 // ─────────────────────────────────────────────────────────────────────────────
 export const CITY_VEHICLES: VehicleConfig[] = [
   {
@@ -898,7 +1116,7 @@ export const CITY_VEHICLES: VehicleConfig[] = [
     type: 'sedan',
     color: 0x1565c0, // Azul Cobalto Metálico
     cruiseSpeed: 7.2, // ~26 km/h
-    startPosition: new THREE.Vector3(-3.5, 0.19, 32.0),
+    startPosition: new THREE.Vector3(3.5, 0.19, 32.0),
     startRotationY: Math.PI, // Sentido Norte
     routeAxis: 'NS',
     routeDirection: -1,
@@ -910,7 +1128,7 @@ export const CITY_VEHICLES: VehicleConfig[] = [
     type: 'suv',
     color: 0xc62828, // Carmesim Metálico
     cruiseSpeed: 6.8, // ~24 km/h
-    startPosition: new THREE.Vector3(3.5, 0.19, -30.0),
+    startPosition: new THREE.Vector3(-3.5, 0.19, -26.0),
     startRotationY: 0, // Sentido Sul
     routeAxis: 'NS',
     routeDirection: 1,
@@ -922,12 +1140,11 @@ export const CITY_VEHICLES: VehicleConfig[] = [
     type: 'hatch',
     color: 0xdcdcdc, // Prata Metálico
     cruiseSpeed: 6.5, // ~23 km/h
-    startPosition: new THREE.Vector3(-32.0, 0.19, -3.5),
+    startPosition: new THREE.Vector3(-32.0, 0.19, 3.5),
     startRotationY: Math.PI / 2, // Sentido Leste
     routeAxis: 'EW',
     routeDirection: 1,
     canPark: true,
-    parkingSpot: new THREE.Vector3(-8.0, 0.19, -36.0), // Vaga no estacionamento do mercado
   },
   {
     id: 'veh-coupe-black',
@@ -936,9 +1153,10 @@ export const CITY_VEHICLES: VehicleConfig[] = [
     type: 'coupe',
     color: 0x212121, // Grafite Ônix
     cruiseSpeed: 8.5, // ~30 km/h
-    startPosition: new THREE.Vector3(30.0, 0.19, 3.5),
+    startPosition: new THREE.Vector3(30.0, 0.19, -3.5),
     startRotationY: -Math.PI / 2, // Sentido Oeste
     routeAxis: 'EW',
     routeDirection: -1,
+    canPark: true,
   },
 ];
