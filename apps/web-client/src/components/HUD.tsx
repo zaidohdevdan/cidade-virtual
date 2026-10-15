@@ -31,9 +31,9 @@ export const HUD: React.FC<HUDProps> = ({
   snapshotData,
 }) => {
   const tlBadgeColors: Record<TrafficLightState, { icon: string; text: string }> = {
-    red: { icon: '🔴', text: 'RED' },
-    yellow: { icon: '🟡', text: 'YELLOW' },
-    green: { icon: '🟢', text: 'GREEN' },
+    green: { icon: '🟢', text: 'AV. CENTRAL' },
+    yellow: { icon: '🟡', text: 'ATENÇÃO (N-S)' },
+    red: { icon: '🟢', text: 'TRANSVERSAL' },
   };
 
   const timeLabels = {
@@ -68,7 +68,7 @@ export const HUD: React.FC<HUDProps> = ({
               <span className="legend-icon legend-vehicle">🚗</span> Veículo
             </div>
             <div className="legend-item">
-              <span className="legend-icon legend-tl">🚦</span> Semáforo
+              <span className="legend-icon legend-tl">🚦</span> Semáforos (DENATRAN)
               <span className="tl-badge" id="tl-status">
                 {tlBadgeColors[trafficLightState].icon} {tlBadgeColors[trafficLightState].text}
               </span>
@@ -88,9 +88,9 @@ export const HUD: React.FC<HUDProps> = ({
             className="action-btn"
             id="btn-traffic-light"
             onClick={onToggleTrafficLight}
-            title="Alternar ciclo do semáforo"
+            title="Alternar ciclo semafórico DENATRAN"
           >
-            🚦 Semáforo: {trafficLightState.toUpperCase()}
+            🚦 Semáforos: {trafficLightState === 'green' ? 'AV. CENTRAL' : trafficLightState === 'yellow' ? 'ATENÇÃO' : 'TRANSVERSAL'}
           </button>
           <button
             className="action-btn"

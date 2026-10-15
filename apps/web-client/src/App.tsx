@@ -19,8 +19,8 @@ export const App: React.FC = () => {
   const player = useMemo(() => new DanielAvatar(), []);
   const agents = useMemo(() => CITY_AGENTS.map((cfg) => new AgentAvatar(cfg)), []);
 
-  // Estados reativos da interface e simulação
-  const [trafficLightState, setTrafficLightState] = useState<TrafficLightState>('red');
+  // Estados reativos da interface e simulação (Padrão DENATRAN em 2 fases)
+  const [trafficLightState, setTrafficLightState] = useState<TrafficLightState>('green');
   const [timeOfDay, setTimeOfDay] = useState<'day' | 'sunset' | 'night'>('day');
   const [isFirstPerson, setIsFirstPerson] = useState<boolean>(false);
   const [cameraAngleY, setCameraAngleY] = useState<number>(0);
@@ -32,17 +32,23 @@ export const App: React.FC = () => {
   });
   const [isSnapshotOpen, setIsSnapshotOpen] = useState<boolean>(false);
 
-  // Ciclo automático do semáforo do cruzamento (8s vermelho, 8s verde, 3s amarelo)
+  // Ciclo automático semafórico em 2 fases (Padrão DENATRAN: 8s Av. Central Verde -> 3s Amarelo -> 8s Transversal Verde)
   useEffect(() => {
-    const tlOrder: TrafficLightState[] = ['red', 'green', 'yellow'];
-    let idx = 0;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
-    const interval = setInterval(() => {
-      idx = (idx + 1) % tlOrder.length;
-      setTrafficLightState(tlOrder[idx]);
-    }, 8000);
+    const scheduleNext = (state: TrafficLightState) => {
+      const delay = state === 'yellow' ? 3000 : 8000;
+      const nextState: TrafficLightState = state === 'green' ? 'yellow' : state === 'yellow' ? 'red' : 'green';
 
-    return () => clearInterval(interval);
+      timeoutId = setTimeout(() => {
+        setTrafficLightState(nextState);
+        scheduleNext(nextState);
+      }, delay);
+    };
+
+    scheduleNext('green');
+
+    return () => clearTimeout(timeoutId);
   }, []);
 
   // Conexão em tempo real Socket.IO com o backend NestJS
@@ -73,7 +79,7 @@ export const App: React.FC = () => {
   }, []);
 
   const handleToggleTrafficLight = useCallback(() => {
-    setTrafficLightState((prev) => (prev === 'red' ? 'green' : prev === 'green' ? 'yellow' : 'red'));
+    setTrafficLightState((prev) => (prev === 'green' ? 'yellow' : prev === 'yellow' ? 'red' : 'green'));
   }, []);
 
   const handleToggleTimeOfDay = useCallback(() => {

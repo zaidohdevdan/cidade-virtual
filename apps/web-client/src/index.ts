@@ -60,9 +60,9 @@ export function createSynapseCity(): {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // ── Ciclo do Semáforo Único do Cruzamento ──────────
+  // ── Ciclo dos Semáforos do Cruzamento (Padrão DENATRAN em 2 Fases) ──
   let tlTimer = 0;
-  const tlStates: TrafficLightState[] = ['red', 'green', 'yellow'];
+  const tlStates: TrafficLightState[] = ['green', 'yellow', 'red'];
   let tlIdx = 0;
 
   const clock = new THREE.Clock();

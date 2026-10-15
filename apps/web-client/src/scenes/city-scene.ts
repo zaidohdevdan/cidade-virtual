@@ -13,6 +13,7 @@ export interface InteractiveObject {
 }
 
 export type TrafficLightState = 'red' | 'yellow' | 'green';
+export type IntersectionPhase = 'NS_GREEN' | 'NS_YELLOW' | 'EW_GREEN' | 'EW_YELLOW' | 'ALL_RED';
 
 export interface ObstacleCollider {
   type: 'box' | 'cylinder';
@@ -26,8 +27,9 @@ export interface ObstacleCollider {
   name?: string;
 }
 
-interface TrafficLightRef {
+export interface TrafficLightRef {
   id: string;
+  axis: 'NS' | 'EW';
   redMat: THREE.MeshStandardMaterial;
   yellowMat: THREE.MeshStandardMaterial;
   greenMat: THREE.MeshStandardMaterial;
@@ -44,7 +46,7 @@ interface TrafficLightRef {
 //       * Avenida Central (Norte-Sul, eixo Z)
 //       * Rua Transversal (Leste-Oeste, eixo X)
 //       * Faixas de pedestres e linhas de retenção
-//   - 1 Único Semáforo na esquina da calçada do cruzamento
+//   - 4 Semáforos nas 4 esquinas do cruzamento (Padrão DENATRAN / CONTRAN)
 //   - Praça Central no Quadrante Sudoeste (SW) com fonte, bancos e flores
 //   - Mercado no Quadrante Norte (NE/N)
 //   - Café no Quadrante Leste (SE/E)
@@ -69,7 +71,7 @@ export class CityScene {
     this.buildGround();
     this.buildRoads();
     this.buildCrosswalks();
-    this.buildTrafficLights(); // Apenas 1 semáforo na esquina do cruzamento
+    this.buildTrafficLights(); // 4 Semáforos padrão DENATRAN/CONTRAN nas 4 esquinas do cruzamento
     this.buildPraca();        // Praça de pedestres no quadrante SW
     this.buildMarket();       // Mercado no quadrante norte
     this.buildCafe();         // Café no quadrante leste
@@ -322,26 +324,97 @@ export class CityScene {
     }
   }
 
-  // ──────────────────── O ÚNICO SEMÁFORO DO CRUZAMENTO ────────────────────
+  // ──────────────────── SINALIZAÇÃO SEMAFÓRICA DO CRUZAMENTO (PADRÃO DENATRAN / CONTRAN) ────────────────────
   private buildTrafficLights(): void {
-    // Apenas 1 semáforo posicionado na esquina da calçada do cruzamento
-    // Local: esquina Sudeste (x = 8.5, z = 8.5), com visão privilegiada para a via e faixas
-    const sx = 8.5;
-    const sz = 8.5;
-    const ref = this.buildSingleTrafficLight(sx, sz, 'tl-cruzamento');
-    this.trafficLights.push(ref);
+    // Conforme o Manual Brasileiro de Sinalização de Trânsito (Volume V - Sinalização Semafórica, CONTRAN/DENATRAN):
+    // Em um cruzamento ortogonal de vias de mão dupla, todas as 4 aproximações devem possuir sinalização
+    // semafórica visível antes da Linha de Retenção (LRE), posicionada à direita da via com braço projetado
+    // sobre a pista de rolamento (altura de 5,20m) e foco para pedestres integrado na coluna vertical (altura de 2,40m).
+    //
+    // As 4 esquinas recebem 1 conjunto semafórico completo cada:
+    // 1. Esquina Sudeste (SE: 8.5, 8.5) -> Aproximação Sul da Av. Central (sentido Norte, rotY = 0, eixo NS)
+    // 2. Esquina Noroeste (NW: -8.5, -8.5) -> Aproximação Norte da Av. Central (sentido Sul, rotY = Math.PI, eixo NS)
+    // 3. Esquina Sudoeste (SW: -8.5, 8.5) -> Aproximação Oeste da Rua Transversal (sentido Leste, rotY = -Math.PI / 2, eixo EW)
+    // 4. Esquina Nordeste (NE: 8.5, -8.5) -> Aproximação Leste da Rua Transversal (sentido Oeste, rotY = Math.PI / 2, eixo EW)
 
-    // Registrar collider do poste do semáforo
-    this.colliders.push({
-      type: 'cylinder',
-      cx: sx,
-      cz: sz,
-      radius: 0.45,
-      name: 'Poste do Semáforo',
-    });
+    const configs = [
+      {
+        id: 'tl-sul',
+        x: 8.5,
+        z: 8.5,
+        rotY: 0,
+        axis: 'NS' as const,
+        name: 'Semáforo Sul — Av. Central',
+        desc: 'Semáforo veicular padrão DENATRAN regulando a aproximação Sul da Avenida Central (sentido Norte) e travessia de pedestres.',
+        colliderName: 'Poste Semáforo Sul (Av. Central)',
+      },
+      {
+        id: 'tl-norte',
+        x: -8.5,
+        z: -8.5,
+        rotY: Math.PI,
+        axis: 'NS' as const,
+        name: 'Semáforo Norte — Av. Central',
+        desc: 'Semáforo veicular padrão DENATRAN regulando a aproximação Norte da Avenida Central (sentido Sul) e travessia de pedestres.',
+        colliderName: 'Poste Semáforo Norte (Av. Central)',
+      },
+      {
+        id: 'tl-oeste',
+        x: -8.5,
+        z: 8.5,
+        rotY: -Math.PI / 2,
+        axis: 'EW' as const,
+        name: 'Semáforo Oeste — Rua Transversal',
+        desc: 'Semáforo veicular padrão DENATRAN regulando a aproximação Oeste da Rua Transversal (sentido Leste) e travessia de pedestres.',
+        colliderName: 'Poste Semáforo Oeste (Rua Transversal)',
+      },
+      {
+        id: 'tl-leste',
+        x: 8.5,
+        z: -8.5,
+        rotY: Math.PI / 2,
+        axis: 'EW' as const,
+        name: 'Semáforo Leste — Rua Transversal',
+        desc: 'Semáforo veicular padrão DENATRAN regulando a aproximação Leste da Rua Transversal (sentido Oeste) e travessia de pedestres.',
+        colliderName: 'Poste Semáforo Leste (Rua Transversal)',
+      },
+    ];
+
+    for (const cfg of configs) {
+      const ref = this.buildSingleTrafficLight(
+        cfg.x,
+        cfg.z,
+        cfg.rotY,
+        cfg.id,
+        cfg.name,
+        cfg.desc,
+        cfg.axis
+      );
+      this.trafficLights.push(ref);
+
+      // Colisor físico do poste cilíndrico na calçada
+      this.colliders.push({
+        type: 'cylinder',
+        cx: cfg.x,
+        cz: cfg.z,
+        radius: 0.45,
+        name: cfg.colliderName,
+      });
+    }
+
+    // Inicializa na Fase 1 do DENATRAN (Av. Central aberta, Transversal fechada)
+    this.setTrafficPhase('NS_GREEN');
   }
 
-  private buildSingleTrafficLight(x: number, z: number, id: string): TrafficLightRef {
+  private buildSingleTrafficLight(
+    x: number,
+    z: number,
+    rotY: number,
+    id: string,
+    name: string,
+    desc: string,
+    axis: 'NS' | 'EW'
+  ): TrafficLightRef {
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x222629, metalness: 0.85, roughness: 0.25 });
     const boxMat = new THREE.MeshStandardMaterial({ color: 0x111315, roughness: 0.3 });
     const visorMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.4 });
@@ -438,21 +511,23 @@ export class CityScene {
     light.position.set(headX, headY, 1.2);
     group.add(light);
 
+    // Posicionamento e rotação para orientar braço e lentes conforme a via
     group.position.set(x, 0, z);
+    group.rotation.y = rotY;
     this.scene.add(group);
 
     this.interactiveObjects.push({
       id,
-      name: 'Semáforo do Cruzamento',
+      name,
       type: 'traffic_light',
       position: new THREE.Vector3(x, 4.5, z),
       observationRadius: 10,
-      description: 'Semáforo de trânsito regulando o cruzamento da Avenida Central com a Rua Transversal.',
-      semanticRule: 'Vermelho: pare. Verde: siga com cautela. Pedestres atravessam na faixa quando liberado.',
+      description: desc,
+      semanticRule: 'Vermelho: pare antes da faixa. Verde: siga com cautela. Pedestres atravessam na fase autorizada.',
       emotionalWeight: 0.9,
     });
 
-    return { id, redMat, yellowMat, greenMat, pedRedMat, pedGreenMat, light, state: 'red' };
+    return { id, axis, redMat, yellowMat, greenMat, pedRedMat, pedGreenMat, light, state: 'red' };
   }
 
   // ──────────────────── PRAÇA CENTRAL (QUADRANTE SUDOESTE) ────────────────────
@@ -1261,32 +1336,84 @@ export class CityScene {
     }
   }
 
-  // ──────────────────── TRAFFIC LIGHT STATE ────────────────────
+  // ──────────────────── CONTROLE SEMAFÓRICO (PADRÃO DENATRAN EM 2 FASES) ────────────────────
+  public currentPhase: IntersectionPhase = 'NS_GREEN';
+
   public setTrafficLightState(id: string, state: TrafficLightState): void {
-    const ref = this.trafficLights.find((t) => t.id === id);
-    if (!ref) return;
-    ref.state = state;
+    const refs = this.trafficLights.filter(
+      (t) => t.id === id || (id === 'tl-cruzamento' && t.id === 'tl-sul')
+    );
+    for (const ref of refs) {
+      ref.state = state;
 
-    // Focos Veiculares
-    ref.redMat.emissiveIntensity = state === 'red' ? 2.5 : 0;
-    ref.redMat.emissive.setHex(state === 'red' ? 0xff0000 : 0x000000);
-    ref.yellowMat.emissiveIntensity = state === 'yellow' ? 2.5 : 0;
-    ref.yellowMat.emissive.setHex(state === 'yellow' ? 0xffbb00 : 0x000000);
-    ref.greenMat.emissiveIntensity = state === 'green' ? 2.5 : 0;
-    ref.greenMat.emissive.setHex(state === 'green' ? 0x00ff44 : 0x000000);
+      // Focos Veiculares (Vermelho, Amarelo, Verde)
+      ref.redMat.emissiveIntensity = state === 'red' ? 2.5 : 0;
+      ref.redMat.emissive.setHex(state === 'red' ? 0xff0000 : 0x000000);
+      ref.yellowMat.emissiveIntensity = state === 'yellow' ? 2.5 : 0;
+      ref.yellowMat.emissive.setHex(state === 'yellow' ? 0xffbb00 : 0x000000);
+      ref.greenMat.emissiveIntensity = state === 'green' ? 2.5 : 0;
+      ref.greenMat.emissive.setHex(state === 'green' ? 0x00ff44 : 0x000000);
 
-    // Focos de Pedestre (inverso: quando carro está vermelho, pedestre está verde)
-    const pedCanWalk = state === 'red';
-    ref.pedRedMat.emissiveIntensity = pedCanWalk ? 0 : 2.0;
-    ref.pedRedMat.emissive.setHex(pedCanWalk ? 0x000000 : 0xff0000);
-    ref.pedGreenMat.emissiveIntensity = pedCanWalk ? 2.0 : 0;
-    ref.pedGreenMat.emissive.setHex(pedCanWalk ? 0x00ff44 : 0x000000);
+      // Focos de Pedestre (Regra DENATRAN: pedestre atravessa com segurança quando o fluxo veicular desta via estiver parado)
+      const pedCanWalk = state === 'red';
+      ref.pedRedMat.emissiveIntensity = pedCanWalk ? 0 : 2.0;
+      ref.pedRedMat.emissive.setHex(pedCanWalk ? 0x000000 : 0xff0000);
+      ref.pedGreenMat.emissiveIntensity = pedCanWalk ? 2.0 : 0;
+      ref.pedGreenMat.emissive.setHex(pedCanWalk ? 0x00ff44 : 0x000000);
 
-    // Luz dinâmica da cena
-    ref.light.color.setHex(state === 'red' ? 0xff0000 : state === 'yellow' ? 0xffbb00 : 0x00ff44);
+      // Luz dinâmica da cena
+      ref.light.color.setHex(state === 'red' ? 0xff0000 : state === 'yellow' ? 0xffbb00 : 0x00ff44);
+    }
+  }
+
+  public setTrafficPhase(phase: IntersectionPhase): void {
+    this.currentPhase = phase;
+    switch (phase) {
+      case 'NS_GREEN':
+        this.setTrafficLightState('tl-sul', 'green');
+        this.setTrafficLightState('tl-norte', 'green');
+        this.setTrafficLightState('tl-leste', 'red');
+        this.setTrafficLightState('tl-oeste', 'red');
+        break;
+      case 'NS_YELLOW':
+        this.setTrafficLightState('tl-sul', 'yellow');
+        this.setTrafficLightState('tl-norte', 'yellow');
+        this.setTrafficLightState('tl-leste', 'red');
+        this.setTrafficLightState('tl-oeste', 'red');
+        break;
+      case 'EW_GREEN':
+        this.setTrafficLightState('tl-sul', 'red');
+        this.setTrafficLightState('tl-norte', 'red');
+        this.setTrafficLightState('tl-leste', 'green');
+        this.setTrafficLightState('tl-oeste', 'green');
+        break;
+      case 'EW_YELLOW':
+        this.setTrafficLightState('tl-sul', 'red');
+        this.setTrafficLightState('tl-norte', 'red');
+        this.setTrafficLightState('tl-leste', 'yellow');
+        this.setTrafficLightState('tl-oeste', 'yellow');
+        break;
+      case 'ALL_RED':
+        this.setTrafficLightState('tl-sul', 'red');
+        this.setTrafficLightState('tl-norte', 'red');
+        this.setTrafficLightState('tl-leste', 'red');
+        this.setTrafficLightState('tl-oeste', 'red');
+        break;
+    }
   }
 
   public setAllTrafficLights(state: TrafficLightState): void {
+    // Sincroniza o ciclo semafórico em 2 fases conforme a orientação principal (Avenida Central)
+    if (state === 'green') {
+      this.setTrafficPhase('NS_GREEN');
+    } else if (state === 'yellow') {
+      this.setTrafficPhase('NS_YELLOW');
+    } else {
+      this.setTrafficPhase('EW_GREEN');
+    }
+  }
+
+  public setUniformTrafficLights(state: TrafficLightState): void {
     for (const t of this.trafficLights) {
       this.setTrafficLightState(t.id, state);
     }
