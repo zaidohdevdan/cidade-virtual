@@ -5,11 +5,13 @@ import { WorldModule } from './modules/world/world.module';
 import { CitizensModule } from './modules/citizens/citizens.module';
 import { CognitionModule } from './modules/cognition/cognition.module';
 import { MemoryModule } from './modules/memory/memory.module';
+import { PersistenceModule } from './modules/persistence/persistence.module';
 import { WorldGateway } from './gateways/world.gateway';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    PersistenceModule,
     WorldModule,
     CitizensModule,
     CognitionModule,
