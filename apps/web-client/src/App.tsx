@@ -112,6 +112,8 @@ export const App: React.FC = () => {
         ...agents.map((a) => ({
           id: a.config.id,
           name: a.config.name,
+          star: a.config.starDesignation,
+          role: a.config.role,
           position: { x: Number(a.position.x.toFixed(2)), z: Number(a.position.z.toFixed(2)) },
         })),
       ],
