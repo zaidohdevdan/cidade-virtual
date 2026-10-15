@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CityScene, TrafficLightState, InteractiveObject } from './scenes/city-scene';
 import { DanielAvatar } from './avatars/daniel-avatar';
 import { AgentAvatar, CITY_AGENTS, AgentConfig } from './avatars/agent-avatar';
+import { VehicleAgent, CITY_VEHICLES } from './vehicles/vehicle-agent';
 import { CameraControls } from './controls/camera-controls';
 import type { SceneSnapshot, CitizenId } from '@cidade-virtual/types';
 
@@ -13,6 +14,7 @@ export function createSynapseCity(): {
   city: CityScene;
   player: DanielAvatar;
   agents: AgentAvatar[];
+  vehicles: VehicleAgent[];
 } {
   const container = document.getElementById('canvas-container');
   if (!container) throw new Error('Element #canvas-container not found.');
@@ -46,11 +48,18 @@ export function createSynapseCity(): {
   controls.isFirstPerson = false;
   controls.cameraAngleX = 0.55; // Ângulo perfeito para ver o cruzamento, semáforo e praça
 
-  // ── AI Agents ──────────────────────────────────────
+  // ── AI Agents (Cidadãos Estelares) ─────────────────
   const agents: AgentAvatar[] = CITY_AGENTS.map((cfg: AgentConfig) => {
     const agent = new AgentAvatar(cfg);
     city.scene.add(agent.mesh);
     return agent;
+  });
+
+  // ── Autonomous Vehicles ────────────────────────────
+  const vehicles: VehicleAgent[] = CITY_VEHICLES.map((cfg) => {
+    const veh = new VehicleAgent(cfg);
+    city.scene.add(veh.mesh);
+    return veh;
   });
 
   // ── Resize ─────────────────────────────────────────
@@ -130,10 +139,16 @@ export function createSynapseCity(): {
       player.update(delta, controls.input, controls.cameraAngleY, city.colliders);
     }
 
-    // Agents
+    // Agents (Cidadãos Estelares)
     for (const agent of agents) {
       agent.update(delta);
       agent.updateLabel(camera, renderer);
+    }
+
+    // Autonomous Vehicles (Trânsito Inteligente)
+    const pedPositions = agents.map((a) => a.position);
+    for (const vehicle of vehicles) {
+      vehicle.update(delta, city.trafficLights, pedPositions, player.position, vehicles);
     }
 
     // Camera
@@ -169,7 +184,7 @@ export function createSynapseCity(): {
   }
 
   animate();
-  return { scene: city.scene, renderer, camera, city, player, agents };
+  return { scene: city.scene, renderer, camera, city, player, agents, vehicles };
 }
 
 // ── Bootstrap ──────────────────────────────────────

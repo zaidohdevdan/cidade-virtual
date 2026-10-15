@@ -7,9 +7,11 @@ import { io, Socket } from 'socket.io-client';
 import { CityScene, TrafficLightState, InteractiveObject } from './scenes/city-scene';
 import { DanielAvatar } from './avatars/daniel-avatar';
 import { AgentAvatar, CITY_AGENTS } from './avatars/agent-avatar';
+import { VehicleAgent, CITY_VEHICLES } from './vehicles/vehicle-agent';
 import { City } from './components/City';
 import { Player } from './components/Player';
 import { Agents } from './components/Agents';
+import { Vehicles } from './components/Vehicles';
 import { CameraController } from './components/CameraController';
 import { HUD } from './components/HUD';
 
@@ -18,6 +20,7 @@ export const App: React.FC = () => {
   const city = useMemo(() => new CityScene(), []);
   const player = useMemo(() => new DanielAvatar(), []);
   const agents = useMemo(() => CITY_AGENTS.map((cfg) => new AgentAvatar(cfg)), []);
+  const vehicles = useMemo(() => CITY_VEHICLES.map((cfg) => new VehicleAgent(cfg)), []);
 
   // Estados reativos da interface e simulação (Padrão DENATRAN em 2 fases)
   const [trafficLightState, setTrafficLightState] = useState<TrafficLightState>('green');
@@ -117,6 +120,14 @@ export const App: React.FC = () => {
           position: { x: Number(a.position.x.toFixed(2)), z: Number(a.position.z.toFixed(2)) },
         })),
       ],
+      vehicles: vehicles.map((v) => ({
+        id: v.config.id,
+        name: v.config.name,
+        model: v.config.modelName,
+        state: v.state,
+        speedKmH: Number((v.speed * 3.6).toFixed(1)),
+        position: { x: Number(v.position.x.toFixed(2)), z: Number(v.position.z.toFixed(2)) },
+      })),
       interactiveObjects: city.interactiveObjects.map((obj) => ({
         id: obj.id,
         name: obj.name,
@@ -130,7 +141,7 @@ export const App: React.FC = () => {
       },
       timestamp: new Date().toISOString(),
     };
-  }, [telemetry, agents, city, trafficLightState, timeOfDay]);
+  }, [telemetry, agents, vehicles, city, trafficLightState, timeOfDay]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
@@ -152,6 +163,12 @@ export const App: React.FC = () => {
               city={city}
               trafficLightState={trafficLightState}
               timeOfDay={timeOfDay}
+            />
+            <Vehicles
+              vehicles={vehicles}
+              trafficLights={city.trafficLights}
+              agents={agents}
+              playerPos={player.position}
             />
             <Player
               player={player}

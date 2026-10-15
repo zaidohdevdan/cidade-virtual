@@ -881,11 +881,11 @@ export class CityScene {
     // Placa "ATENÇÃO: PROIBIDO JOGAR LIXO" na entrada da praça
     this.buildNoLitteringSign(-10, 10);
 
-    // Placas de identificação das ruas
-    this.buildStreetSign(0, -14, 'Avenida Central - Norte', 0);
-    this.buildStreetSign(0, 14, 'Avenida Central - Sul', 0);
-    this.buildStreetSign(-14, 0, 'Rua Transversal - Oeste', Math.PI / 2);
-    this.buildStreetSign(14, 0, 'Rua Transversal - Leste', Math.PI / 2);
+    // Placas de identificação das ruas posicionadas exclusivamente NAS CALÇADAS (fora do asfalto)
+    this.buildStreetSign(8.8, -14.5, 'AVENIDA CENTRAL', 'Sentido Norte • Bairro Centro', 0);
+    this.buildStreetSign(8.8, 14.5, 'AVENIDA CENTRAL', 'Sentido Sul • Bairro Centro', 0);
+    this.buildStreetSign(-14.5, 8.8, 'RUA TRANSVERSAL', 'Sentido Oeste • Bairro Centro', Math.PI / 2);
+    this.buildStreetSign(14.5, -8.8, 'RUA TRANSVERSAL', 'Sentido Leste • Bairro Centro', Math.PI / 2);
 
     // Billboards educativos na cidade
     this.buildBillboard(-36, 4, -18, '#1565c0', 'Cidade Conectada\nIAs em Harmonia', '🌐');
@@ -985,34 +985,58 @@ export class CityScene {
     });
   }
 
-  private buildStreetSign(x: number, z: number, text: string, ry: number): void {
+  private buildStreetSign(x: number, z: number, mainText: string, subText: string, ry: number): void {
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 128;
+    canvas.width = 600;
+    canvas.height = 180;
     const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#1565c0';
-    ctx.roundRect(0, 0, 512, 128, 16);
+    ctx.fillStyle = '#0d47a1'; // Azul oficial de placa toponímica urbana
+    ctx.roundRect(0, 0, 600, 180, 20);
     ctx.fill();
+
+    // Borda interna branca
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 8;
+    ctx.roundRect(8, 8, 584, 164, 14);
+    ctx.stroke();
+
+    // Faixa divisória fina
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(30, 115);
+    ctx.lineTo(570, 115);
+    ctx.stroke();
+
+    // Nome do Logradouro
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 44px sans-serif';
+    ctx.font = 'bold 50px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, 256, 64);
+    ctx.fillText(mainText, 300, 65);
+
+    // Subtexto (Sentido / Bairro / CEP)
+    ctx.fillStyle = '#ffecb3';
+    ctx.font = '500 24px sans-serif';
+    ctx.fillText(subText, 300, 145);
 
     const tex = new THREE.CanvasTexture(canvas);
     const sign = new THREE.Mesh(
-      new THREE.BoxGeometry(2.4, 0.6, 0.08),
-      new THREE.MeshStandardMaterial({ map: tex })
+      new THREE.BoxGeometry(2.6, 0.78, 0.08),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35 })
     );
-    sign.position.set(x, 3.2, z);
+    sign.position.set(x, 3.1, z);
     sign.rotation.y = ry;
+    sign.castShadow = true;
     this.scene.add(sign);
 
+    // Poste de sustentação na calçada
     const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.06, 3.2, 8),
-      new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.7 })
+      new THREE.CylinderGeometry(0.06, 0.06, 3.1, 10),
+      new THREE.MeshStandardMaterial({ color: 0x222629, metalness: 0.8, roughness: 0.3 })
     );
-    pole.position.set(x, 1.6, z);
+    pole.position.set(x, 1.55, z);
+    pole.castShadow = true;
     this.scene.add(pole);
 
     this.colliders.push({
@@ -1020,7 +1044,18 @@ export class CityScene {
       cx: x,
       cz: z,
       radius: 0.35,
-      name: `Poste de Rua (${text})`,
+      name: `Poste de Sinalização (${mainText})`,
+    });
+
+    this.interactiveObjects.push({
+      id: `sign-street-${x.toFixed(0)}-${z.toFixed(0)}`,
+      name: `Placa de Logradouro: ${mainText}`,
+      type: 'sign',
+      position: new THREE.Vector3(x, 2.5, z),
+      observationRadius: 4.5,
+      description: `Placa toponímica oficial na calçada identificando ${mainText} (${subText}).`,
+      semanticRule: 'Sinalização urbana de orientação toponímica conforme padrão de vias públicas.',
+      emotionalWeight: 0.3,
     });
   }
 
@@ -1169,14 +1204,9 @@ export class CityScene {
     }
   }
 
-  // ──────────────────── VEHICLES ────────────────────
+  // ──────────────────── VEHICLES (ESTACIONADOS EM VAGAS) ────────────────────
   private buildVehicles(): void {
-    // Carro parado antes da faixa sul do cruzamento
-    this.buildCar(3.5, 16, 0x111144, Math.PI);
-    // Carro parado antes da faixa norte descendo
-    this.buildCar(-3.5, -16, 0xd32f2f, 0);
-    // Carros no estacionamento do mercado
-    this.buildCar(-8, -36, 0x37474f, 0);
+    // Carro estacionado na vaga de compras do Super Market (fora da pista de rolamento)
     this.buildCar(8, -36, 0xeeeeee, 0);
   }
 
