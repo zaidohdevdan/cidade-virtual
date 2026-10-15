@@ -139,13 +139,13 @@ export class CityScene {
     cross.receiveShadow = true;
     this.scene.add(cross);
 
-    // 4. Linhas de Retenção (Stop Lines) para veículos antes das faixas de pedestre
+    // 4. Linhas de Retenção (LRE - DENATRAN/CONTRAN) para veículos a 1,5m antes das faixas de pedestres
     const stopLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const stopPositions = [
-      { x: 3.5, z: -11.5, w: 6.5, d: 0.5 }, // Pista Norte descendo
-      { x: -3.5, z: 11.5, w: 6.5, d: 0.5 }, // Pista Sul subindo
-      { x: -11.5, z: -3.5, w: 0.5, d: 6.5 }, // Pista Oeste
-      { x: 11.5, z: 3.5, w: 0.5, d: 6.5 },  // Pista Leste
+      { x: 3.5, z: -12.5, w: 6.6, d: 0.4 }, // Pista Norte descendo (mão direita: x > 0)
+      { x: -3.5, z: 12.5, w: 6.6, d: 0.4 }, // Pista Sul subindo (mão direita: x < 0)
+      { x: -12.5, z: -3.5, w: 0.4, d: 6.6 }, // Pista Oeste entrando (mão direita: z < 0)
+      { x: 12.5, z: 3.5, w: 0.4, d: 6.6 },  // Pista Leste entrando (mão direita: z > 0)
     ];
     for (const sl of stopPositions) {
       const g = new THREE.PlaneGeometry(sl.w, sl.d);
@@ -243,32 +243,40 @@ export class CityScene {
     }
   }
 
-  // ──────────────────── CROSSWALKS (FAIXAS DE PEDESTRES) ────────────────────
+  // ──────────────────── CROSSWALKS (FAIXAS DE PEDESTRES — PADRÃO DENATRAN/CONTRAN) ────────────────────
   private buildCrosswalks(): void {
-    const crossMat = new THREE.MeshBasicMaterial({ color: 0xf5f5f0 });
-    // Faixas posicionadas nas 4 aproximações do cruzamento central
-    // Largura da pista = 14m. 11 listras de 0.6m com espaçamento de 1.0m cobrem de -5.0m a +5.0m.
+    const crossMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+    // Especificações CONTRAN / DENATRAN (Manual de Sinalização Horizontal - Vol. IV):
+    // - Faixa Zebrada: listras longitudinais paralelas ao fluxo dos veículos.
+    // - Largura da listra: 0,40m.
+    // - Espaçamento entre listras: 0,40m (relação 1:1).
+    // - Comprimento da travessia (extensão longitudinal): 4,00m.
+    // - Para pista de 14m de largura, 17 listras cobrem de -6,60m a +6,60m (folga de 0,40m de sarjeta).
+    const stripeWidth = 0.40;
+    const stripeLength = 4.00;
+    const stripeSpacing = 0.80; // 0,40m de listra + 0,40m de vão livre
+    const numStripes = 17;
+    const startOffset = -((numStripes - 1) * stripeSpacing) / 2; // -6,40m a +6,40m
+
+    // Centro das faixas posicionado em ±9,0m (estendendo-se de ±7,0m até ±11,0m em relação ao centro)
     const positions = [
-      { x: 0, z: -8.8, isHorizontal: false, name: 'Faixa Norte' },
-      { x: 0, z: 8.8, isHorizontal: false, name: 'Faixa Sul' },
-      { x: -8.8, z: 0, isHorizontal: true, name: 'Faixa Oeste' },
-      { x: 8.8, z: 0, isHorizontal: true, name: 'Faixa Leste' },
+      { x: 0, z: -9.0, isHorizontal: false, name: 'Faixa Norte' },
+      { x: 0, z: 9.0, isHorizontal: false, name: 'Faixa Sul' },
+      { x: -9.0, z: 0, isHorizontal: true, name: 'Faixa Oeste' },
+      { x: 9.0, z: 0, isHorizontal: true, name: 'Faixa Leste' },
     ];
 
     for (const pos of positions) {
-      const numStripes = 11;
-      const stripeSpacing = 1.0;
-      const startOffset = -((numStripes - 1) * stripeSpacing) / 2; // -5.0 a +5.0
-
       for (let i = 0; i < numStripes; i++) {
         const offset = startOffset + i * stripeSpacing;
-        // Padrão de Faixa Zebrada:
-        // As listras devem ser paralelas ao fluxo de veículos da via.
-        // - Via horizontal (Leste/Oeste): comprimento 3.6m em X, largura 0.6m em Z, distribuídas em Z.
-        // - Via vertical (Norte/Sul): comprimento 3.6m em Z, largura 0.6m em X, distribuídas em X.
+
+        // Padrão DENATRAN: listras SEMPRE paralelas ao fluxo veicular:
+        // - Via horizontal (Leste/Oeste): comprimento 4.00m no eixo X, largura 0.40m no eixo Z.
+        // - Via vertical (Norte/Sul): comprimento 4.00m no eixo Z, largura 0.40m no eixo X.
         const sg = new THREE.PlaneGeometry(
-          pos.isHorizontal ? 3.6 : 0.6,
-          pos.isHorizontal ? 0.6 : 3.6
+          pos.isHorizontal ? stripeLength : stripeWidth,
+          pos.isHorizontal ? stripeWidth : stripeLength
         );
         const s = new THREE.Mesh(sg, crossMat);
         s.rotation.x = -Math.PI / 2;
@@ -286,7 +294,7 @@ export class CityScene {
         type: 'crosswalk',
         position: new THREE.Vector3(pos.x, 0, pos.z),
         observationRadius: 5.5,
-        description: 'Faixa de pedestres com listras brancas refletivas para travessia segura.',
+        description: 'Faixa de travessia zebrada oficial (padrão DENATRAN: listras de 0,40m x 4,00m paralelas ao tráfego).',
         semanticRule: 'Pedestres têm prioridade absoluta quando o semáforo estiver vermelho para veículos.',
         emotionalWeight: 0.6,
       });
