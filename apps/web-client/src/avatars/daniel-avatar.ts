@@ -23,6 +23,17 @@ export class DanielAvatar {
   private rightArm!: THREE.Mesh;
   private walkCycleTime: number = 0;
 
+  // Áurea Mística de Fogo Azul (Avatar Protagonista)
+  private auraGroup!: THREE.Group;
+  private innerFlameShell!: THREE.Mesh;
+  private outerFlameShell!: THREE.Mesh;
+  private flameCrownShell!: THREE.Mesh;
+  private auraLight!: THREE.PointLight;
+  private flameParticles: { mesh: THREE.Mesh; baseY: number; speedY: number; angle: number; radius: number }[] = [];
+  private auraGroundRing!: THREE.Mesh;
+  private auraGroundGlow!: THREE.Mesh;
+  private auraTime: number = 0;
+
   // Parâmetros de física e colisão
   private readonly baseSpeed = 5.0; // m/s
   private readonly sprintMultiplier = 1.8;
@@ -98,13 +109,172 @@ export class DanielAvatar {
     rightShoe.position.set(0, -0.72, 0.05);
     this.rightLeg.add(rightShoe);
 
-    // Indicador circular de seleção aos pés (God Mode Halo)
-    const ringGeom = new THREE.RingGeometry(0.4, 0.48, 32);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(ringGeom, ringMat);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.02;
-    this.mesh.add(ring);
+    // Constrói a Áurea Mística de Fogo Azul
+    this.buildBlueFlameAura();
+  }
+
+  /**
+   * Constrói a Áurea de Fogo Azul Transparente ao redor do Avatar Protagonista
+   */
+  private buildBlueFlameAura(): void {
+    this.auraGroup = new THREE.Group();
+    this.mesh.add(this.auraGroup);
+
+    // 1. Luz Mística de Fogo Azul no Centro do Avatar
+    this.auraLight = new THREE.PointLight(0x00e5ff, 1.8, 5.5);
+    this.auraLight.position.set(0, 1.1, 0);
+    this.auraGroup.add(this.auraLight);
+
+    // 2. Casca Interna da Chama (Ciano Elétrico com Additive Blending)
+    const innerGeo = new THREE.CylinderGeometry(0.48, 0.65, 2.05, 18, 4, true);
+    const innerMat = new THREE.MeshBasicMaterial({
+      color: 0x00e5ff,
+      transparent: true,
+      opacity: 0.38,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.innerFlameShell = new THREE.Mesh(innerGeo, innerMat);
+    this.innerFlameShell.position.set(0, 1.05, 0);
+    this.auraGroup.add(this.innerFlameShell);
+
+    // 3. Casca Externa da Chama (Azul Cobalto / Safira Eon)
+    const outerGeo = new THREE.CylinderGeometry(0.60, 0.76, 2.25, 20, 4, true);
+    const outerMat = new THREE.MeshBasicMaterial({
+      color: 0x2979ff,
+      transparent: true,
+      opacity: 0.28,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.outerFlameShell = new THREE.Mesh(outerGeo, outerMat);
+    this.outerFlameShell.position.set(0, 1.15, 0);
+    this.auraGroup.add(this.outerFlameShell);
+
+    // 4. Coroa de Labaredas Superiores (Efeito chamas crepitando sobre a cabeça)
+    const crownGeo = new THREE.ConeGeometry(0.55, 0.75, 16, 2, true);
+    const crownMat = new THREE.MeshBasicMaterial({
+      color: 0x00ffff,
+      transparent: true,
+      opacity: 0.32,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.flameCrownShell = new THREE.Mesh(crownGeo, crownMat);
+    this.flameCrownShell.position.set(0, 2.1, 0);
+    this.flameCrownShell.rotation.x = Math.PI;
+    this.auraGroup.add(this.flameCrownShell);
+
+    // 5. Partículas / Wisps de Chamas Ascendentes Flutuantes (16 labaredas em espiral)
+    const flameGeo = new THREE.ConeGeometry(0.06, 0.22, 6);
+    flameGeo.rotateX(Math.PI);
+    const flameMat = new THREE.MeshBasicMaterial({
+      color: 0x80d8ff,
+      transparent: true,
+      opacity: 0.75,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    for (let i = 0; i < 16; i++) {
+      const p = new THREE.Mesh(flameGeo, flameMat);
+      const angle = (i / 16) * Math.PI * 2;
+      const radius = 0.42 + Math.random() * 0.22;
+      const baseY = 0.2 + (i / 16) * 1.8;
+      p.position.set(Math.cos(angle) * radius, baseY, Math.sin(angle) * radius);
+      this.auraGroup.add(p);
+      this.flameParticles.push({
+        mesh: p,
+        baseY,
+        speedY: 1.2 + Math.random() * 0.8,
+        angle,
+        radius,
+      });
+    }
+
+    // 6. Halo / Círculo Místico Pulsante nos Pés
+    const ringGeo = new THREE.RingGeometry(0.42, 0.75, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x00e5ff,
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.auraGroundRing = new THREE.Mesh(ringGeo, ringMat);
+    this.auraGroundRing.rotation.x = -Math.PI / 2;
+    this.auraGroundRing.position.y = 0.025;
+    this.auraGroup.add(this.auraGroundRing);
+
+    // Disco de Brilho Central no Solo
+    const glowGeo = new THREE.CircleGeometry(0.85, 32);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0x0091ea,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.auraGroundGlow = new THREE.Mesh(glowGeo, glowMat);
+    this.auraGroundGlow.rotation.x = -Math.PI / 2;
+    this.auraGroundGlow.position.y = 0.02;
+    this.auraGroup.add(this.auraGroundGlow);
+  }
+
+  /**
+   * Animação procedural e crepitação contínua da Áurea de Fogo Azul
+   */
+  private updateBlueFlameAura(delta: number): void {
+    this.auraTime += delta * 3.2;
+
+    // Rotação turbilhonar oposta das cascas de chama
+    this.innerFlameShell.rotation.y += delta * 1.8;
+    this.outerFlameShell.rotation.y -= delta * 1.3;
+    this.flameCrownShell.rotation.y += delta * 2.2;
+
+    // Pulsação elástica simulando a tremulação e calor do fogo
+    const flicker1 = Math.sin(this.auraTime * 4.5);
+    const flicker2 = Math.cos(this.auraTime * 6.0);
+    const pulseScaleY = 1.0 + flicker1 * 0.06;
+    const pulseScaleXZ = 1.0 + flicker2 * 0.05;
+
+    this.innerFlameShell.scale.set(pulseScaleXZ, pulseScaleY, pulseScaleXZ);
+    this.outerFlameShell.scale.set(1.0 + flicker2 * 0.07, 1.0 + flicker1 * 0.08, 1.0 + flicker2 * 0.07);
+    this.flameCrownShell.scale.set(1.0 + flicker1 * 0.12, 1.0 + flicker2 * 0.15, 1.0 + flicker1 * 0.12);
+
+    // Pulsação da luz mística (flicker de fogo azul)
+    this.auraLight.intensity = 1.6 + Math.sin(this.auraTime * 5.0) * 0.35 + (Math.random() - 0.5) * 0.15;
+
+    // Animação ascendente das 16 partículas de labareda em espiral
+    for (const p of this.flameParticles) {
+      p.baseY += p.speedY * delta;
+      p.angle += delta * 2.0;
+
+      if (p.baseY > 2.25) {
+        p.baseY = 0.15 + Math.random() * 0.2;
+        p.radius = 0.38 + Math.random() * 0.24;
+      }
+
+      const currentX = Math.cos(p.angle) * p.radius;
+      const currentZ = Math.sin(p.angle) * p.radius;
+      p.mesh.position.set(currentX, p.baseY, currentZ);
+
+      // Conforme sobe, reduz de tamanho simulando dissipação do fogo
+      const lifeRatio = 1.0 - Math.min(1.0, (p.baseY - 0.2) / 2.05);
+      const s = 0.5 + lifeRatio * 0.7;
+      p.mesh.scale.set(s, s * 1.2, s);
+    }
+
+    // Halo no chão girando e pulsando suavemente
+    this.auraGroundRing.rotation.z += delta * 0.6;
+    const ringScale = 1.0 + Math.sin(this.auraTime * 2.5) * 0.08;
+    this.auraGroundRing.scale.set(ringScale, ringScale, 1.0);
+    this.auraGroundGlow.scale.set(ringScale * 0.95, ringScale * 0.95, 1.0);
   }
 
   /**
@@ -212,5 +382,8 @@ export class DanielAvatar {
       this.rightArm.rotation.x = THREE.MathUtils.lerp(this.rightArm.rotation.x, 0, delta * 10);
       this.mesh.position.y = 0.12;
     }
+
+    // Animação Contínua da Áurea de Fogo Azul
+    this.updateBlueFlameAura(delta);
   }
 }
