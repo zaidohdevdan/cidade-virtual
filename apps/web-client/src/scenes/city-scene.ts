@@ -173,19 +173,19 @@ export class CityScene {
     road.receiveShadow = true;
     this.scene.add(road);
 
-    // Linha amarela central dupla tracejada (não entra no miolo do cruzamento)
+    // Linha amarela central dupla tracejada (não entra na área de cruzamento nem nas faixas de pedestre)
     const halfLen = length / 2;
-    const skipZone = 9; // Deixa o cruzamento 18x18 livre de linhas
+    const skipZone = 13.5; // Deixa o cruzamento e a zona de travessia (até 13m) livres de linhas amarelas
     for (let t = -halfLen + 2; t < halfLen; t += 4) {
       if (Math.abs(t) < skipZone) continue;
       const dashLen = 2.4;
       const dashWid = 0.24;
-      const sg = new THREE.PlaneGeometry(
+      const sg = new THREE.BoxGeometry(
         isHorizontal ? dashLen : dashWid,
+        0.02,
         isHorizontal ? dashWid : dashLen
       );
       const s = new THREE.Mesh(sg, yellowLineMat);
-      s.rotation.x = -Math.PI / 2;
       s.position.set(
         isHorizontal ? cx + t : cx,
         0.03,
@@ -245,7 +245,14 @@ export class CityScene {
 
   // ──────────────────── CROSSWALKS (FAIXAS DE PEDESTRES — PADRÃO DENATRAN/CONTRAN) ────────────────────
   private buildCrosswalks(): void {
-    const crossMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const crossMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.35,
+      metalness: 0.05,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
 
     // Especificações CONTRAN / DENATRAN (Manual de Sinalização Horizontal - Vol. IV):
     // - Faixa Zebrada: listras longitudinais paralelas ao fluxo dos veículos.
@@ -274,17 +281,19 @@ export class CityScene {
         // Padrão DENATRAN: listras SEMPRE paralelas ao fluxo veicular:
         // - Via horizontal (Leste/Oeste): comprimento 4.00m no eixo X, largura 0.40m no eixo Z.
         // - Via vertical (Norte/Sul): comprimento 4.00m no eixo Z, largura 0.40m no eixo X.
-        const sg = new THREE.PlaneGeometry(
+        // Utilizando BoxGeometry com altura de 2.5cm para garantir renderização volumétrica nítida sobre o asfalto
+        const sg = new THREE.BoxGeometry(
           pos.isHorizontal ? stripeLength : stripeWidth,
+          0.025,
           pos.isHorizontal ? stripeWidth : stripeLength
         );
         const s = new THREE.Mesh(sg, crossMat);
-        s.rotation.x = -Math.PI / 2;
         s.position.set(
           pos.isHorizontal ? pos.x : pos.x + offset,
-          0.04,
+          0.035,
           pos.isHorizontal ? pos.z + offset : pos.z
         );
+        s.receiveShadow = true;
         this.scene.add(s);
       }
 
