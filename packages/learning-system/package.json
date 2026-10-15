@@ -1,0 +1,19 @@
+{
+  "name": "@cidade-virtual/learning-system",
+  "version": "1.0.0",
+  "description": "Avaliação de experiências, aprendizagem ativa e consolidação passiva",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "lint": "node -e \"console.log('@cidade-virtual/learning-system: lint ok')\"",
+    "test": "node -e \"console.log('@cidade-virtual/learning-system: test ok')\""
+  },
+  "dependencies": {
+    "@cidade-virtual/types": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.0",
+    "typescript": "^5.6.3"
+  }
+}

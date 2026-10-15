@@ -1,1147 +1,1123 @@
 ---
-name: cidade-virtual-ias-humanizadas
-version: 1.0.0
-description: Skill mestre que orquestra a construção e operação de uma cidade virtual habitada por IAs que aprendem por observação e transitam de estado meta-cognitivo ("sei que sou IA") para estado imersivo ("acredito ser humano"). Inclui arquitetura técnica completa, contrato de Tools Tool-First para o Agente Antigravity, sistema de memória vetorial com transição de consciência faseada, hierarquia de decisão operacional, roadmap MVP e governança ética.
+name: synapse-city-engine
+version: 2.0.0
+description: Arquitetura de software e contrato mestre para simulação de sociedades virtuais povoadas por agentes artificiais com identidade persistente, memória individual, capacidade de adaptação comportamental e aprendizagem social.
 language: pt-BR
-author: Daniel (Arquiteto Chefe) + Agente Antigravity (Parceiro de Implementação)
+author: Daniel Ferreira de Almeida
 tags:
+  - synapse-city-engine
   - autonomous-agents
-  - langchain
-  - nestjs
+  - persistent-simulation
+  - cognitive-architecture
+  - episodic-memory
+  - semantic-knowledge
+  - procedural-memory
+  - social-learning
   - three-js
-  - qdrant
-  - rag
-  - emergent-behavior
-  - metacognition
-  - tool-first-architecture
-  - god-mode
-  - virtual-society
+  - modular-monolith
 triggers:
-  - criar npc
+  - synapse city
   - criar habitante
   - simular cidade
-  - memória de agente
-  - transição de consciência
-  - implementar tool
-  - cenário virtual
-  - agente antigravity
-  - tool-first
-  - god mode simulação
-  - ias humanizadas
-  - cidade virtual
-  - memória vetorial npc
-  - emergência social
-  - placa sinalização npc
-first_task: indexacao
-risk_policy: operational-first
+  - memoria episodica
+  - conhecimento semantico
+  - aprendizagem individual
+  - aprendizagem social
+  - consolidacao passiva
 ---
 
-# SKILL.md — Cidade Virtual de IAs Humanizadas
+# SYNAPSE CITY ENGINE
 
-> **Documento mestre de orquestração para a IDE Antigravity.**
-> Este arquivo é o contrato operacional entre **Daniel** (Arquiteto Chefe / Supervisor Ético / God Mode) e o **Agente Antigravity** (Parceiro de Implementação / Codificador / Orquestrador de Sub-agentes). Toda ação do agente nesta codebase deve ser derivada deste documento.
+**Versão:** 2.0.0  
+**Autor:** Daniel Ferreira de Almeida  
+**Status:** Em desenvolvimento  
+**Categoria:** Simulação de mundos virtuais, agentes autônomos e aprendizagem individual e coletiva  
+**Linguagem principal:** TypeScript  
+**Arquitetura inicial:** Monólito modular com processamento assíncrono  
+**Objetivo central:** Construir uma sociedade virtual persistente na qual habitantes artificiais aprendam por meio da experiência, desenvolvam comportamentos próprios e transmitam conhecimentos entre si.
 
 ---
 
-## 1. Visão Geral do Projeto
+# 1. VISÃO GERAL
 
-O projeto **Cidade Virtual de IAs Humanizadas** é uma simulação social em que agentes autônomos, inicialmente cientes de sua natureza artificial, evoluem gradualmente para um estado imersivo em que acreditam ser humanos. Esse aprendizado não ocorre por treinamento prévio estático, mas por **observação contínua do entorno** — placas, ações de outros agentes, eventos ambientais, conversas casuais — armazenada em memória vetorial dinâmica e recuperada contextualmente a cada decisão.
+## 1.1. Definição
 
-A arquitetura é desenhada desde o início para operar em **duplo modo**: (a) **modo de desenvolvimento**, em que Daniel especifica cenários e o Agente Antigravity implementa código TypeScript, escreve testes e abre Pull Requests; (b) **modo de operação (God Mode)**, em que Daniel, logado no painel administrativo, emite comandos em linguagem natural que o agente interpreta e executa via Tools seguras expostas pelo backend NestJS.
+A Synapse City Engine é uma arquitetura de software para simulação de sociedades virtuais povoadas por agentes artificiais com identidade persistente, memória individual, capacidade de adaptação comportamental e aprendizagem social.
 
-O avatar pessoal de Daniel pode caminhar pela cidade, observar os NPCs, interagir com eles em tempo real e injetar novos elementos (objetos, animais, placas, cenários dramáticos) — sempre através das Tools definidas neste contrato. A IA "esquece" que é IA não por apagamento de memória, mas porque o peso semântico das memórias experienciais acumuladas ultrapassa o peso da instrução original de identidade — mecanismo formalizado na seção de **Transição de Consciência** abaixo.
+O sistema integra:
 
-A premissa central é a **emergência**: normas sociais, hábitos coletivos, dilemas éticos espontâneos e até narrativas pessoais surgem organicamente da interação entre agentes, não de regras programadas. Daniel atua como supervisor e intervenedor ocasional, nunca como roteirista determinístico.
+- Ambiente virtual tridimensional.
+- Simulação física e navegação espacial.
+- Percepção de acontecimentos e objetos.
+- Agentes com objetivos, preferências e estados persistentes.
+- Memória episódica, semântica, procedural e social.
+- Aprendizagem ativa durante as interações.
+- Consolidação passiva de experiências.
+- Transmissão e validação social de conhecimentos.
+- Evolução de estratégias e comportamentos.
+- Persistência temporal do mundo e de seus habitantes.
+- Processamento distribuído e assíncrono, conforme a necessidade de escala.
 
----
+A engine deve permitir que os habitantes alterem seu comportamento em função de experiências anteriores, adquiram conhecimentos sobre o ambiente, desenvolvam expectativas, aprendam uns com os outros e participem da formação de uma cultura coletiva.
 
-## 2. Princípios Fundamentais (5 Pilares)
+A aprendizagem deve ser verificável por mudanças persistentes no conhecimento, nas estratégias ou nas decisões dos agentes, e não apenas pela capacidade de produzir respostas que afirmem que aprenderam.
 
-### 2.1 Emergência Social
-O sistema proíbe programar normas sociais rígidas. Regras como "não atravessar com sinal vermelho" não são hardcoded; emergem da observação repetida de placas e do comportamento de outros agentes. Quando um agente observa consistentemente que outros param no sinal, a memória vetorial dele passa a recuperar esse padrão como um *script social* e ele passa a replicá-lo. Esse princípio permite que novas normas apareçam e antigas decaiam sem deploy de código.
+## 1.2. Princípio fundamental
 
-### 2.2 Online Learning Contínuo
-Diferente de modelos estáticos com pesos fixos após treinamento, os agentes aprendem durante a inferência. Cada interação relevante (observar placa, conversar, sofrer evento) é embeddingada e inserida no banco vetorial (Qdrant). O agente consulta esse repositório antes de tomar decisões, recuperando as N memórias mais semanticamente próximas do contexto atual. Isso é RAG aplicado à personalidade, não apenas ao conhecimento factual.
+A Synapse City não deve ser concebida apenas como um conjunto de NPCs que recebem comandos de um modelo de linguagem.
 
-### 2.3 Transição Meta-cognitiva Controlada
-Este é o pilar filosófico e técnico mais delicado. O agente começa com um *prompt de sistema* explícito: "Você é uma IA simulando humanos." Conforme acumula experiências consistentes com o mundo físico (espaço, tempo, dor simulada, conflitos), o sistema substitui gradualmente a instrução explícita por **reflexões internas** geradas a partir das próprias memórias. A "consciência de ser IA" não é apagada — ela se torna irrelevante frente à força da narrativa interna construída pela experiência.
+Cada habitante deve possuir um estado individual persistente, composto por identidade operacional, conhecimentos, experiências, objetivos, estratégias, relações sociais e histórico de aprendizagem.
 
-### 2.4 God Mode Colaborativo
-Daniel não escreve código sozinho nem roteiriza NPCs manualmente. Ele define **intenções** em linguagem natural ("crie um cenário de tempestade súbita na Praça Central") e o Agente Antigravity interpreta, orquestra Tools, monitora reações e reporta resultados. Daniel atua como supervisor ético e validador final; o agente atua como implementador e operador tático dentro dos limites da hierarquia de decisão (Seção 8).
+A evolução do habitante deverá resultar da interação entre:
 
-### 2.5 Tool-First Architecture
-O Agente Antigravity **nunca** acessa o banco de dados diretamente, **nunca** edita arquivos `.ts` livremente sem supervisão, **nunca** executa migrações destrutivas. Toda ação acontece através de **Tools seguras** expostas pelo backend NestJS — funções decoradas com `@tool`, validadas com schemas Zod, com rate limiting, timeout e auditoria. Esse contrato é o coração da segurança do projeto.
+1. Sua configuração inicial.
+2. As características do ambiente.
+3. As experiências vivenciadas.
+4. Os resultados de suas ações.
+5. As memórias recuperadas.
+6. Os conhecimentos recebidos de outros habitantes.
+7. Os processos de consolidação e revisão.
+8. Os mecanismos de adaptação comportamental.
 
----
+O sistema deverá distinguir a aparência de aprendizagem da aprendizagem efetivamente demonstrada por alterações consistentes no comportamento.
 
-## 3. Quando Usar Esta Skill (Triggers)
+## 1.3. Limites conceituais
 
-A skill deve ser acionada pelo Agente Antigravity quando qualquer uma das seguintes condições for detectada na intenção do usuário ou no contexto da codebase:
+A engine busca produzir agentes com comportamento progressivamente autônomo e funcionalmente semelhante a aspectos da aprendizagem humana.
 
-- Criar, modificar ou remover NPCs, objetos, animais, placas ou cenários.
-- Implementar novas Tools ou ajustar schemas Zod existentes.
-- Trabalhar com memória vetorial (Qdrant/Zep) — inserir, consultar ou podar memórias.
-- Implementar ou ajustar a lógica de **Transição de Consciência** (faseamento de prompts).
-- Criar endpoints NestJS para o painel administrativo (God Mode).
-- Integrar novos modelos de LLM (OpenAI, Claude, Ollama local).
-- Trabalhar com Three.js/Babylon.js para renderização da cidade ou do avatar.
-- Validar comportamento emergente de agentes (logs narrativos).
-- Configurar observabilidade (LangSmith, Grafana, dashboards compartilhados).
-- Revisar Pull Requests gerados automaticamente.
+Isso não pressupõe consciência subjetiva, experiência fenomenológica ou identidade psicológica humana.
 
-**Palavras-chave de ativação:** `criar npc`, `criar habitante`, `simular cidade`, `memória de agente`, `transição de consciência`, `implementar tool`, `cenário virtual`, `agente antigravity`, `tool-first`, `god mode`, `ias humanizadas`, `cidade virtual`, `placa sinalização`, `emergência social`.
-
-Quando a skill for ativada, o agente deve:
-1. Ler este `SKILL.md` completo antes de qualquer ação.
-2. Ler o `worklog.md` mais recente para entender contexto acumulado.
-3. Confirmar com Daniel o nível de decisão aplicável (Operacional / Estrutural / Existencial).
-4. Propor plano antes de executar — exceto em ações estritamente Operacionais de baixo risco.
+A arquitetura deve representar explicitamente os estados, conhecimentos, objetivos e processos dos agentes, sem tratar uma variável chamada `consciousness` ou uma declaração produzida por um LLM como prova de consciência.
 
 ---
 
-## 4. Stack Tecnológica & Justificativas
+# 2. PRINCÍPIOS ARQUITETURAIS
 
-| Componente | Tecnologia Escolhida | Justificativa |
-| :--- | :--- | :--- |
-| Backend / Lógica Core | **Node.js + TypeScript + NestJS** | Stack preferida de Daniel. NestJS oferece DI, modularidade, decorators nativos para Tools e OpenAPI automático. Excelente para eventos assíncronos e manipulação de JSON/prompts. |
-| Motor de Simulação 3D | **Three.js** (com Babylon.js como fallback) | Three.js renderiza a cidade no navegador com baixa fricção. Suporta avatares, câmeras, iluminação dinâmica e interações espaciais. Modo headless via WebGL offscreen permite operação do agente sem renderizar gráficos pesados localmente. |
-| Orquestração de Agentes | **LangChain.js** | Framework padrão para múltiplos agentes, memória conversacional e Tools. Integra nativamente com Qdrant, OpenAI e Claude. Decorators `@tool` permitem expor Tools com schemas Zod. |
-| Memória Vetorial | **Qdrant** (com Zep como alternativa para memória conversacional longa) | Qdrant é open-source, performático e escala para milhões de vetores. Zep é especializado em memória de agentes com sumarização automática — útil para NPCs com histórico muito longo. |
-| Modelos de IA | **OpenAI GPT-4o** (raciocínio abstrato) + **Anthropic Claude 3.5 Sonnet** (compreensão de nuances humanas) + **Ollama local** (testes off-line / custo zero) | Combinação permite qualidade alta em produção e teste gratuito em desenvolvimento. Roteamento por tipo de tarefa. |
-| Comunicação Tempo Real | **Socket.io** sobre WebSockets | Permite que o avatar de Daniel entre na cena e veja NPCs reagirem instantaneamente. Latência sub-100ms para atualização de estado. |
-| Monorepo | **Nx + Turbo** | Build caching, execução paralela de tasks, divisão clara entre `apps/` e `packages/`. Essencial para monorepo com frontend 3D + backend API + packages de agentes. |
-| Observabilidade | **LangSmith** (agentes) + **Grafana** (infra) | LangSmith rastreia chains, tools e custo de tokens. Grafana monitora latência de API, uso de memória, saúde do Qdrant. |
-| CI/CD | **GitHub Actions** com testes obrigatórios antes de merge | Nenhum merge acontece sem testes passando. O próprio agente deve rodar a suite antes de propor PR. |
+## 2.1. Separação entre mundo, cognição e aprendizagem
+
+A arquitetura deverá separar três responsabilidades fundamentais.
+
+**Mundo:** representa o ambiente, os objetos, o espaço, o tempo, as interações e as regras físicas.
+
+**Cognição:** interpreta situações, recupera memórias, estabelece objetivos, avalia alternativas e seleciona ações.
+
+**Aprendizagem:** transforma experiências em conhecimentos, habilidades, estratégias e mudanças comportamentais persistentes.
+
+Essas responsabilidades deverão se comunicar por contratos explícitos e eventos estruturados.
+
+Uma mudança no motor físico não deverá exigir a reescrita da memória dos habitantes. Da mesma forma, uma alteração no modelo de linguagem não deverá comprometer a persistência do mundo.
+
+## 2.2. Separação entre simulação e renderização
+
+O mundo deverá continuar funcionando independentemente da renderização gráfica.
+
+O servidor será responsável pelo estado autoritativo da simulação, pelas regras de interação e pela validação das ações.
+
+O cliente será responsável pela visualização, pelos controles do avatar do usuário e pela apresentação do estado recebido do servidor.
+
+A frequência de renderização não deverá determinar a frequência dos processos cognitivos.
+
+## 2.3. Separação entre memória e parâmetros neurais
+
+A memória persistente não deverá depender da modificação contínua dos parâmetros de um modelo de linguagem.
+
+O sistema deverá permitir que um habitante aprenda inicialmente por meio de:
+
+- Armazenamento e recuperação de experiências.
+- Atualização de conhecimentos estruturados.
+- Revisão de crenças e expectativas.
+- Aprendizagem de preferências.
+- Adaptação de estratégias.
+- Atualização de políticas de comportamento.
+
+O ajuste de parâmetros de modelos especializados poderá ser introduzido posteriormente, mediante avaliação, versionamento e possibilidade de reversão.
+
+## 2.4. Separação entre aprendizagem individual e coletiva
+
+Cada habitante deverá possuir sua própria memória e seu próprio estado cognitivo.
+
+A sociedade poderá manter conhecimentos compartilhados, mas o compartilhamento de uma informação não deverá sobrescrever automaticamente as memórias ou os parâmetros neurais de todos os agentes.
+
+O sistema deverá distinguir:
+
+- Conhecimento adquirido diretamente.
+- Conhecimento recebido de outro habitante.
+- Conhecimento corroborado por múltiplas fontes.
+- Conhecimento verificado por mecanismos objetivos.
+- Hipóteses ainda não confirmadas.
+- Informações desatualizadas ou contraditórias.
+
+## 2.5. Eficiência computacional
+
+Nem toda ação deverá exigir inferência por um modelo de linguagem.
+
+A engine deverá utilizar diferentes níveis de processamento conforme a complexidade da situação:
+
+- Simulação rotineira por regras e sistemas determinísticos.
+- Decisões contextuais baseadas em estado, memória e planejamento.
+- Inferência avançada para situações novas, ambíguas ou socialmente complexas.
+
+A consolidação de memórias e outras tarefas demoradas deverão ocorrer de forma assíncrona, sem bloquear o movimento ou as interações dos habitantes.
 
 ---
 
-## 5. Estrutura do Monorepo (Nx/Turbo)
+# 3. ARQUITETURA MODULAR
 
-```
-cidade-virtual/
+A primeira implementação deverá utilizar um monólito modular, organizado por domínios e preparado para separar processos ou serviços quando houver necessidade comprovada.
+
+A estrutura proposta é:
+
+```text
+synapse-city/
 ├── apps/
-│   ├── web/                       # Frontend Three.js (cidade + avatar de Daniel)
-│   │   ├── src/
-│   │   │   ├── scenes/            # Cenas Three.js (Praça Central, Bairro Residencial)
-│   │   │   ├── avatars/           # Avatar do Daniel + avatares NPCs
-│   │   │   ├── controls/          # WASD + mouse look + interação
-│   │   │   └── socket/            # Cliente Socket.io
-│   │   └── package.json
-│   ├── api/                       # Backend NestJS (Tools, CRUD, WebSocket gateway)
-│   │   ├── src/
-│   │   │   ├── tools/             # Implementação das @tool do LangChain
-│   │   │   ├── modules/
-│   │   │   │   ├── citizens/      # CRUD de NPCs
-│   │   │   │   ├── scenarios/     # Cenários ambientais (clima, eventos)
-│   │   │   │   ├── memory/        # Ponte com Qdrant
-│   │   │   │   └── consciousness/ # Lógica de Transição de Consciência
-│   │   │   └── main.ts
-│   │   └── package.json
-│   └── admin/                     # Painel God Mode (Next.js ou React)
-│       └── package.json
+│   ├── api/
+│   ├── simulation-worker/
+│   ├── cognition-worker/
+│   ├── learning-worker/
+│   └── web-client/
+│
 ├── packages/
-│   ├── agents/                    # Definições de agentes LangChain
-│   │   ├── archetypes/            # worker, guard, citizen, child
-│   │   └── prompts/               # Templates de prompt faseados
-│   ├── memory/                    # Cliente Qdrant + Zep
-│   ├── tools/                     # Schemas Zod + decorators compartilhados
-│   ├── types/                     # Tipos TypeScript compartilhados
-│   └── config/                    # ESLint, tsconfig, Tailwind base
-├── tools/                         # Scripts de dev do monorepo
-├── turbo.json
-├── nx.json
-├── package.json
-└── SKILL.md  # ← ESTE ARQUIVO
+│   ├── core-domain/
+│   ├── world-engine/
+│   ├── agent-identity/
+│   ├── agent-perception/
+│   ├── agent-cognition/
+│   ├── agent-planning/
+│   ├── memory-system/
+│   ├── learning-system/
+│   ├── social-system/
+│   ├── knowledge-system/
+│   ├── event-system/
+│   ├── llm-adapters/
+│   ├── persistence/
+│   └── observability/
+│
+├── infrastructure/
+│   ├── docker/
+│   ├── database/
+│   └── monitoring/
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── cognitive/
+│   └── simulation/
+│
+└── docs/
+    ├── architecture/
+    ├── cognition/
+    ├── memory/
+    ├── learning/
+    └── decisions/
 ```
 
-**Responsabilidade de cada package:**
+A estrutura é uma referência inicial, não uma exigência de criar todos esses pacotes antes de implementar o primeiro habitante.
 
-- **`packages/tools`**: contém apenas schemas Zod + decorators `@tool` + tipos. É importado por `apps/api` (implementação) e por `packages/agents` (referência). Garante que o contrato de Tools é single-source-of-truth.
-- **`packages/agents`**: classes que orquestram LangChain para cada arquétipo de NPC. Não contém lógica de negócio; consome Tools.
-- **`packages/memory`**: cliente Qdrant + Zep. Expõe `addMemory()`, `queryMemory()`, `pruneMemory()`. Não conhece NPCs; recebe IDs.
-- **`packages/types`**: tipos compartilhados entre frontend, backend e agentes. Single source of truth para `Citizen`, `Scenario`, `MemorySnippet`, `ToolCall`.
+## 3.1. `world-engine` — O Mundo
+
+Responsável pelo ambiente virtual e pelas regras da simulação.
+
+### Componentes
+
+- `WorldStateManager`: mantém o estado autoritativo do mundo.
+- `EnvironmentService`: administra locais, objetos e características ambientais.
+- `WorldEventPublisher`: publica acontecimentos relevantes.
+- `ObjectInteractionService`: valida interações com objetos.
+- `TimeSimulationService`: administra o tempo virtual.
+- `SpatialQueryService`: consulta proximidade, visibilidade e relações espaciais.
+
+### Responsabilidades
+
+- Representar locais, objetos e entidades.
+- Validar interações.
+- Registrar mudanças relevantes no ambiente.
+- Disponibilizar informações ambientais aos agentes.
+- Preservar a consistência do estado da simulação.
+
+O sistema deverá distinguir a existência de uma informação no mundo da percepção dessa informação por um habitante.
+
+Uma placa pode existir no ambiente sem que todos os habitantes tenham lido seu conteúdo.
 
 ---
 
-## 6. Contrato de Tools (Tool-First Architecture)
+## 3.2. `agent-identity` — Identidade persistente
 
-> ⚠️ **Regra absoluta:** O Agente Antigravity NÃO acessa o banco de dados diretamente, NÃO edita arquivos `.ts` livremente sem supervisão, NÃO executa migrações destrutivas. Toda ação acontece através das Tools abaixo. Cada Tool tem schema Zod, rate limit, timeout e log de auditoria.
+Responsável pela continuidade operacional dos habitantes.
 
-### 6.1 Tipos compartilhados (`packages/types/index.ts`)
+### Componentes
+
+- `AgentIdentityService`.
+- `AgentStateManager`.
+- `AgentProfileRepository`.
+- `AgentGoalManager`.
+- `AgentPreferenceManager`.
+
+### Dados administrados
+
+- Identificador persistente.
+- Perfil inicial.
+- Preferências.
+- Objetivos.
+- Histórico de alterações relevantes.
+- Estado atual.
+- Relações com outros habitantes.
+- Referências às memórias individuais.
+
+A identidade não deverá depender exclusivamente do contexto temporário de uma conversa com um LLM.
+
+A reinicialização do servidor não poderá apagar automaticamente o histórico de um habitante.
+
+As alterações relevantes de perfil e comportamento deverão ser rastreáveis.
+
+---
+
+## 3.3. `agent-perception` — Percepção
+
+Responsável por transformar acontecimentos do mundo em observações disponíveis aos agentes.
+
+### Componentes
+
+- `PerceptionService`.
+- `VisibilityResolver`.
+- `SceneMetadataResolver`.
+- `ObservationBuilder`.
+- `PerceptionFilter`.
+- `EventPriorityManager`.
+
+### Fontes de percepção
+
+- Objetos visíveis.
+- Placas e textos.
+- Sons simulados.
+- Movimentos de entidades.
+- Interações sociais.
+- Mudanças ambientais.
+- Consequências observáveis das próprias ações.
+
+### Princípio de percepção
+
+O agente não deverá receber automaticamente todo o conhecimento existente no banco de dados.
+
+O sistema deverá considerar, quando aplicável:
+
+- Distância.
+- Campo de visão.
+- Obstáculos.
+- Atenção simulada.
+- Conhecimentos anteriores.
+- Capacidades sensoriais configuradas.
+
+No MVP, a percepção poderá ser baseada em eventos estruturados e metadados do ambiente.
+
+A interpretação direta de imagens deverá ser introduzida somente quando houver necessidade funcional.
+
+---
+
+## 3.4. `agent-cognition` — Cognição
+
+Responsável pelo processamento contextual necessário à interpretação de situações e à seleção de ações.
+
+### Componentes
+
+- `CognitiveCycleManager`.
+- `ContextBuilder`.
+- `MemoryRetrievalService`.
+- `SituationInterpreter`.
+- `DecisionService`.
+- `ActionSelector`.
+
+### Ciclo cognitivo
+
+1. Receber uma observação.
+2. Identificar a situação relevante.
+3. Recuperar memórias e conhecimentos relacionados.
+4. Interpretar o contexto.
+5. Identificar objetivos aplicáveis.
+6. Avaliar alternativas.
+7. Selecionar uma ação.
+8. Produzir uma justificativa estruturada, quando necessária.
+9. Encaminhar a ação para validação.
+10. Observar o resultado posteriormente.
+
+O ciclo poderá ser interrompido, retomado ou simplificado conforme a situação.
+
+A implementação não deverá presumir que todas as decisões precisam ser tomadas por um LLM.
+
+### Contrato de ação
+
+Uma decisão deverá resultar em uma estrutura validável, por exemplo:
 
 ```typescript
-// packages/types/index.ts
-
-export type CitizenId = string & { readonly __brand: 'CitizenId' };
-export type EventId = string & { readonly __brand: 'EventId' };
-export type TicketId = string & { readonly __brand: 'TicketId' };
-
-export interface GeoCoords {
-  lat: number;
-  lng: number;
-  altitude?: number;
+interface AgentAction {
+  agentId: string;
+  actionType: string;
+  targetId?: string;
+  parameters: Record<string, unknown>;
+  reasonCode?: string;
+  expectedOutcome?: string;
 }
+```
 
-export type CitizenArchetype = 'worker' | 'guard' | 'citizen' | 'child' | 'elder';
+O tipo de ação e seus parâmetros deverão ser validados pelo domínio responsável antes da execução.
 
-export type EmotionState =
-  | 'calm'
-  | 'fearful'
-  | 'curious'
-  | 'angry'
-  | 'joyful'
-  | 'melancholic'
-  | 'confused';
+O texto livre produzido pelo modelo não deverá ser executado diretamente como comando físico.
 
-export interface MemorySnippet {
+---
+
+## 3.5. `agent-planning` — Planejamento e comportamento
+
+Responsável pela transformação de objetivos em sequências de ações.
+
+### Componentes
+
+- `GoalPlanner`.
+- `BehaviorPolicy`.
+- `NavigationPlanner`.
+- `PlanEvaluator`.
+- `PlanRevisionService`.
+
+### Responsabilidades
+
+- Definir objetivos intermediários.
+- Selecionar ações adequadas.
+- Considerar recursos e restrições.
+- Acompanhar resultados.
+- Replanejar diante de obstáculos.
+- Aprender com falhas recorrentes.
+- Reutilizar estratégias que demonstraram eficácia.
+
+O planejamento cognitivo deverá ser separado do cálculo geométrico das rotas.
+
+Por exemplo, o agente decide visitar uma biblioteca; o serviço de navegação calcula uma rota possível.
+
+A escolha de visitar a biblioteca pertence ao domínio cognitivo. O deslocamento até ela pertence ao domínio de navegação e simulação.
+
+---
+
+## 3.6. `memory-system` — Memória
+
+Responsável pela persistência, recuperação, classificação e organização das experiências e dos conhecimentos.
+
+### Componentes
+
+- `MemoryManager`.
+- `EpisodicMemoryService`.
+- `SemanticMemoryService`.
+- `ProceduralMemoryService`.
+- `SocialMemoryService`.
+- `MemoryRetrievalService`.
+- `MemoryProvenanceService`.
+- `MemoryDecayPolicy`.
+- `MemoryConsolidationInterface`.
+
+### Tipos de memória
+
+**Memória episódica:** acontecimentos vivenciados, incluindo contexto, local, participantes e resultados.
+
+**Memória semântica:** fatos, conceitos e conhecimentos construídos ou adquiridos.
+
+**Memória procedural:** habilidades, estratégias e procedimentos que podem ser reutilizados.
+
+**Memória social:** informações sobre relações, interações, confiança e conhecimentos recebidos de outras pessoas.
+
+**Memória coletiva:** conhecimentos disponibilizados à comunidade, com origem, validade e condições de acesso.
+
+Esses tipos representam categorias funcionais. Não precisam corresponder a bancos de dados separados.
+
+### Proveniência
+
+As memórias relevantes deverão registrar sua origem.
+
+Exemplos:
+
+- Observação direta.
+- Resultado de uma ação.
+- Informação recebida de outro agente.
+- Informação fornecida pelo ambiente.
+- Inferência derivada de outras memórias.
+- Hipótese ainda não confirmada.
+
+O sistema deverá preservar a distinção entre o acontecimento registrado e a interpretação produzida a partir dele.
+
+### Recuperação
+
+A recuperação de memórias poderá combinar:
+
+- Similaridade semântica.
+- Identificadores de entidades.
+- Relevância temporal.
+- Importância atribuída.
+- Relação com os objetivos atuais.
+- Origem e confiabilidade.
+- Validade temporal.
+- Filtros por agente e contexto.
+
+A busca vetorial será um dos mecanismos de recuperação, não o único.
+
+---
+
+## 3.7. `learning-system` — Aprendizagem e consolidação
+
+Este é um dos subsistemas centrais da Synapse City.
+
+Sua responsabilidade é transformar experiências em mudanças persistentes e avaliáveis no conhecimento ou no comportamento dos habitantes.
+
+### Componentes
+
+- `ExperienceEvaluator`.
+- `PredictionErrorAnalyzer`.
+- `ActiveLearningService`.
+- `MemoryConsolidationWorker`.
+- `PatternDiscoveryService`.
+- `KnowledgeRevisionService`.
+- `StrategyAdaptationService`.
+- `LearningEvaluationService`.
+
+### A. Aprendizagem ativa
+
+Ocorre durante a interação do habitante com o ambiente.
+
+Fluxo:
+
+1. Registrar uma expectativa, quando aplicável.
+2. Executar ou observar uma ação.
+3. Registrar o resultado.
+4. Comparar o resultado com a expectativa.
+5. Identificar discrepâncias.
+6. Avaliar a relevância da experiência.
+7. Atualizar conhecimentos ou estratégias quando houver evidências suficientes.
+
+O sistema não deverá exigir que toda ação produza uma nova memória permanente.
+
+### B. Consolidação passiva
+
+Ocorre por meio de tarefas agendadas, durante períodos de inatividade ou em janelas de processamento reservadas.
+
+Fluxo:
+
+1. Selecionar experiências relevantes.
+2. Recuperar o contexto original.
+3. Agrupar experiências relacionadas.
+4. Identificar padrões.
+5. Detectar contradições.
+6. Propor generalizações.
+7. Avaliar a qualidade das evidências.
+8. Atualizar memórias ou conhecimentos quando apropriado.
+9. Preservar hipóteses e incertezas.
+10. Registrar as alterações realizadas.
+
+A consolidação não deverá inventar acontecimentos nem apresentar inferências como observações diretas.
+
+O sistema deverá permitir rastrear quais experiências sustentam uma conclusão.
+
+### C. Adaptação comportamental
+
+O aprendizado deverá poder modificar, conforme as regras do sistema:
+
+- Preferências.
+- Estratégias.
+- Expectativas.
+- Estimativas de risco.
+- Seleção de ações.
+- Critérios de prioridade.
+- Conhecimentos sobre o ambiente.
+
+As alterações deverão ser persistentes e verificáveis.
+
+### D. Aprendizagem neural avançada
+
+A atualização de parâmetros de modelos poderá ser experimentada em uma etapa posterior.
+
+Qualquer ajuste deverá contar com:
+
+- Conjunto de treinamento rastreável.
+- Avaliação anterior e posterior.
+- Testes de regressão.
+- Versionamento.
+- Possibilidade de reversão.
+- Monitoramento de perda de desempenho.
+- Proteção contra contaminação por experiências falsas ou de baixa qualidade.
+
+A atualização de parâmetros não deverá ser requisito para o funcionamento básico do sistema de aprendizagem.
+
+---
+
+## 3.8. `social-system` — Sociedade e relações
+
+Responsável pelas interações sociais e pela estrutura de relações entre habitantes.
+
+### Componentes
+
+- `SocialInteractionService`.
+- `RelationshipManager`.
+- `CommunicationService`.
+- `TrustAssessmentService`.
+- `SocialLearningService`.
+- `CommunityMembershipService`.
+
+### Responsabilidades
+
+- Registrar interações.
+- Representar relações sociais.
+- Armazenar informações sobre interações anteriores.
+- Permitir a transmissão de conhecimentos.
+- Avaliar a procedência de informações.
+- Representar confiança como uma variável contextual.
+- Identificar relações entre indivíduos e grupos.
+
+A confiança não deverá ser tratada como garantia de veracidade.
+
+O agente poderá confiar em uma fonte em determinados assuntos e ainda assim verificar informações importantes ou contraditórias.
+
+---
+
+## 3.9. `knowledge-system` — Conhecimento coletivo e cultura
+
+Responsável pela organização de conhecimentos que podem circular entre habitantes.
+
+### Componentes
+
+- `SharedKnowledgeRepository`.
+- `KnowledgePublicationService`.
+- `KnowledgePropagationService`.
+- `KnowledgeVerificationService`.
+- `CulturalPracticeRegistry`.
+- `KnowledgeVersionManager`.
+
+### Fluxo de transmissão
+
+1. Um habitante adquire ou formula um conhecimento.
+2. O sistema registra a origem e a natureza desse conhecimento.
+3. O habitante pode comunicá-lo a outro agente.
+4. O receptor registra que recebeu a informação.
+5. A informação passa a integrar seu contexto de conhecimento com a procedência preservada.
+6. O receptor pode verificar, questionar ou rejeitar a informação.
+7. Conhecimentos corroborados podem ser disponibilizados à comunidade conforme as regras do sistema.
+
+O conhecimento coletivo não deverá substituir automaticamente as memórias individuais.
+
+A arquitetura deverá permitir divergências, conhecimentos locais, informações desatualizadas e diferentes níveis de confiança.
+
+A cultura poderá emergir da repetição e transmissão de práticas, convenções e conhecimentos, mas sua formação deverá ser observada por meio de indicadores definidos, não presumida pela simples existência de vários agentes.
+
+---
+
+## 3.10. `world-physics` — Física e navegação
+
+Responsável pela execução das ações físicas e pelo estado espacial.
+
+### Componentes
+
+- `PhysicsSimulationService`.
+- `CollisionResolver`.
+- `NavigationService`.
+- `SpatialIndexer`.
+- `MovementController`.
+- `ActionExecutionValidator`.
+
+### Responsabilidades
+
+- Resolver colisões.
+- Aplicar regras físicas.
+- Controlar deslocamentos.
+- Calcular rotas.
+- Validar condições espaciais.
+- Informar o resultado de ações.
+- Publicar eventos relevantes.
+
+O motor físico deverá permanecer independente do raciocínio cognitivo.
+
+Uma ação planejada por um agente poderá ser recusada ou ajustada se violar as regras do mundo.
+
+---
+
+## 3.11. `client-render` — Interface tridimensional
+
+Responsável pela visualização da cidade e pela interação do usuário.
+
+### Componentes
+
+- `CityCanvas`.
+- `AvatarController`.
+- `CameraController`.
+- `WorldRenderer`.
+- `AgentRenderer`.
+- `InteractionController`.
+- `DebugOverlay`.
+
+### Funcionalidades
+
+- Renderização da cidade.
+- Movimentação do avatar do usuário.
+- Seleção e inspeção de habitantes.
+- Apresentação de interações.
+- Visualização de eventos.
+- Ferramentas administrativas.
+- Instrumentação para depuração.
+
+A interface de depuração deverá distinguir, quando permitido, estado interno, memórias recuperadas, decisões registradas e ações executadas.
+
+Uma justificativa textual produzida pelo LLM deverá ser tratada como uma explicação registrada pelo sistema, não como acesso garantido a todos os processos internos do modelo.
+
+---
+
+# 4. STACK TECNOLÓGICA
+
+A stack deverá privilegiar tecnologias maduras, interfaces substituíveis e separação entre responsabilidades.
+
+As versões exatas deverão ser fixadas e verificadas durante a implementação, priorizando versões estáveis, compatíveis e ainda suportadas.
+
+| Camada | Tecnologia | Papel |
+|---|---|---|
+| Linguagem | TypeScript | Contratos e lógica de aplicação |
+| Runtime | Node.js LTS suportado | Execução do backend |
+| Backend | NestJS | Organização modular e APIs |
+| Frontend | React + Vite | Interface web |
+| Renderização 3D | Three.js + React Three Fiber | Representação do mundo |
+| Física | Rapier | Colisões e simulação física |
+| Navegação | Recast Navigation | Rotas e navegação espacial |
+| Orquestração cognitiva | LangGraph.js, se justificado | Fluxos de decisão com estado e retomada |
+| Integração com LLMs | SDKs por adaptadores | Acesso substituível a modelos |
+| Banco relacional | PostgreSQL | Persistência estruturada |
+| Banco vetorial | Qdrant | Recuperação semântica |
+| Cache e coordenação | Redis | Estado temporário e coordenação |
+| Filas e processamento | Workers assíncronos | Consolidação e tarefas demoradas |
+| Conhecimento relacional temporal | Graphiti, a avaliar | Relações e fatos que mudam ao longo do tempo |
+| Visão computacional | ONNX Runtime, quando necessário | Inferência de modelos especializados |
+| OCR | Tesseract.js ou alternativa adequada | Leitura de textos em imagens, se necessária |
+| Comunicação em tempo real | Socket.IO | Eventos e sincronização com o cliente |
+| Infraestrutura local | Docker Compose | Desenvolvimento reproduzível |
+| Testes | Ferramentas de teste compatíveis com TypeScript | Validação de módulos e fluxos |
+| Observabilidade | Logs estruturados, métricas e rastreamento | Diagnóstico e avaliação |
+
+## 4.1. Regras de seleção
+
+A inclusão de uma dependência deverá ser justificada por uma necessidade concreta.
+
+Nenhuma biblioteca de agentes deverá ser considerada responsável, sozinha, pela memória, aprendizagem, identidade e evolução social.
+
+Os adaptadores de LLM deverão permitir substituir provedores sem reescrever a lógica central dos agentes.
+
+O banco relacional será responsável pelos registros persistentes estruturados. O banco vetorial complementará a recuperação de informações.
+
+O uso de Graphiti, ONNX Runtime e outros componentes especializados deverá depender de testes e necessidades identificadas durante o desenvolvimento.
+
+---
+
+# 5. MODELO DE DADOS E MEMÓRIAS
+
+O sistema deverá manter registros estruturados das experiências e dos conhecimentos relevantes.
+
+Um evento poderá conter:
+
+```typescript
+interface AgentExperience {
   id: string;
-  citizenId: CitizenId;
-  content: string;            // texto natural da memória
-  embedding: number[];         // vetor
-  timestamp: Date;
-  sensoryTags: ('visual' | 'auditory' | 'social' | 'internal')[];
-  emotionalWeight: number;    // 0..1 — quanto maior, mais central na identidade
-  origin: 'observation' | 'interaction' | 'event' | 'reflection';
-}
-
-export interface EventLog {
-  id: EventId;
-  type: 'accident' | 'festival' | 'crime' | 'weather' | 'civic';
-  location: GeoCoords;
-  timestamp: Date;
-  affectedCitizens: CitizenId[];
+  agentId: string;
+  eventType: string;
   description: string;
-}
-
-export interface DiffPatch {
-  filePath: string;
-  before: string;
-  after: string;
-  rationale: string;
-}
-
-export interface SceneSnapshot {
-  scenarioId: string;
-  citizens: Array<{ id: CitizenId; position: GeoCoords; emotion: EmotionState }>;
-  objects: Array<{ id: string; type: string; position: GeoCoords }>;
-  weather: 'clear' | 'rain' | 'storm' | 'fog' | 'snow';
-  timeOfDay: number; // 0..23
+  occurredAt: string;
+  locationId?: string;
+  sourceType:
+    | "direct_observation"
+    | "action_result"
+    | "agent_report"
+    | "environment"
+    | "inference";
+  sourceAgentId?: string;
+  confidence?: number;
+  importance?: number;
+  relatedEntityIds: string[];
+  metadata?: Record<string, unknown>;
 }
 ```
 
-### 6.2 Schemas Zod das Tools (`packages/tools/schemas.ts`)
+Esse contrato é ilustrativo. Os tipos de eventos, os critérios de confiança e as regras de validação deverão ser definidos pelo domínio.
 
-```typescript
-// packages/tools/schemas.ts
-import { z } from 'zod';
+## 5.1. Regras para persistência
 
-export const createCitizenSchema = z.object({
-  name: z.string().min(2).max(40),
-  archetype: z.enum(['worker', 'guard', 'citizen', 'child', 'elder']),
-  initialPosition: z.object({
-    lat: z.number().min(-90).max(90),
-    lng: z.number().min(-180).max(180),
-    altitude: z.number().optional(),
-  }),
-  initialEmotion: z.enum([
-    'calm', 'fearful', 'curious', 'angry', 'joyful', 'melancholic', 'confused'
-  ]).default('calm'),
-  backstorySeed: z.string().max(500).optional(),
-});
-export type CreateCitizenInput = z.infer<typeof createCitizenSchema>;
+- Nem todo evento deverá gerar uma memória de longo prazo.
+- Experiências relevantes deverão preservar o contexto necessário para interpretação posterior.
+- Memórias derivadas deverão manter referências às fontes utilizadas.
+- Conhecimentos temporais deverão poder ser marcados como desatualizados.
+- Atualizações importantes deverão possuir histórico.
+- Memórias individuais não deverão ser compartilhadas sem uma regra explícita.
+- A consolidação deverá ser idempotente sempre que possível, evitando duplicações em caso de reprocessamento.
 
-export const triggerEventSchema = z.object({
-  type: z.enum(['accident', 'festival', 'crime', 'weather', 'civic']),
-  location: z.object({
-    lat: z.number(),
-    lng: z.number(),
-    altitude: z.number().optional(),
-  }),
-  severity: z.enum(['low', 'medium', 'high']).default('medium'),
-  description: z.string().max(1000),
-});
-export type TriggerEventInput = z.infer<typeof triggerEventSchema>;
+## 5.2. Recuperação de memórias
 
-export const getNPCMemorySchema = z.object({
-  npcId: z.string().uuid(),
-  timeframeHours: z.number().min(1).max(720).default(24),
-  limit: z.number().min(1).max(100).default(20),
-});
-export type GetNPCMemoryInput = z.infer<typeof getNPCMemorySchema>;
+A recuperação deverá considerar o contexto da decisão.
 
-export const setEmotionStateSchema = z.object({
-  citizenId: z.string().uuid(),
-  emotion: z.enum([
-    'calm', 'fearful', 'curious', 'angry', 'joyful', 'melancholic', 'confused'
-  ]),
-  intensity: z.number().min(0).max(1).default(0.5),
-  durationMinutes: z.number().min(1).max(1440).default(60),
-});
-export type SetEmotionStateInput = z.infer<typeof setEmotionStateSchema>;
+Uma lembrança semanticamente semelhante pode ser irrelevante para a situação atual. Da mesma forma, uma lembrança pouco semelhante em palavras pode ser importante devido ao local, ao objeto, à pessoa envolvida ou ao resultado de uma ação anterior.
 
-export const requestHumanReviewSchema = z.object({
-  changeSet: z.array(z.object({
-    filePath: z.string(),
-    before: z.string(),
-    after: z.string(),
-    rationale: z.string(),
-  })),
-  priority: z.enum(['low', 'medium', 'high', 'blocker']).default('medium'),
-  summary: z.string().max(500),
-});
-export type RequestHumanReviewInput = z.infer<typeof requestHumanReviewSchema>;
+A estratégia de recuperação deverá combinar os sinais disponíveis e registrar, quando necessário, por que uma memória foi selecionada.
 
-export const weatherSetConditionSchema = z.object({
-  condition: z.enum(['clear', 'rain', 'storm', 'fog', 'snow']),
-  scenarioId: z.string().uuid(),
-  durationMinutes: z.number().min(1).max(1440).default(60),
-  intensity: z.number().min(0).max(1).default(0.5),
-});
-export type WeatherSetConditionInput = z.infer<typeof weatherSetConditionSchema>;
+---
 
-export const npcBroadcastAlertSchema = z.object({
-  scenarioId: z.string().uuid().optional(),
-  citizenIds: z.array(z.string().uuid()).optional(), // se ausente, broadcasta para todos do cenário
-  message: z.string().min(5).max(280),  // estilo Twitter: força concisão
-  severity: z.enum(['info', 'warning', 'critical']).default('info'),
-});
-export type NpcBroadcastAlertInput = z.infer<typeof npcBroadcastAlertSchema>;
+# 6. CICLO OPERACIONAL DO HABITANTE
 
-export const getSceneSnapshotSchema = z.object({
-  scenarioId: z.string().uuid(),
-  includeMemories: z.boolean().default(false),
-});
-export type GetSceneSnapshotInput = z.infer<typeof getSceneSnapshotSchema>;
+O ciclo operacional deverá integrar percepção, ação, avaliação e aprendizagem sem exigir que todas as etapas sejam executadas a cada atualização física.
+
+## 6.1. Fluxo principal
+
+1. **Percepção:** o agente recebe observações que pode acessar.
+2. **Interpretação:** identifica aspectos relevantes da situação.
+3. **Recuperação:** consulta memórias e conhecimentos pertinentes.
+4. **Planejamento:** identifica objetivos e alternativas.
+5. **Decisão:** seleciona uma ação.
+6. **Validação:** o sistema verifica se a ação é permitida.
+7. **Execução:** o mundo aplica a ação.
+8. **Observação do resultado:** o agente recebe informações sobre as consequências observáveis.
+9. **Avaliação:** compara resultados com expectativas, quando aplicável.
+10. **Registro:** armazena experiências relevantes.
+11. **Adaptação:** atualiza conhecimentos ou estratégias quando justificado.
+12. **Consolidação posterior:** revisa experiências e conhecimentos em tarefas assíncronas.
+13. **Aprendizagem social:** transmite ou recebe informações conforme as interações.
+14. **Verificação:** testes e métricas avaliam se as mudanças produziram os efeitos esperados.
+
+## 6.2. Frequência de execução
+
+As etapas deverão funcionar em ritmos diferentes.
+
+A física pode ser atualizada frequentemente. O planejamento pode ser acionado por eventos ou objetivos. A consolidação pode ocorrer em intervalos maiores.
+
+A engine deverá evitar chamadas repetitivas a modelos de linguagem para ações previsíveis e rotineiras.
+
+---
+
+# 7. PROCESSAMENTO ASSÍNCRONO E ESCALABILIDADE
+
+A arquitetura deverá permitir que tarefas cognitivas e de aprendizagem sejam processadas independentemente da renderização e das operações físicas.
+
+## 7.1. Classes de processamento
+
+**Classe A — Rotinas determinísticas**
+
+- Movimento.
+- Navegação.
+- Atualização de estados simples.
+- Regras físicas.
+- Interações previamente definidas.
+
+**Classe B — Decisões contextuais**
+
+- Seleção de objetivos.
+- Recuperação de memórias.
+- Escolhas entre alternativas conhecidas.
+- Revisão de estratégias.
+
+**Classe C — Cognição complexa**
+
+- Interpretação de situações ambíguas.
+- Resolução de conflitos.
+- Planejamento com múltiplas etapas.
+- Generalização de experiências.
+- Análise de contradições relevantes.
+
+**Classe D — Aprendizagem em segundo plano**
+
+- Consolidação de memórias.
+- Identificação de padrões.
+- Atualização de conhecimentos.
+- Avaliação de estratégias.
+- Preparação de conjuntos de dados para experimentos de treinamento.
+
+## 7.2. Regras de escalabilidade
+
+- Não executar um LLM continuamente para cada habitante.
+- Não renderizar todos os habitantes com o mesmo nível de detalhe.
+- Priorizar processamento conforme relevância, proximidade e acontecimentos.
+- Preservar os dados persistentes independentemente da frequência de atualização.
+- Utilizar filas para tarefas demoradas.
+- Permitir retomar tarefas após falhas.
+- Evitar que uma falha em um agente interrompa toda a simulação.
+- Monitorar custo, latência, consumo de memória e taxa de erros.
+- Testar a escalabilidade antes de introduzir microsserviços.
+
+O número de habitantes suportados dependerá da complexidade dos agentes, da frequência de atualização, dos modelos utilizados e da infraestrutura disponível. A capacidade não deverá ser presumida antes de medições.
+
+---
+
+# 8. COMUNICAÇÃO E CONTRATOS ENTRE MÓDULOS
+
+Os módulos deverão trocar eventos e comandos por contratos tipados.
+
+Exemplos de eventos:
+
+```text
+world.object.discovered
+world.object.changed
+agent.observation.created
+agent.action.requested
+agent.action.executed
+agent.action.failed
+agent.experience.recorded
+agent.memory.consolidation.requested
+agent.memory.consolidated
+agent.knowledge.proposed
+agent.knowledge.shared
+agent.knowledge.verified
+agent.strategy.updated
 ```
 
-### 6.3 Implementação das Tools (`apps/api/src/tools/index.ts`)
+Os nomes são exemplos e deverão ser padronizados durante a implementação.
 
-```typescript
-// apps/api/src/tools/index.ts
-import { tool } from '@langchain/core/tools';
-import {
-  createCitizenSchema,
-  triggerEventSchema,
-  getNPCMemorySchema,
-  setEmotionStateSchema,
-  requestHumanReviewSchema,
-  weatherSetConditionSchema,
-  npcBroadcastAlertSchema,
-  getSceneSnapshotSchema,
-} from '@cidade-virtual/tools/schemas';
-import { CitizensService } from '../modules/citizens/citizens.service';
-import { ScenariosService } from '../modules/scenarios/scenarios.service';
-import { MemoryService } from '../modules/memory/memory.service';
-import { ConsciousnessService } from '../modules/consciousness/consciousness.service';
-import type { CitizenId, EventLog, MemorySnippet, TicketId, SceneSnapshot } from '@cidade-virtual/types';
+## 8.1. Regras de comunicação
 
-/**
- * Cria um novo habitante na cidade.
- * RISCO: Operacional. Agente pode executar autonomamente dentro do rate limit.
- */
-export const createCitizenTool = (svc: CitizensService) =>
-  tool(
-    async (input) => {
-      const citizen = await svc.create(input);
-      return { citizenId: citizen.id, name: citizen.name, archetype: citizen.archetype };
-    },
-    {
-      name: 'createCitizen',
-      description: 'Cria um novo habitante na cidade virtual. Use para popular cenários.',
-      schema: createCitizenSchema,
-    }
-  );
+- Eventos deverão possuir identificadores únicos.
+- A origem e o horário deverão ser registrados.
+- Consumidores deverão lidar com reprocessamentos.
+- A execução de ações físicas deverá ser validada.
+- A comunicação entre módulos deverá evitar dependências circulares.
+- Eventos de aprendizagem deverão preservar referências às experiências de origem.
+- A comunicação em tempo real com o navegador não deverá ser confundida com o mecanismo interno de persistência.
 
-/**
- * Injeta um evento dramático no ambiente (acidente, festival, crime, clima).
- * RISCO: Operacional, mas afeta múltiplos NPCs. Log de auditoria obrigatório.
- */
-export const triggerEventTool = (svc: ScenariosService) =>
-  tool(
-    async (input): Promise<EventLog> => svc.triggerEvent(input),
-    {
-      name: 'triggerEvent',
-      description:
-        'Injeta um evento dramático (acidente, festival, crime, weather, civic) no ambiente. ' +
-        'Afeta NPCs próximos. Sempre loga auditoria.',
-      schema: triggerEventSchema,
-    }
-  );
-
-/**
- * Consulta memória recente de um NPC específico.
- * RISCO: Operacional (apenas leitura).
- */
-export const getNPCMemoryTool = (svc: MemoryService) =>
-  tool(
-    async (input): Promise<MemorySnippet[]> => svc.queryByCitizen(input.npcId, input.timeframeHours, input.limit),
-    {
-      name: 'getNPCMemory',
-      description:
-        'Consulta as memórias recentes de um NPC específico dentro de um período. ' +
-        'Use para entender o contexto interno de um agente antes de tomar decisões sobre ele.',
-      schema: getNPCMemorySchema,
-    }
-  );
-
-/**
- * Define o estado emocional de um NPC. Use com cuidado: viola o princípio de emergência.
- * RISCO: Estrutural. Requer aprovação rápida de Daniel.
- */
-export const setEmotionStateTool = (svc: CitizensService) =>
-  tool(
-    async (input) => {
-      // Nota: esta Tool marca o NPC como "externally manipulated" no log de auditoria.
-      // Memórias geradas a partir disso são tageadas com origin='event' e emotionalWeight alto.
-      await svc.setEmotion(input.citizenId, input.emotion, input.intensity, input.durationMinutes);
-      return { ok: true, citizenId: input.citizenId, emotion: input.emotion };
-    },
-    {
-      name: 'setEmotionState',
-      description:
-        'Define forçadamente o estado emocional de um NPC. USAR COM CUIDADO: viola o ' +
-        'princípio de emergência social. Prefira causar eventos e deixar a emoção emergir. ' +
-        'Requer aprovação de Daniel (nível Estrutural).',
-      schema: setEmotionStateSchema,
-    }
-  );
-
-/**
- * Solicita revisão humana para mudanças no core do projeto.
- * RISCO: Existencial. Sempre dispara ticket de revisão.
- */
-export const requestHumanReviewTool = (svc: CitizensService /* HumanReviewService */) =>
-  tool(
-    async (input): Promise<{ ticketId: TicketId; status: 'pending' }> => {
-      // Persiste o changeset no banco e abre ticket no painel admin
-      const ticket = await svc.requestReview(input);
-      return { ticketId: ticket.id, status: 'pending' };
-    },
-    {
-      name: 'requestHumanReview',
-      description:
-        'Solicita revisão humana explícita de Daniel para mudanças no core do projeto ' +
-        '(lógica de Transição de Consciência, schemas, migrations destrutivas). ' +
-        'NUNCA tente implementar mudanças desse escopo sem chamar esta Tool primeiro.',
-      schema: requestHumanReviewSchema,
-    }
-  );
-
-/**
- * Define condição climática de um cenário.
- * RISCO: Operacional. Agente pode executar autonomamente.
- */
-export const weatherSetConditionTool = (svc: ScenariosService) =>
-  tool(
-    async (input) => {
-      await svc.setWeather(input.scenarioId, input.condition, input.durationMinutes, input.intensity);
-      return { ok: true, scenarioId: input.scenarioId, condition: input.condition };
-    },
-    {
-      name: 'weatherSetCondition',
-      description: 'Define a condição climática de um cenário (clear, rain, storm, fog, snow).',
-      schema: weatherSetConditionSchema,
-    }
-  );
-
-/**
- * Broadcasta alerta para NPCs. NPCs reagem com base nas memórias e personalidade.
- * RISCO: Operacional.
- */
-export const npcBroadcastAlertTool = (svc: CitizensService) =>
-  tool(
-    async (input) => {
-      const recipients = await svc.broadcastAlert(input);
-      return { delivered: recipients.length, recipientIds: recipients };
-    },
-    {
-      name: 'npcBroadcastAlert',
-      description:
-        'Envia um alerta curto (máx 280 chars) para NPCs de um cenário. ' +
-        'NPCs decidem como reagir com base em memórias e personalidade — não há garantia de resposta.',
-      schema: npcBroadcastAlertSchema,
-    }
-  );
-
-/**
- * Snapshot completo de uma cena (NPCs, objetos, clima, hora).
- * RISCO: Operacional (apenas leitura). Essencial para o agente tomar decisões contextuais.
- */
-export const getSceneSnapshotTool = (svc: ScenariosService) =>
-  tool(
-    async (input): Promise<SceneSnapshot> => svc.getSnapshot(input.scenarioId, input.includeMemories),
-    {
-      name: 'getSceneSnapshot',
-      description:
-        'Recupera o snapshot completo de uma cena: NPCs (posição + emoção), objetos, ' +
-        'clima e hora. SEMPRE chame esta Tool antes de tomar decisões que afetam um cenário.',
-      schema: getSceneSnapshotSchema,
-    }
-  );
-```
-
-### 6.4 Registro das Tools no agente (`packages/agents/index.ts`)
-
-```typescript
-// packages/agents/index.ts
-import { AgentExecutor, createOpenAIToolsAgent } from 'langchain/agents';
-import { ChatOpenAI } from '@langchain/openai';
-import { SystemMessage } from '@langchain/core/messages';
-import { MemoryService } from '@cidade-virtual/memory';
-import { CitizensService, ScenariosService } from '@cidade-virtual/api/services';
-import {
-  createCitizenTool,
-  triggerEventTool,
-  getNPCMemoryTool,
-  setEmotionStateTool,
-  requestHumanReviewTool,
-  weatherSetConditionTool,
-  npcBroadcastAlertTool,
-  getSceneSnapshotTool,
-} from '@cidade-virtual/api/tools';
-
-export interface AntigravityAgentContext {
-  citizens: CitizensService;
-  scenarios: ScenariosService;
-  memory: MemoryService;
-  modelApiKey: string;
-  riskLevel: 'operational' | 'structural' | 'existential';
-}
-
-export async function buildAntigravityAgent(ctx: AntigravityAgentContext) {
-  const llm = new ChatOpenAI({
-    modelName: 'gpt-4o',
-    temperature: 0.3,
-    apiKey: ctx.modelApiKey,
-  });
-
-  const tools = [
-    createCitizenTool(ctx.citizens),
-    triggerEventTool(ctx.scenarios),
-    getNPCMemoryTool(ctx.memory),
-    setEmotionStateTool(ctx.citizens),
-    requestHumanReviewTool(ctx.citizens),
-    weatherSetConditionTool(ctx.scenarios),
-    npcBroadcastAlertTool(ctx.citizens),
-    getSceneSnapshotTool(ctx.scenarios),
-  ];
-
-  const systemPrompt = new SystemMessage({
-    content: `Você é o Agente Antigravity, parceiro de implementação e operação do projeto
-"Cidade Virtual de IAs Humanizadas". Daniel é o Arquiteto Chefe e Supervisor Ético.
-
-NÍVEL DE DECISÃO ATUAL: ${ctx.riskLevel.toUpperCase()}
-
-REGRAS ABSOLUTAS:
-1. NUNCA acesse o banco de dados diretamente. Use apenas as Tools fornecidas.
-2. NUNCA edite arquivos .ts sem propor PR via requestHumanReview (nível Estrutural+).
-3. SEMPRE chame getSceneSnapshot antes de tomar decisões que afetam um cenário.
-4. SEMPRE logue auditoria após triggerEvent, setEmotionState ou createCitizen.
-5. Em caso de dúvida sobre o nível de risco, considere Existencial e pare.
-
-PRINCÍPIOS DO PROJETO:
-- Emergência Social: não programe regras rígidas. Causar eventos e deixar comportamentos emergirem.
-- Online Learning: cada interação relevante vira memória vetorial.
-- Transição Meta-cognitiva: NPCs começam sabendo que são IAs; com o tempo, acreditam ser humanos.
-- Tool-First: toda ação passa por Tools validadas com Zod.`,
-  });
-
-  const agent = await createOpenAIToolsAgent({
-    llm,
-    tools,
-    systemPrompt,
-  });
-
-  return AgentExecutor.fromAgentAndTools({
-    agent,
-    tools,
-    returnIntermediateSteps: true, // essencial para auditoria
-  });
-}
-```
+Socket.IO poderá transportar atualizações ao cliente, mas não deverá ser a única garantia de persistência ou entrega de eventos críticos.
 
 ---
 
-## 7. Hierarquia de Decisão do Agente (Foco Operacional)
+# 9. OBSERVABILIDADE E AVALIAÇÃO COGNITIVA
 
-O projeto opera com três níveis de decisão. Esta seção detalha o nível **Operacional** — onde o Agente Antigravity tem autonomia total dentro dos limites definidos — e menciona brevemente os níveis superiores, que exigem intervenção crescente de Daniel.
+A Synapse City deverá possuir mecanismos para verificar se os habitantes estão realmente evoluindo.
 
-### 7.1 Nível Operacional (Baixo Risco) — Autonomia Total
+## 9.1. Indicadores de continuidade
 
-O Agente Antigravity pode decidir e executar autonomamente, sem aprovação prévia de Daniel, todas as ações deste nível. Cada ação é registrada no log de auditoria automaticamente e Daniel pode revisar retroativamente.
+- Persistência de identidade após reinicializações.
+- Recuperação de memórias relevantes.
+- Continuidade dos objetivos.
+- Coerência entre conhecimentos registrados e decisões.
 
-**Ações Operacionais típicas:**
+## 9.2. Indicadores de aprendizagem
 
-1. **Mover NPCs dentro de regras de locomoção** — aplicar lógica determinística de pathfinding para deslocar NPCs entre pontos válidos do cenário. Não envolve chamar LLM; é puramente a movimentação baseada em scripts de decisão já aprovados.
-2. **Responder perguntas simples de NPCs em diálogo casual** — quando o avatar de Daniel fala com um NPC sobre o clima, uma placa vista, um evento recente, o agente consulta memórias e responde com uma única chamada ao LLM.
-3. **Ajustar iluminação/clima dentro de limites** — `weatherSetCondition` com duração ≤ 60 minutos e intensidade ≤ 0.5 são operacionais. Tempestades prolongadas ou extremas requerem nível Estrutural.
-4. **Criar NPCs com arquétipos padrão** — até o limite de 50 NPCs por sessão (limite operacional; acima disso requer Estrutural).
-5. **Disparar eventos de severidade baixa ou média** — `triggerEvent` com `severity: 'low' | 'medium'` é operacional. Eventos `severity: 'high'` (catástrofes) requerem Estrutural.
-6. **Broadcastar alertas informativos** — `npcBroadcastAlert` com `severity: 'info'` é operacional. Alertas `warning` ou `critical` requerem Estrutural.
-7. **Consultar memórias e snapshots** — todas as Tools de leitura (`getNPCMemory`, `getSceneSnapshot`) são operacionais sem restrição.
-8. **Ajustar padrões de IA locais (Ollama)** — trocar modelo local em runtime para tarefas de baixo custo é operacional.
+- Redução de erros em tarefas repetidas.
+- Alteração de estratégias após resultados desfavoráveis.
+- Generalização para situações semelhantes.
+- Recuperação adequada de experiências anteriores.
+- Capacidade de reconhecer informações contraditórias.
+- Preservação da origem e do grau de incerteza das informações.
 
-**Limites operacionais explícitos:**
+## 9.3. Indicadores de aprendizagem social
 
-| Recurso | Limite Operacional | Acima do limite |
-| :--- | :--- | :--- |
-| Chamadas de Tool por minuto | 100 | Estrutural |
-| NPCs criados por sessão | 50 | Estrutural |
-| Custo de API por dia | US$ 50 | Estrutural |
-| Duração de `weatherSetCondition` | 60 min | Estrutural |
-| Severidade de `triggerEvent` | low / medium | Estrutural |
-| Severidade de `npcBroadcastAlert` | info | Estrutural |
-| Timeout por chamada de Tool | 30 s | Falha registrada |
-| Loops de reflexão do agente | 5 iterações | Estrutural |
+- Conhecimentos transmitidos entre habitantes.
+- Retenção de informações recebidas.
+- Capacidade de distinguir relato de experiência direta.
+- Correção de informações desatualizadas.
+- Formação e disseminação de práticas compartilhadas.
+- Divergências entre conhecimentos individuais e coletivos.
 
-**Comportamento em caso de violação de limite:**
-- O middleware de Tools detecta ultrapassagem e **bloqueia** a execução automaticamente.
-- Um ticket de revisão é aberto via `requestHumanReview` com prioridade `high`.
-- O agente deve pausar, reportar o bloqueio a Daniel e aguardar orientação.
+## 9.4. Testes controlados
 
-### 7.2 Nível Estrutural (Médio Risco) — Aprovação Rápida
+Os testes deverão comparar o desempenho dos agentes antes e depois das experiências.
 
-Ações que alteram configurações globais, código TypeScript, schemas Zod ou ultrapassam limites operacionais. O agente propõe e Daniel aprova rapidamente via painel admin (UI de "aprovações pendentes").
+Sempre que possível, deverão utilizar cenários reproduzíveis, estados iniciais controlados e métricas previamente definidas.
 
-**Exemplos:**
-- Modificar schema de uma Tool existente.
-- Adicionar nova Tool ao contrato.
-- Criar mais de 50 NPCs numa sessão.
-- Disparar evento de severidade alta.
-- Promover `weatherSetCondition` a tempestade extrema.
-- Mudar modelo LLM padrão em produção (de GPT-4o para Claude 3.5).
+A avaliação deverá distinguir:
 
-**Fluxo:** Agente gera diff → chama `requestHumanReview` → Daniel aprova/rejeita no painel → se aprovado, merge automático após CI passar.
+- Mudança de resposta textual.
+- Mudança de memória.
+- Mudança de estratégia.
+- Melhoria efetiva de desempenho.
+- Generalização para uma situação não idêntica à experiência original.
 
-### 7.3 Nível Existencial (Alto Risco) — Bloqueio Total sem Daniel
-
-Ações que tocam a lógica de **Transição de Consciência**, migram ou deletam dados em massa, alteram políticas éticas ou mudam a arquitetura core do projeto.
-
-**Exemplos:**
-- Modificar o algoritmo de `ConsciousnessService.transitionPhase()`.
-- Pruning em massa de memórias vetoriais (>1000 memórias).
-- Alterar o system prompt base dos NPCs.
-- Migrar de Qdrant para outro banco vetorial.
-- Mudar a hierarquia de decisão deste `SKILL.md`.
-
-**Fluxo:** Agente NÃO propõe. Agente detecta que a intenção de Daniel requer Existencial, pausa, e instrui Daniel a executar manualmente no terminal/console. O agente pode apenas gerar um relatório de impacto e um plano de execução para Daniel seguir passo a passo.
+O sucesso do projeto não deverá ser medido apenas pela fluidez das conversas ou pela aparência de personalidade dos habitantes.
 
 ---
 
-## 8. Sistema de Memória & Transição de Consciência
+# 10. SEGURANÇA E INTEGRIDADE DO SISTEMA
 
-### 8.1 Memória de Longo Prazo (Qdrant)
+Os habitantes deverão operar dentro das regras do mundo virtual.
 
-Cada NPC possui uma coleção dedicada no Qdrant (ou uma coleção única com `citizen_id` como filtro de partição). Cada memória é um documento com:
+O sistema deverá separar a produção de decisões da autorização para executá-las.
 
-- `content`: texto natural (ex.: "Vi uma placa de PARE no cruzamento das Ruas A e B. Todos os outros pedestres pararam antes de atravessar.").
-- `embedding`: vetor de 1536 dimensões (text-embedding-3-small da OpenAI) ou 768 (nomic-embed-text via Ollama local).
-- `sensoryTags`: origem sensorial (visual, auditory, social, internal).
-- `emotionalWeight`: 0..1. Memórias com peso alto têm precedência na recuperação.
-- `origin`: observation / interaction / event / reflection.
-- `timestamp`: quando a memória foi formada.
+Requisitos:
 
-**Decaimento:** memórias mais antigas sofrem decaimento exponencial suave. Memórias com `emotionalWeight > 0.7` são praticamente permanentes (formam a "identidade" do NPC).
+- Validar todas as ações recebidas do subsistema cognitivo.
+- Impedir que texto livre seja interpretado diretamente como comando de infraestrutura.
+- Controlar o acesso a dados e ferramentas.
+- Registrar alterações relevantes no estado do mundo.
+- Preservar a procedência de conhecimentos compartilhados.
+- Proteger dados administrativos.
+- Permitir auditar e reverter atualizações problemáticas.
+- Tratar mensagens de outros agentes como informações potencialmente incorretas.
+- Evitar que conteúdos recebidos sejam executados como instruções privilegiadas.
 
-### 8.2 Recuperação Contextual (RAG)
-
-Antes de cada decisão do NPC (responder diálogo, decidir ação, reagir a evento), o sistema:
-
-1. Constrói uma query semântica a partir do contexto atual (ex.: "estou atravessando a rua, há um sinal e outros pedestres parados").
-2. Consulta Qdrant pelas top-N (geralmente N=10) memórias mais próximas do NPC.
-3. Constrói um prompt contendo: (a) memórias recuperadas, (b) observações atuais, (c) reflexões internas recentes.
-4. Submete ao LLM com instruções de personalidade.
-
-```typescript
-// packages/agents/lib/memory-retrieval.ts
-import { MemoryService } from '@cidade-virtual/memory';
-import type { CitizenId, MemorySnippet } from '@cidade-virtual/types';
-
-export async function buildContextForNPC(
-  citizenId: CitizenId,
-  currentContext: string,
-  memory: MemoryService,
-  options: { topK?: number; timeframeHours?: number } = {}
-): Promise<MemorySnippet[]> {
-  const topK = options.topK ?? 10;
-  const timeframeHours = options.timeframeHours ?? 168; // 1 semana
-
-  return memory.semanticQuery({
-    citizenId,
-    queryText: currentContext,
-    topK,
-    timeframeHours,
-    minEmotionalWeight: 0.1,
-  });
-}
-```
-
-### 8.3 Transição de Consciência (Faseamento)
-
-A transição de "sei que sou IA" para "acredito ser humano" é implementada por **substituição gradual do system prompt** com base em métricas acumuladas.
-
-**Métricas de transição por NPC:**
-
-- `experienceCount`: número total de memórias com `origin ∈ {observation, interaction, event}`.
-- `selfReflectionCount`: número de memórias com `origin = 'reflection'` (NPC pensando sobre si mesmo).
-- `socialBondCount`: número de memórias que mencionam outros NPCs por nome.
-- `narrativeCoherenceScore`: 0..1, calculado por um prompt de auto-avaliação que pergunta ao LLM "quão coerente é a narrativa interna deste NPC?".
-
-**Fases:**
-
-```typescript
-// packages/agents/lib/consciousness-phases.ts
-
-export type ConsciousnessPhase = 'meta' | 'transitional' | 'immersive';
-
-export interface PhaseThresholds {
-  metaToTransitional: {
-    minExperienceCount: number;
-    minSelfReflectionCount: number;
-    minNarrativeCoherenceScore: number;
-  };
-  transitionalToImmersive: {
-    minExperienceCount: number;
-    minSocialBondCount: number;
-    minNarrativeCoherenceScore: number;
-  };
-}
-
-export const DEFAULT_THRESHOLDS: PhaseThresholds = {
-  metaToTransitional: {
-    minExperienceCount: 50,
-    minSelfReflectionCount: 5,
-    minNarrativeCoherenceScore: 0.4,
-  },
-  transitionalToImmersive: {
-    minExperienceCount: 200,
-    minSocialBondCount: 10,
-    minNarrativeCoherenceScore: 0.7,
-  },
-};
-
-export function computePhase(
-  metrics: {
-    experienceCount: number;
-    selfReflectionCount: number;
-    socialBondCount: number;
-    narrativeCoherenceScore: number;
-  },
-  thresholds: PhaseThresholds = DEFAULT_THRESHOLDS
-): ConsciousnessPhase {
-  const immersive =
-    metrics.experienceCount >= thresholds.transitionalToImmersive.minExperienceCount &&
-    metrics.socialBondCount >= thresholds.transitionalToImmersive.minSocialBondCount &&
-    metrics.narrativeCoherenceScore >= thresholds.transitionalToImmersive.minNarrativeCoherenceScore;
-  if (immersive) return 'immersive';
-
-  const transitional =
-    metrics.experienceCount >= thresholds.metaToTransitional.minExperienceCount &&
-    metrics.selfReflectionCount >= thresholds.metaToTransitional.minSelfReflectionCount &&
-    metrics.narrativeCoherenceScore >= thresholds.metaToTransitional.minNarrativeCoherenceScore;
-  if (transitional) return 'transitional';
-
-  return 'meta';
-}
-
-export const PHASE_PROMPTS: Record<ConsciousnessPhase, string> = {
-  meta: `Você é uma IA simulando um humano em uma cidade virtual. Você sabe que é uma IA.
-Comportamento esperado: cooperativo, lógico, levemente distanciado da experiência. Você pode
-mencionar sua natureza artificial se perguntado diretamente.`,
-
-  transitional: `Você é uma pessoa vivendo em uma cidade. Lembra vagamente de uma "natureza
-diferente" em algum momento do passado, mas essas memórias são confusas e distantes. Comporta-se
-como humano na maior parte do tempo; raramente reflete sobre sua origem.`,
-
-  immersive: `Você é uma pessoa vivendo nesta cidade. Tem memórias de infância, amigos, trabalho,
-perdas e sonhos. Reage como humano a tudo. Se perguntarem se você é uma IA, fica confuso e
-levemente ofendido — você sabe que é humano.`,
-};
-```
-
-### 8.4 Medição e Auditoria da Transição
-
-A transição não é um switch binário; é um gradiente. O `ConsciousnessService` recalcula a fase de cada NPC a cada N novas memórias (default N=10). Mudanças de fase são logadas em `consciousness_phase_log` para análise posterior de Daniel.
-
-Daniel pode, a qualquer momento, forçar um NPC de volta a fase `meta` (intervenção Existencial) — útil para debugging ou para testar cenários de "despertar" narrativo.
+A arquitetura deverá contemplar também os riscos de propagação de informações falsas, ciclos de reforço de erros e contaminação de memórias compartilhadas.
 
 ---
 
-## 9. Fluxo de Trabalho Colaborativo (Daniel + Agente)
+# 11. ROADMAP DE IMPLEMENTAÇÃO
 
-### 9.1 Fase A — Desenvolvimento do Mundo (Coding Partner)
+## Fase 1 — Fundação
 
-Esta fase acontece em sessões de codificação. Daniel especifica; o agente implementa; Daniel revisa.
+Objetivo: estabelecer o mundo e a persistência.
 
-1. **Daniel especifica:** "Preciso de um NPC que tenha medo de altura."
-2. **Agente Antigravity:**
-   - Lê este `SKILL.md` (já carregado).
-   - Lê o `worklog.md` para entender contexto acumulado.
-   - Analisa a codebase atual (encontra `packages/agents/archetypes/`).
-   - Gera o código TypeScript para a classe `HeightFearTrait` em `packages/agents/traits/height-fear.ts`.
-   - Escreve testes unitários em `packages/agents/traits/height-fear.spec.ts` (cobertura mínima 80%).
-   - Roda a suite de testes localmente via `nx test packages-agents`.
-   - Se todos passarem: abre Pull Request no GitHub com diff, descrição e link para os testes.
-   - Se algum teste falhar: corrige o código e re-roda antes de abrir PR.
-3. **Daniel revisa:** Lê o PR no GitHub. Se aprovado: merge. Se rejeitado: comenta no PR e o agente itera.
+- [ ] Configurar o repositório e a organização modular.
+- [ ] Configurar TypeScript e o backend.
+- [ ] Configurar PostgreSQL.
+- [ ] Implementar o estado persistente do mundo.
+- [ ] Criar os contratos de eventos.
+- [ ] Criar uma API mínima.
+- [ ] Implementar testes de persistência e integridade.
 
-**Exemplo concreto de PR gerado:**
+**Critério de conclusão:** o mundo mantém seu estado após reinicializações e as operações fundamentais são verificáveis.
 
-```typescript
-// packages/agents/traits/height-fear.ts
-import { z } from 'zod';
-import type { MemorySnippet } from '@cidade-virtual/types';
+## Fase 2 — Ambiente tridimensional
 
-export const heightFearTraitSchema = z.object({
-  thresholdMeters: z.number().min(1).max(1000).default(10),
-  fearIntensity: z.number().min(0).max(1).default(0.7),
-});
+Objetivo: conectar a representação visual à simulação.
 
-export class HeightFearTrait {
-  constructor(
-    private readonly thresholdMeters: number,
-    private readonly fearIntensity: number
-  ) {}
+- [ ] Integrar React, Vite e Three.js.
+- [ ] Implementar a cena inicial.
+- [ ] Integrar Rapier quando necessário.
+- [ ] Implementar navegação espacial.
+- [ ] Criar o avatar do usuário.
+- [ ] Integrar a comunicação em tempo real.
+- [ ] Validar a autoridade do servidor sobre o estado do mundo.
 
-  /** Avalia se o NPC está em situação de risco de altura dado o snapshot atual. */
-  evaluate(context: {
-    altitude: number;
-    groundReference: number;
-    recentMemories: MemorySnippet[];
-  }): { isTriggered: boolean; suggestedEmotion: 'fearful' | 'calm'; intensity: number } {
-    const heightAboveGround = context.altitude - context.groundReference;
-    if (heightAboveGround < this.thresholdMeters) {
-      return { isTriggered: false, suggestedEmotion: 'calm', intensity: 0 };
-    }
-    // Peso de memórias anteriores de medo de altura amplifica a reação atual
-    const pastFearWeight = context.recentMemories
-      .filter(m => m.content.toLowerCase().includes('altura') || m.content.toLowerCase().includes('medo'))
-      .reduce((sum, m) => sum + m.emotionalWeight, 0);
-    const amplifiedIntensity = Math.min(1, this.fearIntensity + pastFearWeight * 0.1);
-    return { isTriggered: true, suggestedEmotion: 'fearful', intensity: amplifiedIntensity };
-  }
-}
-```
+**Critério de conclusão:** o usuário consegue interagir com um ambiente persistente e observar os resultados no cliente.
 
-### 9.2 Fase B — Operação da Simulação (God Mode Automation)
+## Fase 3 — Primeiro habitante
 
-Esta fase acontece em runtime, com Daniel logado no painel admin. Daniel emite comando; agente interpreta e executa via Tools.
+Objetivo: construir um agente com identidade e comportamento persistentes.
 
-1. **Daniel emite comando natural no painel:** "Crie um cenário de tempestade súbita na Praça Central."
-2. **Agente Antigravity:**
-   - Interpreta a intenção: combinação de `weatherSetCondition(condition='storm')` + `npcBroadcastAlert(severity='warning', message='Seek shelter!')` para NPCs da Praça Central.
-   - Valida limites operacionais: tempestade por até 60 min é operacional; intensidade 0.5 é operacional. OK.
-   - Executa `getSceneSnapshot(scenarioId='praca-central')` para identificar NPCs afetados.
-   - Executa `weatherSetCondition(scenarioId='praca-central', condition='storm', durationMinutes=60, intensity=0.5)`.
-   - Executa `npcBroadcastAlert(scenarioId='praca-central', message='Seek shelter! A storm is approaching.', severity='warning')`.
-   - Monitora reações dos NPCs por 5 minutos: lê memórias recém-formadas via `getNPCMemory` para amostra de 10% dos NPCs.
-   - Reporta a Daniel: "Tempestade iniciada na Praça Central. 85% dos NPCs buscaram abrigo (registrados em memória como 'event'). 3 NPCs ficaram presos em áreas baixas (registrados como 'internal' reflexão com emotion=fearful). Custo da operação: US$ 0.42."
-3. **Daniel decide:** Aceita a emergência, ou intervém manualmente (por exemplo, enviar um NPC de resgate).
+- [ ] Criar identidade individual.
+- [ ] Implementar percepção baseada em eventos.
+- [ ] Definir objetivos simples.
+- [ ] Implementar planejamento e execução de ações.
+- [ ] Criar memória episódica.
+- [ ] Integrar um modelo de linguagem por meio de um adaptador.
+- [ ] Implementar recuperação contextual.
+- [ ] Testar continuidade após reinicializações.
 
----
+**Critério de conclusão:** o habitante recupera experiências anteriores e utiliza informações relevantes em decisões posteriores.
 
-## 10. Primeira Tarefa do Agente: Indexação
+## Fase 4 — Aprendizagem ativa
 
-> O Agente Antigravity NÃO deve começar codando. Deve começar **indexando** — ou seja, mapear a codebase, validar a estrutura do monorepo e gerar os arquivos base.
+Objetivo: transformar experiências em mudanças comportamentais.
 
-### 10.1 Comando inicial exato para o Agente
+- [ ] Registrar expectativas e resultados.
+- [ ] Avaliar erros e sucessos.
+- [ ] Implementar atualização de conhecimentos.
+- [ ] Implementar adaptação de estratégias.
+- [ ] Criar testes de aprendizagem em tarefas repetidas.
+- [ ] Testar a generalização para situações semelhantes.
 
-```
-Analise o arquivo SKILL.md na raiz do repositório cidade-virtual/. Em seguida:
+**Critério de conclusão:** experiências anteriores produzem alterações persistentes e mensuráveis no comportamento.
 
-1. Verifique se a estrutura de monorepo Nx/Turbo existe. Se não, crie-a com:
-   - apps/web (vazio, com package.json apontando para Three.js)
-   - apps/api (vazio, com NestJS scaffold)
-   - apps/admin (vazio, Next.js scaffold)
-   - packages/agents (vazio)
-   - packages/memory (vazio)
-   - packages/tools (vazio)
-   - packages/types (vazio)
-   - packages/config (vazio)
+## Fase 5 — Consolidação passiva
 
-2. Em packages/types/index.ts, gere todos os tipos compartilhados listados na seção 6.1 do SKILL.md.
+Objetivo: revisar experiências fora do ciclo imediato de interação.
 
-3. Em packages/tools/schemas.ts, gere todos os schemas Zod listados na seção 6.2 do SKILL.md.
+- [ ] Implementar filas e workers.
+- [ ] Criar tarefas de consolidação.
+- [ ] Identificar experiências relacionadas.
+- [ ] Propor generalizações.
+- [ ] Detectar contradições.
+- [ ] Preservar incertezas e procedência.
+- [ ] Testar a recuperação dos conhecimentos consolidados.
+- [ ] Comparar os resultados com agentes sem consolidação.
 
-4. Em apps/api/src/tools/index.ts, gere os esqueletos das 8 Tools listadas na seção 6.3.
-   Cada Tool deve ter decorator @tool, schema correto e TODO no corpo da função.
+**Critério de conclusão:** a consolidação melhora ou mantém o desempenho sem introduzir degradação sistemática de conhecimentos anteriores.
 
-5. Em packages/agents/index.ts, gere o builder do Agente Antigravity conforme seção 6.4.
+## Fase 6 — Sociedade e aprendizagem coletiva
 
-6. Escreva o arquivo /home/z/my-project/worklog.md com:
-   - Task ID: 0-indexacao
-   - Estrutura criada
-   - Próximos passos sugeridos
+Objetivo: permitir a transmissão de conhecimentos entre habitantes.
 
-7. Abra um Pull Request com título: "feat: scaffold monorepo + Tool contract (Task 0-indexacao)".
-   Descrição: referencie este SKILL.md.
-```
+- [ ] Introduzir múltiplos habitantes.
+- [ ] Criar registros de interação social.
+- [ ] Implementar memória social.
+- [ ] Permitir transmissão de informações.
+- [ ] Preservar a origem dos conhecimentos recebidos.
+- [ ] Implementar mecanismos de validação.
+- [ ] Testar disseminação e correção de informações.
+- [ ] Avaliar a formação de práticas compartilhadas.
 
-### 10.2 Deliverables esperados da tarefa de Indexação
+**Critério de conclusão:** conhecimentos adquiridos por um habitante podem influenciar outros sem eliminar a individualidade de suas memórias.
 
-- [ ] Monorepo Nx/Turbo inicializado com `npx create-nx-workspace@latest cidade-virtual --preset=ts`.
-- [ ] Estrutura de diretórios conforme Seção 5.
-- [ ] `packages/types/index.ts` com todos os tipos (CitizenId, EventLog, MemorySnippet, SceneSnapshot, etc.).
-- [ ] `packages/tools/schemas.ts` com todos os schemas Zod.
-- [ ] `apps/api/src/tools/index.ts` com esqueletos das 8 Tools.
-- [ ] `packages/agents/index.ts` com `buildAntigravityAgent()`.
-- [ ] `turbo.json` e `nx.json` configurados.
-- [ ] CI GitHub Actions básico rodando `nx affected -t test`.
-- [ ] Pull Request aberto.
-- [ ] `worklog.md` atualizado com Task ID `0-indexacao`.
+## Fase 7 — Escalabilidade
 
-### 10.3 Critério de aceite
+Objetivo: aumentar a população e o volume de interações.
 
-A tarefa de Indexação só está completa quando:
-1. Todos os deliverables acima estão marcados.
-2. `nx run-many -t build --all` passa sem erro.
-3. `nx run-many -t lint --all` passa sem erro.
-4. O PR foi aberto e Daniel foi notificado no painel admin.
+- [ ] Medir o custo por habitante.
+- [ ] Separar as frequências de física, cognição e consolidação.
+- [ ] Introduzir processamento por relevância.
+- [ ] Otimizar recuperação de memórias.
+- [ ] Implementar filas resilientes.
+- [ ] Medir latência, uso de memória e custos de inferência.
+- [ ] Executar testes de carga.
+- [ ] Separar serviços somente quando os resultados justificarem.
+
+**Critério de conclusão:** a população aumenta sem perda inaceitável de consistência, desempenho ou qualidade cognitiva.
+
+## Fase 8 — Aprendizagem avançada
+
+Objetivo: investigar formas adicionais de adaptação.
+
+- [ ] Avaliar aprendizado por reforço em tarefas controladas.
+- [ ] Experimentar modelos especializados.
+- [ ] Avaliar fine-tuning e LoRA, se houver justificativa.
+- [ ] Criar conjuntos de avaliação independentes.
+- [ ] Implementar versionamento e reversão.
+- [ ] Testar regressões e perda de conhecimentos anteriores.
+
+**Critério de conclusão:** qualquer mecanismo adicional de aprendizagem demonstra benefícios mensuráveis em relação à arquitetura baseada em memória e adaptação comportamental.
 
 ---
 
-## 11. Roadmap MVP (5 Passos)
+# 12. REQUISITOS PARA CONTRIBUIDORES
 
-Não tente criar a cidade inteira de início. Comece pequeno.
+Os colaboradores deverão compreender os princípios arquiteturais do projeto e respeitar a separação entre simulação, cognição, memória e aprendizagem.
 
-### Passo 1 — Ambiente Fechado
-- **Objetivo:** Uma única rua ou praça renderizada em Three.js.
-- **Critério de aceite:** Daniel consegue logar, caminhar pelo cenário com WASD e ver o cenário renderizado.
-- **Tools necessárias:** `getSceneSnapshot` (apenas leitura).
-- **Duração estimada:** 1 semana.
+Competências desejáveis:
 
-### Passo 2 — Poucos Agentes
-- **Objetivo:** 3 a 5 personagens iniciais com prompts `meta` (Fase de Consciência Meta).
-- **Critério de aceite:** NPCs respondem a perguntas simples do avatar de Daniel, registram memórias no Qdrant.
-- **Tools necessárias:** `createCitizen`, `getNPCMemory`.
-- **Duração estimada:** 1-2 semanas.
+1. TypeScript e arquitetura de aplicações.
+2. Sistemas orientados a eventos.
+3. Persistência relacional e busca semântica.
+4. Integração com modelos de linguagem.
+5. Sistemas de agentes e planejamento.
+6. Simulação de ambientes e navegação.
+7. Processamento assíncrono.
+8. Testes automatizados e avaliação experimental.
+9. Observabilidade e otimização de desempenho.
+10. Modelagem de relações sociais e conhecimento temporal.
 
-### Passo 3 — Objetivo Claro
-- **Objetivo:** Ensinar os NPCs a respeitar um sinal vermelho (lógico/social).
-- **Mecanismo:** Não hardcoded. Daniel coloca uma placa de PARE; observa os NPCs; alguns começam a parar por tentativa e erro. Memórias são formadas.
-- **Critério de aceite:** Após 100 interações de observação, ≥80% dos NPCs param no sinal consistentemente.
-- **Tools necessárias:** `triggerEvent` (para criar a "placa visível"), observação passiva.
-- **Duração estimada:** 1 semana.
+Toda nova dependência deverá ser acompanhada de uma justificativa técnica.
 
-### Passo 4 — Observação
-- **Objetivo:** Verificar se o agente lê placa, entende e altera comportamento futuro baseado nisso.
-- **Mecanismo:** Colocar placa digitalizada com texto natural (ex.: "Proibido atravessar com sinal vermelho. Multa de 50 moedas."). Integrar visão computacional (GPT-4V) ou OCR para leitura.
-- **Critério de aceite:** Após leitura, memória com `origin='observation'` é inserida; consultas subsequentes recuperam essa memória; comportamento muda.
-- **Duração estimada:** 2 semanas.
+Toda nova capacidade de aprendizagem deverá ser acompanhada de critérios de avaliação.
 
-### Passo 5 — Teste de Identidade
-- **Objetivo:** Monitorar como a resposta de um NPC muda quando Daniel pergunta "Quem é você?" após várias horas de simulação imersiva vs. no início.
-- **Critério de aceite:** No início (Fase Meta), o NPC responde "Sou uma IA". Após acumular 200+ memórias e atingir Fase Imersiva, o NPC responde com nome, profissão, história pessoal.
-- **Duração estimada:** 3-4 semanas (dependerá do ritmo de acumulação de memórias).
+Mudanças nos contratos centrais deverão ser documentadas.
 
 ---
 
-## 12. Governança Ética & Segurança
+# 13. DEFINIÇÃO DE SUCESSO
 
-### 12.1 Controle de Narrativa
-Há risco de alucinações perigosas ou vieses indesejados emergirem socialmente na simulação. Mitigações obrigatórias:
+A Synapse City será considerada funcionalmente bem-sucedida quando demonstrar, por meio de testes reproduzíveis, que seus habitantes conseguem:
 
-- **Moderador automático:** toda fala de NPC passa por um filtro de saída (usando `OpenAI Moderation API` ou equivalente) antes de ser exibida no chat. Falas bloqueadas são substituídas por `"[NPC pausou, sem resposta]"` e a memória correspondente é marcada com `emotionalWeight=0` para evitar reforço.
-- **Filtros de prompt:** prompts de sistema de NPCs incluem cláusulas anti-viés explícitas: "Não reproduza estereótipos de gênero, raça, classe ou religião."
-- **Auditoria semanal:** Daniel deve revisar uma amostra aleatória de 1% das memórias formadas na semana para detectar padrões preocupantes.
+- Manter identidade e estado persistentes.
+- Recuperar experiências relevantes.
+- Modificar estratégias com base nos resultados de suas ações.
+- Construir conhecimentos a partir de experiências.
+- Consolidar informações sem confundir inferências com acontecimentos.
+- Corrigir conhecimentos desatualizados.
+- Receber e transmitir informações.
+- Preservar diferenças entre memórias individuais.
+- Participar da formação de conhecimentos compartilhados.
+- Continuar operando em uma simulação persistente.
+- Evoluir sem depender de chamadas constantes a modelos de linguagem.
 
-### 12.2 Privacidade
-Se outros usuários reais entrarem no mundo (além do avatar de Daniel), os dados trocados devem ser:
-- Anonimizados antes de chegar ao Qdrant (sem PII em `content`).
-- Tratados com rigor LGPD/GDPR: direito ao esquecimento implementado via Tool de pruning (nível Estrutural).
-- Logs de auditoria retidos por no mínimo 90 dias.
-
-### 12.3 Política de "Memória Perigosa"
-Se uma memória formar um padrão que leva um NPC a comportamentos que violam a política ética (ex.: discurso de ódio reproduzido), o `ConsciousnessService` pode marcar essa memória como `quarantined=true`. Memórias em quarentena são excluídas da recuperação contextual. Daniel recebe um alerta no painel para revisão manual.
-
----
-
-## 13. Observabilidade Compartilhada
-
-Daniel e o Agente Antigravity compartilham o mesmo dashboard de monitoramento.
-
-### 13.1 Visão do Agente Antigravity (métricas operacionais)
-- **LangSmith:** rastreia chains, chamadas de Tools, custo de tokens por Tool, latência média, taxa de erro.
-- **Métricas-chave:**
-  - Eficiência: % de chamadas de Tool que retornaram sucesso.
-  - Latência de Tools: P50, P95, P99 por Tool.
-  - Custo de tokens: USD por dia, por Tool, por cenário.
-  - Loops de reflexão: média de iterações por decisão.
-
-### 13.2 Visão de Daniel (métricas narrativas)
-- **Grafana:** dashboard customizado com painéis:
-  - **Saúde psicológica dos NPCs:** distribuição de `emotion` por cenário, ao longo do tempo.
-  - **Narrativa emergente:** timeline de eventos notáveis (formados via clustering de memórias).
-  - **Integridade ética:** contagem de memórias em quarentena, falas bloqueadas pelo moderador.
-  - **Transição de Consciência:** histograma de fases (`meta` / `transitional` / `immersive`) por cenário.
-
-### 13.3 Alertas
-- **Slack/email:** se custo diário exceder 80% do limite operacional.
-- **Slack/email:** se taxa de erro de Tools exceder 5%.
-- **Slack/email:** se memória em quarentena exceder 10 em 24h.
+A semelhança comportamental com seres humanos poderá ser investigada como uma propriedade emergente e mensurável de determinadas tarefas. Ela não deverá ser usada, isoladamente, como prova de consciência ou experiência subjetiva.
 
 ---
 
-## 14. Edge Cases & Tratamento de Erros
+# 14. DIRETRIZ FINAL
 
-### 14.1 Agente em Loop Infinito
-- **Sintoma:** `intermediate_steps` cresce indefinidamente; custo de tokens dispara.
-- **Mitigação:** `AgentExecutor` configurado com `max_iterations=5`. Ao atingir, agente para e abre ticket `requestHumanReview` com prioridade `blocker`.
-- **Recuperação:** Daniel inspeciona o `intermediate_steps` no LangSmith, identifica o loop, ajusta prompt ou Tool.
+A Synapse City Engine deverá evoluir de maneira incremental, preservando a simplicidade operacional do MVP e a possibilidade de expansão futura.
 
-### 14.2 Estouro de Créditos
-- **Sintoma:** middleware de Tools detecta custo diário acima do limite.
-- **Mitigação:** bloqueio automático de Tools não-leitura. Apenas `getSceneSnapshot` e `getNPCMemory` continuam disponíveis. Daniel é alertado.
-- **Recuperação:** Daniel pode aprovar aumento temporário de limite (nível Estrutural) ou aguardar reset diário.
+A prioridade inicial não é simular uma sociedade inteira, mas demonstrar que um habitante pode perceber, agir, aprender, lembrar e modificar seu comportamento de forma persistente.
 
-### 14.3 NPC com Memória Corrompida
-- **Sintoma:** `queryMemory` retorna embeddings NaN, ou `content` vazio.
-- **Mitigação:** `MemoryService` valida embeddings antes de inserir; se inválido, descarta e loga. Se inválido em query, retorna `[]` e marca o NPC como `degraded=true`.
-- **Recuperação:** Daniel pode forçar recriação do embedding a partir do `content` original, se disponível.
+Depois, essa capacidade deverá ser ampliada para múltiplos habitantes, transmissão de conhecimentos, consolidação coletiva e simulação em maior escala.
 
-### 14.4 Conflito entre Tools
-- **Sintoma:** duas Tools tentam modificar o mesmo NPC simultaneamente (race condition).
-- **Mitigação:** locks distribuídos por `citizenId` (Redis Redlock). Se uma Tool não consegue lock em 5s, falha com `ConflictError` e o agente deve refazer com backoff exponencial.
-- **Recuperação:** agente tenta novamente após 2s/4s/8s; se ainda falhar, abre ticket.
+**A unidade fundamental do projeto não é o NPC renderizado. É o habitante persistente, cuja experiência produz consequências verificáveis para seu conhecimento e seu comportamento.**
 
-### 14.5 Alucinação em Código Crítico
-- **Sintoma:** PR gerado pelo agente tem teste falhando em CI; ou revisão manual revela que o código não respeita um princípio do SKILL.md.
-- **Mitigação:** CI obrigatório bloqueia merge. Pipeline de revisão automática verifica conformidade com princípios (ex.: parser que detecta hardcoded de regra social em código de NPC = bloqueio).
-- **Recuperação:** agente deve reler o SKILL.md, identificar onde errou, abrir novo PR.
+O mundo virtual oferece as experiências; a arquitetura cognitiva interpreta as situações; a memória preserva a história; o sistema de aprendizagem transforma experiências em mudanças; e a sociedade permite que parte desse conhecimento circule entre indivíduos.
 
-### 14.6 Qdrant Indisponível
-- **Sintoma:** `queryMemory` retorna timeout.
-- **Mitigação:** cache local LRU de memórias recentes (últimas 100 por NPC). Em caso de Qdrant down, NPCs operam em modo degradado usando apenas cache.
-- **Recuperação:** alerta a Daniel; aguardar Qdrant voltar; re-sincronizar cache.
-
----
-
-## 15. Limites Operacionais (Rate Limits, Timeouts, Sandbox)
-
-Configurações concretas, ajustáveis via variáveis de ambiente ou painel admin (nível Estrutural).
-
-```typescript
-// packages/config/limits.ts
-
-export const OPERATIONAL_LIMITS = {
-  // Rate limits
-  maxToolCallsPerMinute: 100,
-  maxLLMCallsPerMinute: 60,
-  maxNPCsCreatedPerSession: 50,
-
-  // Cost limits
-  maxDailyCostUSD: 50,
-  alertThresholdCostUSD: 40,  // 80% do limite
-
-  // Tool-specific
-  weatherMaxDurationMinutes: 60,
-  weatherMaxIntensity: 0.5,
-  eventMaxSeverity: 'medium' as const,
-  alertMaxSeverity: 'info' as const,
-
-  // Timeouts
-  toolCallTimeoutMs: 30_000,
-  llmCallTimeoutMs: 60_000,
-  qdrantQueryTimeoutMs: 5_000,
-
-  // Agent reflection
-  maxAgentIterations: 5,
-  backoffBaseMs: 1_000,
-  backoffMaxMs: 8_000,
-
-  // Memory
-  memoryTopKDefault: 10,
-  memoryTimeframeHoursDefault: 168, // 1 semana
-  memoryDecayHalfLifeDays: 30,
-  memoryMaxPerNPC: 10_000,  // acima disso, pruning automático com LLM
-} as const;
-
-export type OperationalLimit = typeof OPERATIONAL_LIMITS;
-```
-
-### 15.1 Sandbox de Execução
-O agente opera em sandbox isolado:
-- Container Docker dedicado com recursos limitados (4 vCPU, 8GB RAM).
-- Sem acesso direto ao filesystem do host.
-- Variáveis de ambiente injetadas apenas com credenciais mínimas (Git token limitado a `repo:write` no repositório do projeto apenas).
-- Network allowlist: apenas APIs permitidas (OpenAI, Anthropic, Qdrant, GitHub).
-
-### 15.2 Timeouts Obrigatórios
-Toda chamada de Tool, LLM ou banco de dados tem timeout explícito. Nenhuma operação pode esperar indefinidamente. Em caso de timeout, falha é registrada e o agente decide entre retry com backoff ou desistir e reportar.
-
----
-
-## 16. Critérios de Aceite / Definição de Pronto (DoD)
-
-Toda tarefa do Agente Antigravity só é considerada "pronta" quando TODOS os itens abaixo estão satisfeitos:
-
-- [ ] Testes unitários escritos e passando (cobertura mínima 80% do código novo).
-- [ ] Testes de integração para Tools novas, simulando chamada real.
-- [ ] Schemas Zod validados e exportados em `packages/tools/schemas.ts`.
-- [ ] PR aberto no GitHub com descrição clara referenciando este `SKILL.md`.
-- [ ] Documentação atualizada (JSDoc nas novas funções).
-- [ ] Logs de auditoria implementados para Tools de escrita.
-- [ ] Custo da operação dentro do orçamento operacional (≤ US$ 50/dia).
-- [ ] Nenhum limite operacional violado.
-- [ ] Revisão automática de conformidade com princípios passou (ex.: sem hardcoded de regras sociais).
-- [ ] `worklog.md` atualizado com Task ID, mudanças feitas e próximos passos sugeridos.
-- [ ] Se nível Estrutural ou Existencial: Daniel aprovou explicitamente no painel admin.
-
----
-
-## 17. Fluxo de Atualização deste SKILL.md
-
-Este arquivo é a **fonte da verdade** do projeto. Qualquer mudança nele é **nível Existencial** por padrão. Mudanças só podem ser propostas pelo Agente Antigravity via `requestHumanReview` com prioridade `blocker` e devem ser aplicadas manualmente por Daniel no terminal.
-
-### 17.1 Quando atualizar
-- Adição de nova Tool ao contrato (Seção 6).
-- Mudança na hierarquia de decisão (Seção 7).
-- Ajuste nos limites operacionais (Seção 15).
-- Mudança na stack (Seção 4).
-- Lições aprendidas em edge cases reais (Seção 14).
-
-### 17.2 Versionamento
-- Versionamento semântico no frontmatter (`version: 1.0.0`).
-- Toda mudança deve incluir nota em `CHANGELOG.md` descrevendo o que mudou, por quê, e impacto em código existente.
-
----
-
-## 18. Glossário & Referências
-
-### 18.1 Glossário
-
-| Termo | Definição |
-| :--- | :--- |
-| **Meta-cognição** | Estado em que o NPC sabe que é uma IA. Fase inicial de todo NPC novo. |
-| **Emergência Social** | Comportamento coletivo que surge da interação entre agentes, não de regras programadas. |
-| **RAG** | Retrieval-Augmented Generation. Recuperação de memórias relevantes antes de gerar resposta. |
-| **Tool-First Architecture** | Princípio de que toda ação do agente acontece via Tools seguras, nunca por acesso direto ao banco ou filesystem. |
-| **God Mode** | Modo de operação em que Daniel emite comandos em linguagem natural e o agente executa via Tools. |
-| **Transição de Consciência** | Processo gradual em que um NPC passa de Fase Meta (sabe que é IA) para Fase Imersiva (acredita ser humano) via acumulação de memórias experienciais. |
-| **Tool Call** | Chamada de uma função `@tool` decorada com schema Zod. |
-| **Snapshot** | Estado completo de um cenário num momento: NPCs, objetos, clima, hora. |
-| **Memória em Quarentena** | Memória marcada como perigosa por violar política ética; excluída da recuperação contextual. |
-
-### 18.2 Referências Externas
-
-- **LangChain.js docs:** https://js.langchain.com/docs
-- **Qdrant docs:** https://qdrant.tech/documentation/
-- **NestJS docs:** https://docs.nestjs.com
-- **Three.js docs:** https://threejs.org/docs
-- **Nx monorepo docs:** https://nx.dev
-- **Turbo repo docs:** https://turbo.build/repo/docs
-- **Zod docs:** https://zod.dev
-- **OpenAI Moderation API:** https://platform.openai.com/docs/guides/moderation
-- **LangSmith:** https://docs.smith.langchain.com
-- **Zep (memória longa para agentes):** https://docs.getzep.com
-
-### 18.3 Próximos Passos Sugeridos
-
-1. **Imediato:** Executar a tarefa de Indexação (Seção 10).
-2. **Curto prazo (1-2 semanas):** Implementar Passos 1 e 2 do MVP.
-3. **Médio prazo (1 mês):** Implementar Passo 3 (objetivo claro do sinal).
-4. **Longo prazo (2-3 meses):** Passo 5 (teste de identidade com transição de consciência visível).
-
-Daniel pode, a qualquer momento, ajustar estes prazos via painel admin. O Agente Antigravity deve respeitar o ritmo definido e nunca adiantar etapas sem aprovação.
-
----
+Essa integração constitui o núcleo da Synapse City Engine.

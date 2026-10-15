@@ -1,3 +1,4 @@
+import { Injectable } from '@nestjs/common';
 import type {
   CitizenId,
   CitizenArchetype,
@@ -10,6 +11,7 @@ import type {
   NpcBroadcastAlertInput,
 } from '@cidade-virtual/tools/schemas';
 
+@Injectable()
 export class CitizensService {
   /**
    * Cria um novo cidadão na cidade virtual.

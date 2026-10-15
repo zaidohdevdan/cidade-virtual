@@ -10,6 +10,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "paths": {
       "@cidade-virtual/types": ["packages/types/index.ts"],
@@ -26,8 +28,12 @@
       "@cidade-virtual/api/tools": ["apps/api/src/tools/index.ts"],
       "@cidade-virtual/api/services": ["apps/api/src/services/index.ts"],
       "@cidade-virtual/api/*": ["apps/api/src/*"],
-      "@cidade-virtual/web": ["apps/web/src/index.ts"],
-      "@cidade-virtual/admin": ["apps/admin/src/index.ts"]
+      "@cidade-virtual/web-client": ["apps/web-client/src/main.tsx"],
+      "@cidade-virtual/admin": ["apps/admin/src/index.ts"],
+      "@cidade-virtual/llm-adapters": ["packages/llm-adapters/index.ts"],
+      "@cidade-virtual/agent-cognition": ["packages/agent-cognition/index.ts"],
+      "@cidade-virtual/world-engine": ["packages/world-engine/index.ts"],
+      "@cidade-virtual/observability": ["packages/observability/index.ts"]
     }
   }
 }

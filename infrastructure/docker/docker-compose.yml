@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # ── Banco Relacional Principal (Persistência Estruturada) ──
+  postgres:
+    image: postgres:16-alpine
+    container_name: synapse-city-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: synapse_secret_password
+      POSTGRES_DB: synapse_city
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U synapse -d synapse_city']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Banco Vetorial (Recuperação Semântica de Memórias) ──
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    container_name: synapse-city-qdrant
+    restart: unless-stopped
+    ports:
+      - '6333:6333'
+      - '6334:6334'
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # ── Cache & Coordenação Assíncrona ──
+  redis:
+    image: redis:7-alpine
+    container_name: synapse-city-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  redis_data:

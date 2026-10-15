@@ -2,27 +2,42 @@
   "name": "cidade-virtual",
   "version": "1.0.0",
   "private": true,
-  "description": "Cidade Virtual de IAs Humanizadas - Monorepo",
+  "description": "SYNAPSE CITY ENGINE — Monorepo do ambiente virtual persistente habitado por agentes de IA",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
+    "dev": "nx run-many -t dev -p @cidade-virtual/api @cidade-virtual/web-client --parallel",
+    "dev:web": "nx run @cidade-virtual/web-client:dev",
+    "dev:api": "nx run @cidade-virtual/api:dev",
+    "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
     "build": "nx run-many -t build --all",
     "lint": "nx run-many -t lint --all",
-    "test": "nx run-many -t test --all"
+    "test": "nx run-many -t test --all",
+    "typecheck": "nx run-many -t typecheck --all"
   },
   "devDependencies": {
-    "@langchain/core": "^0.3.15",
-    "@langchain/openai": "^0.3.11",
     "@types/node": "^22.8.0",
+    "@types/pg": "^8.11.10",
     "@types/three": "^0.170.0",
-    "langchain": "^0.3.5",
     "nx": "^20.4.0",
-    "three": "^0.170.0",
     "turbo": "^2.4.0",
     "typescript": "^5.6.3",
     "vite": "^8.3.4",
+    "vitest": "^2.1.3"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.14.0",
+    "@react-three/drei": "^9.117.3",
+    "@react-three/fiber": "^8.17.10",
+    "@react-three/rapier": "^1.5.0",
+    "drizzle-orm": "^0.36.1",
+    "pg": "^8.13.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.170.0",
     "zod": "^3.23.8"
   }
 }

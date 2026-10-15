@@ -1,15 +1,10 @@
-import type { MemorySnippet } from '@cidade-virtual/types';
+// apps/api/src/modules/memory/memory.service.ts
+import { Injectable } from '@nestjs/common';
+import { MemoryService as CoreMemoryService } from '@cidade-virtual/memory';
 
-export class MemoryService {
-  /**
-   * Consulta memórias recentes de um NPC.
-   */
-  async queryByCitizen(
-    _npcId: string,
-    _timeframeHours: number,
-    _limit: number
-  ): Promise<MemorySnippet[]> {
-    // TODO: recuperar memórias recentes do NPC via Qdrant
-    return [];
-  }
-}
+/**
+ * Serviço de memória da API que estende o CoreMemoryService, garantindo
+ * compatibilidade de tipos em todo o monorepo.
+ */
+@Injectable()
+export class MemoryService extends CoreMemoryService {}

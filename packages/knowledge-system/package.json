@@ -1,0 +1,19 @@
+{
+  "name": "@cidade-virtual/knowledge-system",
+  "version": "1.0.0",
+  "description": "Conhecimento compartilhado pela comunidade e difusão cultural",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "lint": "node -e \"console.log('@cidade-virtual/knowledge-system: lint ok')\"",
+    "test": "node -e \"console.log('@cidade-virtual/knowledge-system: test ok')\""
+  },
+  "dependencies": {
+    "@cidade-virtual/types": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.0",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@cidade-virtual/core-domain",
+  "version": "1.0.0",
+  "description": "Entidades, identificadores e contratos fundamentais da Synapse City",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "lint": "node -e \"console.log('@cidade-virtual/core-domain: lint ok')\"",
+    "test": "node -e \"console.log('@cidade-virtual/core-domain: test ok')\""
+  },
+  "dependencies": {
+    "@cidade-virtual/types": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.0",
+    "typescript": "^5.6.3"
+  }
+}

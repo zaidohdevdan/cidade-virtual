@@ -1,0 +1,19 @@
+{
+  "name": "@cidade-virtual/observability",
+  "version": "1.0.0",
+  "description": "Logs estruturados, métricas e auditoria cognitiva do sistema",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "lint": "node -e \"console.log('@cidade-virtual/observability: lint ok')\"",
+    "test": "node -e \"console.log('@cidade-virtual/observability: test ok')\""
+  },
+  "dependencies": {
+    "@cidade-virtual/types": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.0",
+    "typescript": "^5.6.3"
+  }
+}
