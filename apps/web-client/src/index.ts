@@ -134,20 +134,20 @@ export function createSynapseCity(): {
       if (btn) btn.innerHTML = `🚦 Semáforo: ${tlStates[tlIdx].toUpperCase()}`;
     }
 
-    // Player com resposta física a todos os obstáculos da cena (estáticos + veículos dinâmicos)
-    avatar_update: {
-      const activeColliders = city.colliders.slice();
-      for (const v of vehicles) {
-        for (const c of v.getColliders()) {
-          activeColliders.push(c);
-        }
+    // Reúne colisores da cena (estáticos + veículos dinâmicos)
+    const activeColliders = city.colliders.slice();
+    for (const v of vehicles) {
+      for (const c of v.getColliders()) {
+        activeColliders.push(c);
       }
-      player.update(delta, controls.input, controls.cameraAngleY, activeColliders);
     }
 
-    // Agents (Cidadãos Estelares)
+    // Player com resposta física a todos os obstáculos da cena
+    player.update(delta, controls.input, controls.cameraAngleY, activeColliders);
+
+    // Agents (Cidadãos Estelares com resposta física a veículos e obstáculos)
     for (const agent of agents) {
-      agent.update(delta);
+      agent.update(delta, activeColliders);
       agent.updateLabel(camera, renderer);
     }
 

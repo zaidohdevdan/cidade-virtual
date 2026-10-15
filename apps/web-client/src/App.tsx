@@ -179,7 +179,7 @@ export const App: React.FC = () => {
               onTelemetryUpdate={handleTelemetryUpdate}
               onObservationUpdate={handleObservationUpdate}
             />
-            <Agents agents={agents} />
+            <Agents agents={agents} vehicles={vehicles} colliders={city.colliders} />
             <CameraController
               playerPosition={player.position}
               isFirstPerson={isFirstPerson}

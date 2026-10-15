@@ -1,5 +1,6 @@
 // apps/web/src/avatars/agent-avatar.ts
 import * as THREE from 'three';
+import { ObstacleCollider } from '../scenes/city-scene';
 
 export interface AgentConfig {
   id: string;
@@ -36,6 +37,7 @@ export class AgentAvatar {
   private waitTimer: number = 0;
 
   private readonly walkSpeed = 2.2 + Math.random() * 1.5;
+  public readonly radius = 0.4; // Raio corporal de colisão do pedestre (40 cm)
 
   constructor(config: AgentConfig) {
     this.config = config;
@@ -457,10 +459,49 @@ export class AgentAvatar {
     }
   }
 
-  public update(delta: number): void {
+  /**
+   * Checa se a posição desejada colide com algum obstáculo da cena ou veículo dinâmico
+   */
+  private checkCollision(targetX: number, targetZ: number, colliders: ObstacleCollider[]): boolean {
+    const r = this.radius;
+
+    for (const c of colliders) {
+      if (c.type === 'box') {
+        if (c.minX === undefined || c.maxX === undefined || c.minZ === undefined || c.maxZ === undefined) continue;
+        const closestX = Math.max(c.minX, Math.min(targetX, c.maxX));
+        const closestZ = Math.max(c.minZ, Math.min(targetZ, c.maxZ));
+        const distX = targetX - closestX;
+        const distZ = targetZ - closestZ;
+        const distSq = distX * distX + distZ * distZ;
+
+        if (distSq < r * r) {
+          return true;
+        }
+      } else if (c.type === 'cylinder') {
+        if (c.cx === undefined || c.cz === undefined || c.radius === undefined) continue;
+        const distX = targetX - c.cx;
+        const distZ = targetZ - c.cz;
+        const distSq = distX * distX + distZ * distZ;
+        const combinedRadius = c.radius + r;
+
+        if (distSq < combinedRadius * combinedRadius) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  public update(delta: number, colliders: ObstacleCollider[] = []): void {
     if (this.waitTimer > 0) {
       this.waitTimer -= delta;
       this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 10);
+      this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
+      this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, delta * 8);
+      this.leftArm.rotation.x = THREE.MathUtils.lerp(this.leftArm.rotation.x, 0, delta * 8);
+      this.rightArm.rotation.x = THREE.MathUtils.lerp(this.rightArm.rotation.x, 0, delta * 8);
+      this.mesh.position.y = 0.04;
       return;
     }
 
@@ -469,7 +510,7 @@ export class AgentAvatar {
     const dir = flat.clone().sub(this.position);
     const dist = dir.length();
 
-    if (dist < 0.5) {
+    if (dist < 0.6) {
       this.patrolIndex = (this.patrolIndex + 1) % this.config.patrolPoints.length;
       this.waitTimer = 1.5 + Math.random() * 2;
       return;
@@ -481,17 +522,52 @@ export class AgentAvatar {
     this.rotationY += angleDiff * Math.min(1, delta * 6);
     this.mesh.rotation.y = this.rotationY;
 
-    this.speed = THREE.MathUtils.lerp(this.speed, this.walkSpeed, delta * 6);
-    this.position.addScaledVector(dir, this.speed * delta);
+    // Deslocamento desejado
+    const step = this.speed * delta;
+    const desiredDx = dir.x * step;
+    const desiredDz = dir.z * step;
 
-    // Animação dinâmica de caminhada
-    this.walkCycleTime += delta * this.speed * 2;
-    const legAngle = Math.sin(this.walkCycleTime) * 0.55;
-    this.leftLeg.rotation.x = legAngle;
-    this.rightLeg.rotation.x = -legAngle;
-    this.leftArm.rotation.x = -legAngle * 0.65;
-    this.rightArm.rotation.x = legAngle * 0.65;
-    this.mesh.position.y = Math.abs(Math.sin(this.walkCycleTime * 2)) * 0.04;
+    // Resolução de colisão com deslizamento de superfície (wall-sliding) contra automóveis e obstáculos
+    const currX = this.position.x;
+    const currZ = this.position.z;
+
+    let nextX = currX + desiredDx;
+    if (this.checkCollision(nextX, currZ, colliders)) {
+      nextX = currX;
+    }
+
+    let nextZ = currZ + desiredDz;
+    if (this.checkCollision(nextX, nextZ, colliders)) {
+      nextZ = currZ;
+    }
+
+    // Se o agente estiver totalmente obstruído por um veículo ou obstáculo à frente
+    const isBlocked = nextX === currX && nextZ === currZ && (desiredDx !== 0 || desiredDz !== 0);
+    if (isBlocked) {
+      // Desacelera e aguarda o veículo desobstruir o caminho
+      this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 10);
+    } else {
+      this.speed = THREE.MathUtils.lerp(this.speed, this.walkSpeed, delta * 6);
+      this.position.x = nextX;
+      this.position.z = nextZ;
+    }
+
+    // Animação dinâmica de caminhada proporcional à velocidade real
+    if (this.speed > 0.2) {
+      this.walkCycleTime += delta * this.speed * 2;
+      const legAngle = Math.sin(this.walkCycleTime) * 0.55;
+      this.leftLeg.rotation.x = legAngle;
+      this.rightLeg.rotation.x = -legAngle;
+      this.leftArm.rotation.x = -legAngle * 0.65;
+      this.rightArm.rotation.x = legAngle * 0.65;
+      this.mesh.position.y = Math.abs(Math.sin(this.walkCycleTime * 2)) * 0.04;
+    } else {
+      this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
+      this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, delta * 8);
+      this.leftArm.rotation.x = THREE.MathUtils.lerp(this.leftArm.rotation.x, 0, delta * 8);
+      this.rightArm.rotation.x = THREE.MathUtils.lerp(this.rightArm.rotation.x, 0, delta * 8);
+      this.mesh.position.y = 0.04;
+    }
   }
 
   public dispose(): void {
