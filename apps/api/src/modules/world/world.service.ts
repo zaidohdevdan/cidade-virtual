@@ -9,6 +9,16 @@ import type {
 import type { TriggerEventInput } from '@cidade-virtual/tools/schemas';
 import { WorldStateRepository, WorldStateRow } from '@cidade-virtual/persistence';
 
+export const VALID_WEATHER_CONDITIONS = ['clear', 'rain', 'storm', 'fog', 'snow'] as const;
+export type WeatherCondition = (typeof VALID_WEATHER_CONDITIONS)[number];
+
+function toWeatherCondition(value: string | undefined | null): WeatherCondition {
+  if (value && (VALID_WEATHER_CONDITIONS as readonly string[]).includes(value)) {
+    return value as WeatherCondition;
+  }
+  return 'clear';
+}
+
 /**
  * Serviço do mundo — administra cenários, clima, tick temporal e estado autoritativo.
  * Alinhado com packages/world-engine e SKILL 2.0.0 (Seções 3.1 e 13.1 - Fase 1).
@@ -35,8 +45,9 @@ export class WorldService implements OnModuleInit {
       } else {
         this.logger.log(`Estado persistente do mundo recuperado: ${state.id} (tick: ${state.tickCount})`);
       }
-    } catch (err: any) {
-      this.logger.warn(`Banco relacional não acessível no bootstrap (modo offline/resiliente): ${err.message}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Banco relacional não acessível no bootstrap (modo offline/resiliente): ${message}`);
     }
   }
 
@@ -46,8 +57,9 @@ export class WorldService implements OnModuleInit {
   async getWorldState(id: string = WorldService.DEFAULT_WORLD_ID): Promise<WorldStateRow | null> {
     try {
       return await this.worldStateRepo.getById(id);
-    } catch (err: any) {
-      this.logger.error(`Erro ao consultar estado do mundo: ${err.message}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Erro ao consultar estado do mundo: ${message}`);
       return null;
     }
   }
@@ -78,7 +90,7 @@ export class WorldService implements OnModuleInit {
    */
   async setWeather(
     scenarioId: string = WorldService.DEFAULT_WORLD_ID,
-    condition: 'clear' | 'rain' | 'storm' | 'fog' | 'snow',
+    condition: WeatherCondition,
     _durationMinutes: number = 30,
     _intensity: number = 1.0
   ): Promise<void> {
@@ -98,7 +110,7 @@ export class WorldService implements OnModuleInit {
       scenarioId: state?.id || WorldService.DEFAULT_WORLD_ID,
       citizens: [],
       objects: [],
-      weather: ((state?.weather as any) || 'clear'),
+      weather: toWeatherCondition(state?.weather),
       timeOfDay: state?.timeOfDay ?? 12,
     };
   }
