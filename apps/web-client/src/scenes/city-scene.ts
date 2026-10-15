@@ -148,9 +148,8 @@ export class CityScene {
       { x: 12.5, z: 3.5, w: 0.4, d: 6.6 },  // Pista Leste entrando (mão direita: z > 0)
     ];
     for (const sl of stopPositions) {
-      const g = new THREE.PlaneGeometry(sl.w, sl.d);
+      const g = new THREE.BoxGeometry(sl.w, 0.02, sl.d);
       const m = new THREE.Mesh(g, stopLineMat);
-      m.rotation.x = -Math.PI / 2;
       m.position.set(sl.x, 0.035, sl.z);
       this.scene.add(m);
     }
@@ -209,37 +208,50 @@ export class CityScene {
       this.scene.add(l);
     }
 
-    // Calçadas de concreto nos lados da rua
+    // Calçadas de concreto nos lados da rua (interrompidas no cruzamento entre -7 e +7)
     const swW = 6;
+    const halfIntersection = width / 2; // 7m
+    const segLen = length / 2 - halfIntersection; // 50 - 7 = 43m
+    const segCenter = halfIntersection + segLen / 2; // 7 + 21.5 = 28.5m
+
     for (const sign of [-1, 1]) {
       const swOffset = sign * (width / 2 + swW / 2);
-      const swGeom = new THREE.BoxGeometry(
-        isHorizontal ? length : swW,
-        0.22,
-        isHorizontal ? swW : length
-      );
-      const sw = new THREE.Mesh(swGeom, sidewalkMat);
-      sw.position.set(
-        isHorizontal ? cx : cx + swOffset,
-        0.11,
-        isHorizontal ? cz + swOffset : cz
-      );
-      sw.receiveShadow = true;
-      this.scene.add(sw);
+      const curbOffset = sign * (width / 2);
 
-      // Meio-fio de granito
-      const curbGeom = new THREE.BoxGeometry(
-        isHorizontal ? length : 0.28,
-        0.26,
-        isHorizontal ? 0.28 : length
-      );
-      const curb = new THREE.Mesh(curbGeom, curbMat);
-      curb.position.set(
-        isHorizontal ? cx : cx + sign * (width / 2),
-        0.13,
-        isHorizontal ? cz + sign * (width / 2) : cz
-      );
-      this.scene.add(curb);
+      // Cada calçada é dividida em dois segmentos (lado positivo e lado negativo da via),
+      // deixando o cruzamento e as faixas de pedestres 100% livres e desobstruídos
+      for (const dir of [-1, 1]) {
+        const t = dir * segCenter;
+
+        // Calçada de concreto
+        const swGeom = new THREE.BoxGeometry(
+          isHorizontal ? segLen : swW,
+          0.22,
+          isHorizontal ? swW : segLen
+        );
+        const sw = new THREE.Mesh(swGeom, sidewalkMat);
+        sw.position.set(
+          isHorizontal ? cx + t : cx + swOffset,
+          0.11,
+          isHorizontal ? cz + swOffset : cz + t
+        );
+        sw.receiveShadow = true;
+        this.scene.add(sw);
+
+        // Meio-fio de granito
+        const curbGeom = new THREE.BoxGeometry(
+          isHorizontal ? segLen : 0.28,
+          0.26,
+          isHorizontal ? 0.28 : segLen
+        );
+        const curb = new THREE.Mesh(curbGeom, curbMat);
+        curb.position.set(
+          isHorizontal ? cx + t : cx + curbOffset,
+          0.13,
+          isHorizontal ? cz + curbOffset : cz + t
+        );
+        this.scene.add(curb);
+      }
     }
   }
 
