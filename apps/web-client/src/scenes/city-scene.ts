@@ -178,7 +178,12 @@ export class CityScene {
     const skipZone = 9; // Deixa o cruzamento 18x18 livre de linhas
     for (let t = -halfLen + 2; t < halfLen; t += 4) {
       if (Math.abs(t) < skipZone) continue;
-      const sg = new THREE.PlaneGeometry(0.24, 2.4);
+      const dashLen = 2.4;
+      const dashWid = 0.24;
+      const sg = new THREE.PlaneGeometry(
+        isHorizontal ? dashLen : dashWid,
+        isHorizontal ? dashWid : dashLen
+      );
       const s = new THREE.Mesh(sg, yellowLineMat);
       s.rotation.x = -Math.PI / 2;
       s.position.set(
@@ -238,27 +243,39 @@ export class CityScene {
     }
   }
 
-  // ──────────────────── CROSSWALKS ────────────────────
+  // ──────────────────── CROSSWALKS (FAIXAS DE PEDESTRES) ────────────────────
   private buildCrosswalks(): void {
     const crossMat = new THREE.MeshBasicMaterial({ color: 0xf5f5f0 });
     // Faixas posicionadas nas 4 aproximações do cruzamento central
+    // Largura da pista = 14m. 11 listras de 0.6m com espaçamento de 1.0m cobrem de -5.0m a +5.0m.
     const positions = [
-      { x: 0, z: -8.8, rot: 0, name: 'Faixa Norte' },
-      { x: 0, z: 8.8, rot: 0, name: 'Faixa Sul' },
-      { x: -8.8, z: 0, rot: Math.PI / 2, name: 'Faixa Oeste' },
-      { x: 8.8, z: 0, rot: Math.PI / 2, name: 'Faixa Leste' },
+      { x: 0, z: -8.8, isHorizontal: false, name: 'Faixa Norte' },
+      { x: 0, z: 8.8, isHorizontal: false, name: 'Faixa Sul' },
+      { x: -8.8, z: 0, isHorizontal: true, name: 'Faixa Oeste' },
+      { x: 8.8, z: 0, isHorizontal: true, name: 'Faixa Leste' },
     ];
 
     for (const pos of positions) {
-      for (let i = 0; i < 9; i++) {
-        const sg = new THREE.PlaneGeometry(0.7, 3.8);
+      const numStripes = 11;
+      const stripeSpacing = 1.0;
+      const startOffset = -((numStripes - 1) * stripeSpacing) / 2; // -5.0 a +5.0
+
+      for (let i = 0; i < numStripes; i++) {
+        const offset = startOffset + i * stripeSpacing;
+        // Padrão de Faixa Zebrada:
+        // As listras devem ser paralelas ao fluxo de veículos da via.
+        // - Via horizontal (Leste/Oeste): comprimento 3.6m em X, largura 0.6m em Z, distribuídas em Z.
+        // - Via vertical (Norte/Sul): comprimento 3.6m em Z, largura 0.6m em X, distribuídas em X.
+        const sg = new THREE.PlaneGeometry(
+          pos.isHorizontal ? 3.6 : 0.6,
+          pos.isHorizontal ? 0.6 : 3.6
+        );
         const s = new THREE.Mesh(sg, crossMat);
         s.rotation.x = -Math.PI / 2;
-        const offset = -4.0 + i * 1.0;
         s.position.set(
-          pos.rot !== 0 ? pos.x : pos.x + offset,
+          pos.isHorizontal ? pos.x : pos.x + offset,
           0.04,
-          pos.rot !== 0 ? pos.z + offset : pos.z
+          pos.isHorizontal ? pos.z + offset : pos.z
         );
         this.scene.add(s);
       }
