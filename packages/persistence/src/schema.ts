@@ -65,11 +65,12 @@ export const agentExperiencesTable = pgTable(
     sourceAgentId: varchar('source_agent_id', { length: 64 }),
     confidence: numeric('confidence', { precision: 3, scale: 2 }).default('1.00').notNull(),
     importance: numeric('importance', { precision: 3, scale: 2 }).default('0.50').notNull(),
+    relatedEntityIds: text('related_entity_ids').array().default([]).notNull(),
     metadata: jsonb('metadata').default({}).notNull(),
   },
   (table) => [
     index('idx_agent_exp_agent_id').on(table.agentId),
-    index('idx_agent_exp_occurred_at').on(table.occurredAt),
+    index('idx_agent_exp_occurred_at').on(table.occurredAt.desc()),
   ]
 );
 

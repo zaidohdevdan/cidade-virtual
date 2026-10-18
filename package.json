@@ -16,7 +16,8 @@
     "build": "nx run-many -t build --all",
     "lint": "nx run-many -t lint --all",
     "test": "nx run-many -t test --all",
-    "typecheck": "nx run-many -t typecheck --all"
+    "typecheck": "nx run-many -t typecheck --all",
+    "check:schema-drift": "tsx scripts/check-schema-drift.ts"
   },
   "devDependencies": {
     "@types/node": "^22.8.0",

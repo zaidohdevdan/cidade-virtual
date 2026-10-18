@@ -8,8 +8,8 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
-    "lint": "node -e \"console.log('@cidade-virtual/web: lint ok')\"",
-    "test": "vitest run --passWithNoTests",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

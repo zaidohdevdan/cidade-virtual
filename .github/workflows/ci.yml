@@ -18,6 +18,7 @@ jobs:
           node-version: 22
           cache: 'npm'
       - run: npm install
+      - run: npm run check:schema-drift
       - run: npx nx run-many -t build --all
       - run: npx nx run-many -t lint --all
       - run: npx nx run-many -t test --all

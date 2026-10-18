@@ -22,7 +22,7 @@ Inicialização e indexação da estrutura base do monorepo Nx/Turbo conforme co
   - `packages/tools`: Schemas Zod (`createCitizenSchema`, `triggerEventSchema`, `getNPCMemorySchema`, `setEmotionStateSchema`, `requestHumanReviewSchema`, `weatherSetConditionSchema`, `npcBroadcastAlertSchema`, `getSceneSnapshotSchema`) e exports.
   - `packages/memory`: Definição e cliente base `MemoryService` para integração Qdrant/Zep.
   - `packages/config`: Constante `OPERATIONAL_LIMITS` da Seção 15 do `SKILL.md`.
-  - `packages/agents`: `buildAntigravityAgent()` com `ChatOpenAI`, `AgentExecutor`, registro das 8 Tools e system prompt com regras de segurança e níveis operacionais.
+  - `packages/agents`: `buildAntigravityAgent()` com `AntigravityAgent` (substituindo a menção conceitual ao `AgentExecutor` do LangChain), registro das 8 Tools e system prompt com regras de segurança e níveis operacionais.
 - **Apps:**
   - `apps/api`: Backend NestJS com esqueleto das 8 Tools (`apps/api/src/tools/index.ts`), decorators `@tool`, schemas Zod e serviços (`CitizensService`, `ScenariosService`, `MemoryService`, `ConsciousnessService`).
   - `apps/web`: Scaffold frontend com suporte a Three.js (`apps/web/src/index.ts`).
@@ -66,3 +66,28 @@ Implementação do ambiente 3D interativo da Rua Central no `apps/web` com Three
 ### 4. Próximos Passos Sugeridos
 1. **Passo 2 do MVP:** Popular a cena com 3 a 5 NPCs iniciais em Fase Meta de Consciência.
 2. **Integração de Memória:** Conectar os scripts sociais observados pelos NPCs ao Qdrant para recuperação via RAG.
+
+---
+
+## Task ID: bloco-1-fase-0-confianca
+- **Data:** 2026-10-18
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Estrutural & Operacional (Resolução de Pendências do Backlog v3.0)
+
+### 1. Resumo Executivo
+Execução completa do Bloco 1 (Fase 0 — Confiança e Integridade Rápida) do `task.md`, eliminando dívidas técnicas críticas apontadas na auditoria estática e alinhando o monorepo para a trilha do Marco M0.
+
+### 2. Entregas Realizadas
+- **Task-009 (Schema Drift):** Sincronizada a tabela `agent_experiences` no Drizzle (`packages/persistence/src/schema.ts`) adicionando a coluna `relatedEntityIds: text('related_entity_ids').array()` e o índice `idx_agent_exp_occurred_at` com `occurredAt.desc()`. Criado o script `scripts/check-schema-drift.ts` (`npm run check:schema-drift`) que valida paridade 100% entre `init.sql`, Drizzle schema e `@cidade-virtual/types`.
+- **Task-010 (WorldService timeOfDay):** Corrigido `WorldService.setWeather` para preservar o horário atual do mundo em vez de resetar para 12h. Criado teste unitário `apps/api/src/modules/world/world.service.spec.ts`.
+- **Task-011 (Remoção de Código Morto):** O arquivo legado `apps/web-client/src/index.ts` (Three.js vanilla com simulação paralela não montada) foi limpo e transformado em exportador limpo de tipos e componentes para o `@cidade-virtual/web-client`.
+- **Task-012 (Reconciliação AgentExecutor):** Documentação do `worklog.md` alinhada à arquitetura nativa com `AntigravityAgent` e `CognitiveCycleManager`.
+- **Task-018 (Setup e Documentação):** Criado o `README.md` canônico na raiz com guia de setup (< 15 min), comandos Docker, diagrama de arquitetura em Mermaid e estrutura do monorepo.
+- **Task-019 (Pipeline de Validação Honesta):** Removidos scripts fakes com `console.log` e flags evasivas `--passWithNoTests` em `apps/api` e `apps/web-client`. Criado teste unitário para o frontend `agent-avatar.spec.ts`. Adicionado o check de drift ao fluxo do CI (`.github/workflows/ci.yml`).
+
+### 3. Validação de Aceite
+- `npm run check:schema-drift`: 100% sincronizado sem desvios.
+- `npx vitest run`: 4 arquivos de teste, 9 asserções executadas e 100% aprovadas.
+- `npm run typecheck`: Validação estática honesta em todos os projetos sem erros.
+

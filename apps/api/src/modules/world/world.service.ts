@@ -86,16 +86,19 @@ export class WorldService implements OnModuleInit {
   }
 
   /**
-   * Define condição climática do cenário e persiste no banco.
+   * Define condição climática do cenário e persiste no banco, preservando o horário atual do mundo.
    */
   async setWeather(
     scenarioId: string = WorldService.DEFAULT_WORLD_ID,
     condition: WeatherCondition,
     _durationMinutes: number = 30,
-    _intensity: number = 1.0
+    _intensity: number = 1.0,
+    timeOfDay?: number
   ): Promise<void> {
-    await this.worldStateRepo.updateEnvironment(scenarioId, 12, condition);
-    this.logger.log(`Clima do cenário ${scenarioId} alterado para ${condition}`);
+    const currentState = await this.getWorldState(scenarioId);
+    const targetTime = timeOfDay ?? currentState?.timeOfDay ?? 12;
+    await this.worldStateRepo.updateEnvironment(scenarioId, targetTime, condition);
+    this.logger.log(`Clima do cenário ${scenarioId} alterado para ${condition} (hora: ${targetTime}h)`);
   }
 
   /**

@@ -120,16 +120,19 @@ describe('Fase 1: Fundação — Persistência e Integridade do Mundo', () => {
       sourceType: 'direct_observation',
       confidence: '1.00',
       importance: '0.80',
+      relatedEntityIds: ['traffic-light-01', 'crosswalk-central'],
       metadata: { signal: 'red' },
     });
 
     expect(exp.id).toBeDefined();
     expect(exp.agentId).toBe(agentId);
     expect(exp.sourceType).toBe('direct_observation');
+    expect(exp.relatedEntityIds).toEqual(['traffic-light-01', 'crosswalk-central']);
 
     // 3. Consultar histórico de experiências do habitante
     const history = await expRepo.getByAgentId(agentId);
     expect(history.length).toBeGreaterThanOrEqual(1);
     expect(history[0].eventType).toBe('traffic_light_observed');
+    expect(history[0].relatedEntityIds).toEqual(['traffic-light-01', 'crosswalk-central']);
   });
 });
