@@ -6,6 +6,7 @@
 import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
 import type { AgentAction, CitizenId } from '@cidade-virtual/types';
 import type { LLMProviderAdapter } from '@cidade-virtual/llm-adapters';
+import { metrics, cognitiveAudit } from '@cidade-virtual/observability';
 
 /**
  * Estado cognitivo do agente manipulado pelo grafo de decisão.
@@ -26,6 +27,11 @@ export const CognitiveStateAnnotation = Annotation.Root({
 
 export type CognitiveState = typeof CognitiveStateAnnotation.State;
 
+export interface EvaluateActionOptions {
+  relevantContext?: string[];
+  forceLLM?: boolean;
+}
+
 export class CognitiveCycleManager {
   private workflow;
   private llmAdapter?: LLMProviderAdapter;
@@ -39,61 +45,88 @@ export class CognitiveCycleManager {
     return new StateGraph(CognitiveStateAnnotation)
       // 1 & 2: Interpretação da situação a partir do estímulo percebido
       .addNode('interpretSituation', async (state) => {
-        const isRoutine = state.observation.toLowerCase().includes('caminhar') ||
-                          state.observation.toLowerCase().includes('parado');
+        const obsLower = state.observation.toLowerCase();
+        const isRoutine = obsLower.includes('caminha') ||
+                          obsLower.includes('parado') ||
+                          obsLower.includes('aguarda') ||
+                          obsLower.includes('patrulha') ||
+                          obsLower.includes('verde') ||
+                          obsLower.includes('trabalho') ||
+                          obsLower.includes('rotina');
+
+        const needsDeliberation = state.requiresLLM || (!isRoutine && (state.confidence ?? 0.5) < 0.7);
 
         return {
           situation: `Situação identificada: ${state.observation}`,
-          requiresLLM: !isRoutine && !!this.llmAdapter,
-          confidence: 0.85,
+          requiresLLM: needsDeliberation && !!this.llmAdapter,
+          confidence: isRoutine ? 0.85 : (state.confidence ?? 0.6),
         };
       })
 
       // 3 & 4: Construção do contexto e recuperação de regras
-      .addNode('buildContext', async (_state) => {
+      .addNode('buildContext', async (state) => {
+        const urbanRule = 'Regra: Respeitar o espaço público, faixa de pedestres e sinalizações urbanas.';
+        const merged = [urbanRule, ...(state.relevantContext ?? [])];
         return {
-          relevantContext: ['Regra: Respeitar o espaço público e sinalizações urbanas.'],
+          relevantContext: merged,
         };
       })
 
       // 5, 6 & 7: Seleção de Ação deliberada (Determinística ou via LLM)
       .addNode('selectAction', async (state) => {
         if (state.requiresLLM && this.llmAdapter) {
+          metrics.increment('llm.calls');
           const prompt = `Observação: ${state.observation}\nContexto: ${state.relevantContext.join('; ')}\nQual ação o agente deve tomar?`;
           const response = await this.llmAdapter.complete({
             prompt,
             systemPrompt: 'Você é o módulo deliberativo de um habitante da cidade virtual.',
           });
 
-          return {
-            chosenAction: {
-              agentId: state.agentId,
-              actionType: 'llm_deliberated_action',
-              targetId: state.targetId,
-              parameters: { response: response.content },
-              reasonCode: 'LLM_REASONING',
-              expectedOutcome: response.content.slice(0, 80),
+          const action: AgentAction = {
+            agentId: state.agentId,
+            actionType: 'llm_deliberated_action',
+            targetId: state.targetId,
+            parameters: {
+              response: response.content,
+              contextCount: state.relevantContext.length,
             },
+            reasonCode: 'LLM_REASONING',
+            expectedOutcome: response.content.slice(0, 80),
           };
+
+          return { chosenAction: action };
         }
 
         // Ação rotineira determinística (sem custo de inferência)
-        return {
-          chosenAction: {
-            agentId: state.agentId,
-            actionType: 'routine_navigation',
-            targetId: state.targetId,
-            parameters: { observation: state.observation },
-            reasonCode: 'ROUTINE_POLICY',
-            expectedOutcome: 'Deslocamento urbano seguro',
+        const routineAction: AgentAction = {
+          agentId: state.agentId,
+          actionType: 'routine_navigation',
+          targetId: state.targetId,
+          parameters: {
+            observation: state.observation,
+            contextCount: state.relevantContext.length,
           },
+          reasonCode: 'ROUTINE_POLICY',
+          expectedOutcome: 'Deslocamento urbano seguro conforme normas de trânsito',
         };
+
+        return { chosenAction: routineAction };
       })
 
       // 8 & 9: Validação da ação conforme regras do mundo
       .addNode('validateAction', async (state) => {
+        const boostedConfidence = Math.min(1.0, (state.confidence ?? 0.8) + 0.1);
+        if (state.chosenAction) {
+          cognitiveAudit.logDecision(
+            state.agentId,
+            state.chosenAction,
+            state.chosenAction.reasonCode ?? 'POLICY',
+            boostedConfidence,
+          );
+        }
+
         return {
-          confidence: Math.min(1.0, (state.confidence ?? 0.8) + 0.1),
+          confidence: boostedConfidence,
         };
       })
 
@@ -108,14 +141,19 @@ export class CognitiveCycleManager {
   /**
    * Avalia uma observação e executa o ciclo cognitivo do agente através do grafo.
    */
-  async evaluateAction(agentId: CitizenId, observation: string, targetId?: string): Promise<AgentAction> {
+  async evaluateAction(
+    agentId: CitizenId,
+    observation: string,
+    targetId?: string,
+    options?: EvaluateActionOptions,
+  ): Promise<AgentAction> {
     const finalState = await this.workflow.invoke({
       agentId,
       observation,
       targetId,
-      relevantContext: [],
-      confidence: 0.5,
-      requiresLLM: false,
+      relevantContext: options?.relevantContext ?? [],
+      confidence: options?.forceLLM ? 0.4 : 0.5,
+      requiresLLM: options?.forceLLM ?? false,
     });
 
     return finalState.chosenAction;

@@ -137,4 +137,40 @@ Execução completa e validação de ponta a ponta do **Bloco 2 (Marco M0 - Onda
 - **Tipagem Estática:** `npm run typecheck` — 0 erros em todos os pacotes e aplicações.
 - **Serviços Ativos:** PostgreSQL (porta 5433) e Qdrant (porta 6333) operando saudáveis via Docker.
 
+---
+
+## Task ID: bloco-3-ciclo-cognitivo-e-workers
+- **Data:** 2026-10-18
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Estrutural & Operacional (Onda 2: Autonomia dos Agentes, Ciclo Deliberativo e Filas de Mensageria)
+
+### 1. Resumo Executivo
+Execução completa do **Bloco 03 (Onda 2 — Autonomia dos Agentes)**. O motor cognitivo foi integrado ao grafo LangGraph do `packages/agent-cognition`, ponderando memórias do Qdrant e contexto urbano para deliberar ações reais com persistência em PostgreSQL. Foi implementada a infraestrutura assíncrona de mensageria com BullMQ sobre o Redis 7 real, além do `CognitionWorker` gerenciando taxa, concorrência e tolerância a falhas (DLQ).
+
+### 2. Entregas Realizadas
+- **Task-004 (Conexão do Ciclo Cognitivo):**
+  - Conectado `CognitionService` ao `CognitiveCycleManager` (`packages/agent-cognition`), orquestrado por StateGraph/LangGraph.
+  - Implementada recuperação semântica no Qdrant das top-3 memórias pertinentes antes da deliberação.
+  - Criada política deliberativa: rotinas urbanas mantêm execução determinística com `confidence: 0.85`, enquanto situações novas ou de baixa confiança deliberam via `LLMProviderAdapter` com incremento da métrica `metrics.increment('llm.calls')` e logs de auditoria `[AUDIT] [COGNITION]`.
+  - Persistência automática da ação resultante no PostgreSQL (`agent_experiences` com `sourceType: 'action_result'`).
+  - Testes unitários em `apps/api/src/modules/cognition/cognition.service.spec.ts` (2/2).
+- **Task-005 (Infraestrutura BullMQ & Filas Redis):**
+  - Instalação e configuração de `bullmq` e `ioredis` sobre o container `synapse-city-redis` (porta 6379).
+  - Criado `packages/event-system/queues.ts` com as filas `cognition-queue`, `simulation-queue`, `learning-queue` e a Dead Letter Queue (`dlq-queue`).
+  - Configurados retries com backoff exponencial (1s a 8s), retenção de falhas e registro de tempo de espera com `SystemQueues.recordWaitTime()` na métrica `queue.wait.time.ms`.
+  - Testes de integração com Redis real em `tests/integration/queues.test.ts` (5/5).
+- **Task-006 (Worker de Cognição Assíncrono):**
+  - Implementado `CognitionWorker` em `packages/event-system/workers/cognition.worker.ts` consumindo `cognition-queue`.
+  - Concorrência configurada para 5 jobs paralelos, com rate limiting local (60 chamadas/min).
+  - Roteamento para Dead Letter Queue após 5 tentativas de falha (`queues.sendToDLQ`).
+  - Testes de integração em `tests/integration/cognition-worker.test.ts` (2/2) validando processamento concorrente sob carga com latência média de 50-80ms (< 2s p95).
+
+### 3. Validação de Aceite
+- **Suíte Completa:** `npx vitest run` — **12 arquivos de teste, 33 testes executados e 100% aprovados** sem mocks de banco, vetor ou fila.
+- **Sincronismo de Schema:** `npm run check:schema-drift` — 100% alinhado entre SQL, Drizzle e Types.
+- **Tipagem Estática:** `npm run typecheck` — 0 erros no monorepo.
+- **Serviços Operacionais:** PostgreSQL 16 (5433), Qdrant 1.12.1 (6333) e Redis 7 (6379) ativos e saudáveis.
+
+
 

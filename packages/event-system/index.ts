@@ -18,3 +18,6 @@ export class EventBus {
     }
   }
 }
+
+export * from './queues';
+export * from './workers/cognition.worker';

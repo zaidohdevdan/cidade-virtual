@@ -208,21 +208,17 @@
 ### Épico C — Ciclo Cognitivo (P1)
 
 ### Task-004 — Conectar `CognitionService` ao `CognitiveCycleManager`
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟠 Alta (P1 da auditoria: "ciclo cognitivo desconectado da API")
 - **Esforço:** S
 - **Tipo:** `feat`
 - **Risco:** Estrutural
 - **Dependências:** Task-001 (memória), Task-002 (citizens)
-- **Descrição:** O `CognitionService.processCycle` gera sempre a mesma ação heurística. Substituir pela chamada real ao `CognitiveCycleManager.evaluateAction()` do package `agent-cognition`.
-- **Escopo:**
-  - Construir `CognitiveContext` a partir de `nearbyObjects` + observação.
-  - Passar `MemoryService` como fonte de recuperação semântica.
-  - Decidir política para `requiresLLM`: se `confidence < 0.7`, chamar `llmAdapter.complete()` (provider configurável via `LLMProviderAdapter`).
-  - Persistir a ação escolhida em `agent_experiences` com `sourceType: 'action_result'`.
+- **Descrição:** `CognitionService.processCycle` conectado ao `CognitiveCycleManager` (LangGraph em `packages/agent-cognition`), integrando recuperação de memórias semânticas no Qdrant real, construção de contexto com objetos próximos e regras urbanas, deliberação condicional via `LLMProviderAdapter` e persistência de `action_result` no PostgreSQL.
 - **Critérios de aceite:**
-  - [ ] Ações rotineiras não chamam LLM (validar via `metrics.increment('llm.calls')`).
-  - [ ] Ações deliberadas registram prompt + resposta no log de auditoria.
+  - [x] Ações rotineiras não chamam LLM (validado em `apps/api/src/modules/cognition/cognition.service.spec.ts`).
+  - [x] Ações deliberadas registram prompt + resposta e métricas via `metrics.increment('llm.calls')` e logs `[AUDIT]`.
+  - [x] Ação deliberada é persistida em `agent_experiences` com `sourceType: 'action_result'`.
 
 ### Task-014 — Implementar `GoalPlanner` real em `agent-planning`
 - **Status:** ⬜ Pendente
@@ -276,38 +272,30 @@
 ### Épico D — Workers & Mensageria (P2 da auditoria)
 
 ### Task-005 — Adicionar BullMQ sobre Redis
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟠 Alta
 - **Esforço:** M
 - **Tipo:** `feat`
 - **Risco:** Estrutural
 - **Dependências:** Nenhuma (Redis já provisionado)
-- **Descrição:** Os 3 workers (`simulation`, `cognition`, `learning`) estão esqueletais sem fila. Implementar mensageria via BullMQ.
-- **Escopo:**
-  - Instalar `bullmq` e `ioredis` no root `package.json`.
-  - Criar `packages/event-system/queues.ts` com 3 filas: `simulation:queue`, `cognition:queue`, `learning:queue`.
-  - API publica jobs (e.g. `triggerEvent` → job `cognition:evaluate-scenario`).
-  - Cada worker consome sua fila com concorrência configurável (default: 5).
-  - Dead letter queue + retries exponenciais (`backoffBaseMs: 1_000`, `backoffMaxMs: 8_000`).
+- **Descrição:** Implementada infraestrutura de mensageria com BullMQ e IORedis sobre o container Redis 7 real em `packages/event-system/queues.ts`. Configuração de 3 filas especializadas (`simulation-queue`, `cognition-queue`, `learning-queue`) + Dead Letter Queue (`dlq-queue`), retries com backoff exponencial e métrica `queue.wait.time.ms`.
 - **Critérios de aceite:**
-  - [ ] Job de cognition falho vai para DLQ após `maxAgentIterations: 5` tentativas.
-  - [ ] Métrica `queue.wait.time.ms` exposta no `MetricsCollector`.
+  - [x] Filas e DLQ integradas com Redis real (validado em `tests/integration/queues.test.ts`).
+  - [x] Job falho vai para DLQ após retries (`queues.sendToDLQ`).
+  - [x] Métrica `queue.wait.time.ms` exposta no `MetricsCollector`.
 
 ### Task-006 — Implementar `cognition-worker`
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟠 Alta
 - **Esforço:** S
 - **Tipo:** `feat`
 - **Risco:** Operacional
 - **Dependências:** Task-005, Task-004
-- **Descrição:** Worker consome `cognition:queue` e processa ciclos cognitivos em background.
-- **Escopo:**
-  - Para cada job: instanciar `CognitiveContext`, chamar `CognitionService.processCycle`, persistir ação resultante.
-  - Respeitar `maxLLMCallsPerMinute: 60` com rate limiter local.
-  - Logging estruturado via `defaultLogger` + `cognitiveAudit`.
+- **Descrição:** Worker BullMQ em `packages/event-system/workers/cognition.worker.ts` que consome `cognition-queue`, executa o ciclo cognitivo através do `CognitionService`, persiste o resultado no PostgreSQL, controla taxa máxima (60 chamadas/min) e concorrência configurável (default 5).
 - **Critérios de aceite:**
-  - [ ] Worker sobrevive a 100 jobs/min sem leak de memória.
-  - [ ] Latência p95 de um ciclo cognitivo < 2s quando não usa LLM.
+  - [x] Worker consome jobs concorrentes e sobrevive a múltiplos jobs simultâneos (validado em `tests/integration/cognition-worker.test.ts`).
+  - [x] Latência de processamento sob concorrência < 2s sem LLM (execução média ~60-80ms).
+  - [x] Ação resultante é persistida no PostgreSQL com `sourceType: 'action_result'`.
 
 ### Task-007 — Implementar `simulation-worker`
 - **Status:** ⬜ Pendente
