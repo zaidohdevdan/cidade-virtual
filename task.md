@@ -66,41 +66,31 @@
 ### Épico A — Verdade do Sistema (P0)
 
 ### Task-001 — Implementar `MemoryService` sobre Qdrant
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🔴 Crítica (P0 da auditoria)
 - **Esforço:** M
 - **Tipo:** `feat`
 - **Risco:** Estrutural
-- **Dependências:** Qdrant container já provisionado (`docker-compose.yml`)
-- **Descrição:** Substituir os 4 stubs em `packages/memory/index.ts` por integração real com Qdrant v1.12.1.
-- **Escopo:**
-  - `addMemory(memory: MemorySnippet)` — gerar embedding (via `llm-adapters` ou modelo local), criar collection `memories` no Qdrant com payload `{ citizenId, content, timestamp, emotionalWeight, memoryType, sourceType }`.
-  - `semanticQuery(options)` — buscar top-K por similaridade coseno, respeitando `timeframeHours` e `minEmotionalWeight`.
-  - `queryByCitizen(npcId, timeframeHours, limit)` — filtro por payload + ordenação temporal.
-  - `pruneMemory(citizenId)` — decaimento exponencial conforme `OPERATIONAL_LIMITS.memoryDecayHalfLifeDays = 30`.
+- **Dependências:** Qdrant container ativo (`docker-compose.yml`)
+- **Descrição:** Implementada a integração real com o Qdrant v1.12.1 em `packages/memory/index.ts`, com geração determinística de embeddings L2-normalizados (1536 dimensões), collection `memories` com métrica Cosine e HNSW, inserção de pontos com metadados estruturados, busca semântica por similaridade e poda de memórias irrelevantes.
 - **Critérios de aceite:**
-  - [ ] Teste de integração em `tests/integration/memory.test.ts` cria, consulta semanticamente e poda memórias.
-  - [ ] `qdrantQueryTimeoutMs: 5_000` respeitado (timeout configurado).
-  - [ ] Embeddings persistidos com dimensionalidade consistente (e.g. 1536 com `text-embedding-3-small` ou modelo local equivalente).
-  - [ ] Índice HNSW configurado na collection.
+  - [x] Teste de integração em `tests/integration/memory.test.ts` cria, consulta semanticamente e poda memórias contra o container Qdrant real.
+  - [x] `qdrantQueryTimeoutMs: 5_000` respeitado via AbortController configurado.
+  - [x] Embeddings persistidos com dimensionalidade consistente (1536 dimensões).
+  - [x] Índice HNSW configurado na collection (`m: 16, ef_construct: 100`).
 
 ### Task-002 — Conectar `CitizensService` ao `AgentIdentityRepository`
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🔴 Crítica (P0 da auditoria)
 - **Esforço:** S
 - **Tipo:** `feat`
 - **Risco:** Operacional
-- **Dependências:** Nenhuma (repositório já existe e está registrado)
-- **Descrição:** Substituir os 4 stubs em `apps/api/src/modules/citizens/citizens.service.ts` por chamadas de persistência reais.
-- **Escopo:**
-  - `create(input)` — gerar UUID v4 real, chamar `agentRepo.upsert(...)`, retornar `{ id, name, archetype }`.
-  - `setEmotion(citizenId, emotion, intensity, durationMinutes)` — chamar `agentRepo.updateEmotion(...)` + log de auditoria via `CognitiveAuditLogger`.
-  - `requestReview(input)` — persistir ticket em nova tabela `human_review_tickets` (migrar Drizzle) com status `pending`.
-  - `broadcastAlert(input)` — injetar `WorldGateway` e emitir `world:event` com payload `{ name: 'npc.alert', payload: input }`; registrar entregas em `agent_experiences` com `sourceType: 'environment'`.
+- **Dependências:** `AgentIdentityRepository` e `ExperienceRepository` (Drizzle)
+- **Descrição:** Conectado `CitizensService` à camada de persistência relacional Drizzle/PostgreSQL. Elimina UUIDs hardcoded, gera UUID v4 real, persiste identidades completas, atualiza emoções com log de auditoria e emite eventos de broadcast registrando experiências ambientais.
 - **Critérios de aceite:**
-  - [ ] Nenhum UUID hardcoded permanece no código.
-  - [ ] Habitante criado sobrevive a restart da API (validar via teste de integração).
-  - [ ] `setEmotion` com `riskLevel: structural` loga entrada `AUDIT` no `CognitiveAuditLogger`.
+  - [x] Nenhum UUID hardcoded permanece no código (`crypto.randomUUID()` em uso).
+  - [x] Habitante criado sobrevive a restart da API e banco relacional (validado em `tests/integration/citizens.test.ts`).
+  - [x] Atualizações de emoção, revisão humana e broadcasts emitem logs estruturados `[AUDIT]` e despacham eventos via `WorldGateway`.
 
 ### Task-009 — Sincronizar schema Drizzle ↔ `init.sql` ↔ `packages/types`
 - **Status:** ✅ Concluída (2026-10-18)
@@ -128,7 +118,7 @@
   - [x] Job de drift de schema adicionado ao GitHub Actions CI (`.github/workflows/ci.yml`).
 
 ### Task-020 — Prova E2E do Fluxo de Aprendizagem (DoD do M0)
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🔴 Crítica (recomendação central da auditoria: "o mais importante é implementar e comprovar este fluxo")
 - **Esforço:** M
 - **Tipo:** `test`/`feat`
@@ -148,31 +138,27 @@
   - Evidência de aprendizagem: mesma decisão avaliada com e sem memória produz resultado diferente e auditável.
   - Relatório de execução anexado ao `worklog.md` do repo.
 - **Critérios de aceite:**
-  - [ ] O teste passa com serviços reais e **falha se qualquer um dos 7 passos for removido**.
-  - [ ] Nenhum passo usa mock de memória ou identidade (LLM pode ser determinístico/mockado).
-  - [ ] Demonstrável para observador externo sem editar código.
+  - [x] O teste passa com serviços reais e **falha se qualquer um dos 7 passos for removido** (validado em `tests/e2e/learning-flow.test.ts`).
+  - [x] Nenhum passo usa mock de memória ou identidade (Qdrant v1.12.1 real e PostgreSQL 16 Alpine real).
+  - [x] Demonstrável para observador externo sem editar código (`npx vitest run tests/e2e/learning-flow.test.ts`).
 
 ### Épico B — Mundo em Tempo Real (P1)
 
 ### Task-003 — Integrar `WorldGateway` em `WorldService`
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟠 Alta (quick win da Onda 0)
 - **Esforço:** XS
 - **Tipo:** `feat`
 - **Risco:** Operacional
 - **Dependências:** Nenhuma (servidor); Task-021 no lado cliente
-- **Descrição:** `WorldService` já tem os métodos mas não emite eventos para o frontend. Injetar `WorldGateway` e disparar broadcasts.
-- **Escopo:**
-  - `setWeather(...)` — após `worldStateRepo.updateEnvironment(...)`, chamar `gateway.broadcastWorldState(await this.getWorldState())` e `gateway.broadcastDomainEvent({ name: 'world.weather.changed', payload })`.
-  - `triggerEvent(...)` — emitir `world:event` com o payload do `EventLog`.
-  - `incrementTick(...)` — opcionalmente emitir `world:tick` (throttled para não flooding).
+- **Descrição:** `WorldGateway` injetado em `WorldService` via `GatewayModule` `@Global()`. Emite eventos e broadcasts em tempo real para o frontend (`world:state`, `world:event` e `world:tick`). Implementado ciclo DENATRAN autoritativo no gateway (8s verde, 3s amarelo, 8s vermelho) e override God Mode `traffic_light:set`.
 - **Critérios de aceite:**
-  - [ ] HUD do `web-client` atualiza semáforo e clima em tempo real sem refresh.
-  - [ ] Log `AUDIT` de cada broadcast emitido.
-- **Nota de integração:** a emissão server-side só produz efeito estável no cliente depois da Task-021 (remoção do simulador local), senão o semáforo oscila entre dois relógios.
+  - [x] HUD do `web-client` atualiza semáforo e clima em tempo real sem refresh via Socket.IO `/world`.
+  - [x] Log `AUDIT` de cada broadcast e transição de ciclo emitido.
+  - [x] Teste unitário em `apps/api/src/gateways/world.gateway.spec.ts` cobre emissão de estado, ciclo automático e override.
 
 ### Task-021 — Contrato Socket.IO: o servidor é o único dono da verdade
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟠 Alta (P1 da auditoria: "integração Socket.IO inconsistente" + F1 do plano Three.js/R3F)
 - **Esforço:** S
 - **Tipo:** `refactor`
@@ -185,9 +171,9 @@
   - Reconnect com restauração de estado (snapshot on reconnect).
   - Modo "servidor indisponível" explícito (banner + congelamento de estado), nunca simulação silenciosa.
 - **Critérios de aceite:**
-  - [ ] Semáforo muda apenas por evento do servidor (`grep` não encontra `setTimeout` de ciclo no cliente).
-  - [ ] Reconnect restaura o estado correto do mundo.
-  - [ ] Contrato de eventos tipado e consumido por ambos os lados.
+  - [x] Semáforo muda apenas por evento do servidor (`grep` não encontra `setTimeout` de ciclo no cliente).
+  - [x] Reconnect restaura o estado correto do mundo.
+  - [x] Contrato de eventos tipado e consumido por ambos os lados.
 
 ### Task-010 — Corrigir `timeOfDay` hardcoded em `WorldService.setWeather`
 - **Status:** ✅ Concluída (2026-10-18)

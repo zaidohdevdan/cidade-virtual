@@ -91,3 +91,50 @@ Execução completa do Bloco 1 (Fase 0 — Confiança e Integridade Rápida) do 
 - `npx vitest run`: 4 arquivos de teste, 9 asserções executadas e 100% aprovadas.
 - `npm run typecheck`: Validação estática honesta em todos os projetos sem erros.
 
+---
+
+## Task ID: bloco-2-marco-m0
+- **Data:** 2026-10-18
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Existencial & Estrutural (Marco M0: Habitante persiste, mundo emite, aprendizagem comprovada)
+
+### 1. Resumo Executivo
+Execução completa e validação de ponta a ponta do **Bloco 2 (Marco M0 - Onda 1)** do `task.md`. Todos os stubs e fachadas críticas foram eliminados e substituídos por integrações reais com PostgreSQL 16 e Qdrant v1.12.1. O servidor tornou-se a única autoridade de estado e tempo (Socket.IO `/world`), e o ciclo de aprendizagem de 7 passos foi comprovado E2E sem nenhum mock de persistência ou memória vetorial.
+
+### 2. Entregas Realizadas
+- **Task-002 (CitizensService & Identidade Persistente):**
+  - Conectado `CitizensService` ao `AgentIdentityRepository` e `ExperienceRepository` (Drizzle ORM).
+  - Eliminados UUIDs hardcoded no backend, adotando `crypto.randomUUID()`.
+  - Implementada persistência completa de habitantes, emissão de logs estruturados `[AUDIT]` e broadcast de eventos ambientais.
+  - Testes unitários em `citizens.service.spec.ts` (3/3) e teste de integração contra PostgreSQL real em `tests/integration/citizens.test.ts` (2/2).
+- **Task-003 & Task-021 (Mundo em Tempo Real & Servidor Autoritativo):**
+  - Implementado `WorldGateway` no namespace `/world` encapsulado em `GatewayModule` (`@Global()`).
+  - Definido ciclo DENATRAN autoritativo server-side (8s verde, 3s amarelo, 8s vermelho) com suporte a override God Mode `traffic_light:set` e log `[AUDIT]`.
+  - Integrado `WorldGateway` em `WorldService` para broadcast de `world:state`, `world:event` e `world:tick`.
+  - Eliminado o ciclo duplicado com `setTimeout` local no `App.tsx` (`grep setTimeout` = 0 ocorrências). O cliente agora escuta exclusivamente o servidor.
+  - Unificados os contratos em `@cidade-virtual/types` (`TrafficLightSignal`, `WorldStateEventPayload`, `AvatarPositionPayload`).
+  - Teste unitário em `apps/api/src/gateways/world.gateway.spec.ts` (4/4).
+- **Task-001 (MemoryService sobre Qdrant Real):**
+  - Container Qdrant v1.12.1 provisionado e verificado na porta 6333.
+  - Implementado `packages/memory/index.ts` com gerador determinístico de embeddings L2-normalizados (1536 dimensões) via projeção de n-grams.
+  - Configurada collection `memories` com métrica Cosine e índice HNSW (`m: 16, ef_construct: 100`).
+  - Implementadas inserção (`addMemory`), busca semântica (`semanticQuery`), filtro por cidadão (`queryByCitizen`) e expurgo (`pruneMemory`).
+  - Teste de integração contra o container Qdrant real em `tests/integration/memory.test.ts` (5/5).
+- **Task-020 (DoD do Marco M0 — Prova E2E do Fluxo de Aprendizagem):**
+  - Criado `tests/e2e/learning-flow.test.ts` validando os 7 passos fundamentais com zero mocks de dados:
+    1. Habitante criado com identidade persistente em PostgreSQL.
+    2. Observação do semáforo/faixa registrada como experiência (`sourceType: 'direct_observation'`).
+    3. Indexação vetorial imediata no Qdrant com metadados estruturados.
+    4. Recuperação semântica via similaridade de cossenos no Qdrant.
+    5. Tomada de decisão cognitiva orientada pela memória recuperada.
+    6. Validação e execução de movimento pelo motor para a faixa de pedestres.
+    7. Registro do desfecho e feedback em PostgreSQL e Qdrant (`sourceType: 'action_result'`).
+
+### 3. Validação de Aceite
+- **Suíte Completa:** `npx vitest run` — 9 arquivos de teste, **24 testes executados e 100% aprovados** (520ms no teste E2E).
+- **Sincronismo de Schema:** `npm run check:schema-drift` — 100% alinhado entre SQL, Drizzle e Types.
+- **Tipagem Estática:** `npm run typecheck` — 0 erros em todos os pacotes e aplicações.
+- **Serviços Ativos:** PostgreSQL (porta 5433) e Qdrant (porta 6333) operando saudáveis via Docker.
+
+

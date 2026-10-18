@@ -129,3 +129,24 @@ export interface SceneSnapshot {
   weather: 'clear' | 'rain' | 'storm' | 'fog' | 'snow';
   timeOfDay: number; // 0..23
 }
+
+// ── Contratos Socket.IO em Tempo Real (Task-021) ──
+export type TrafficLightSignal = 'green' | 'yellow' | 'red';
+
+export interface WorldStateEventPayload {
+  scenarioId: string;
+  name?: string;
+  tickCount: number;
+  timeOfDay: number;
+  weather: 'clear' | 'rain' | 'storm' | 'fog' | 'snow';
+  trafficLight: TrafficLightSignal;
+  updatedAt?: string;
+}
+
+export interface AvatarPositionPayload {
+  clientId: string;
+  x: number;
+  y: number;
+  z: number;
+  rotationY?: number;
+}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Physics } from '@react-three/rapier';
 import * as THREE from 'three';
@@ -34,55 +34,69 @@ export const App: React.FC = () => {
     speedKmH: 0,
   });
   const [isSnapshotOpen, setIsSnapshotOpen] = useState<boolean>(false);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const socketRef = useRef<Socket | null>(null);
 
-  // Ciclo automático semafórico em 2 fases (Padrão DENATRAN: 8s Av. Central Verde -> 3s Amarelo -> 8s Transversal Verde)
-  useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout>;
-
-    const scheduleNext = (state: TrafficLightState) => {
-      const delay = state === 'yellow' ? 3000 : 8000;
-      const nextState: TrafficLightState = state === 'green' ? 'yellow' : state === 'yellow' ? 'red' : 'green';
-
-      timeoutId = setTimeout(() => {
-        setTrafficLightState(nextState);
-        scheduleNext(nextState);
-      }, delay);
-    };
-
-    scheduleNext('green');
-
-    return () => clearTimeout(timeoutId);
-  }, []);
-
-  // Conexão em tempo real Socket.IO com o backend NestJS
+  // Conexão em tempo real Socket.IO com o namespace autoritativo /world do backend NestJS (Task-021)
   useEffect(() => {
     let socket: Socket | null = null;
     try {
-      const serverUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : `http://${window.location.hostname}:3001`;
+      const serverUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001/world' : `http://${window.location.hostname}:3001/world`;
       socket = io(serverUrl, {
         autoConnect: true,
         transports: ['websocket', 'polling'],
       });
+      socketRef.current = socket;
 
       socket.on('connect', () => {
-        console.log('[Socket.IO] Conectado ao servidor da Cidade Virtual:', socket?.id);
+        setIsConnected(true);
+        console.log('[Socket.IO] Conectado ao servidor autoritativo /world:', socket?.id);
       });
 
-      socket.on('world:state', (state: { trafficLight?: TrafficLightState; timeOfDay?: 'day' | 'sunset' | 'night' }) => {
-        if (state.trafficLight) setTrafficLightState(state.trafficLight);
-        if (state.timeOfDay) setTimeOfDay(state.timeOfDay);
+      socket.on('disconnect', () => {
+        setIsConnected(false);
+        console.warn('[Socket.IO] Desconectado do servidor autoritativo.');
+      });
+
+      socket.on('world:state', (state: { trafficLight?: TrafficLightState; timeOfDay?: number | string }) => {
+        if (state.trafficLight) {
+          setTrafficLightState(state.trafficLight);
+        }
+        if (state.timeOfDay !== undefined) {
+          const hour = typeof state.timeOfDay === 'number' ? state.timeOfDay : 12;
+          const tod: 'day' | 'sunset' | 'night' =
+            hour >= 6 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'sunset' : 'night';
+          setTimeOfDay(tod);
+        }
+      });
+
+      socket.on('world:event', (event: { name: string; payload: Record<string, unknown> }) => {
+        if (event.name === 'traffic_light.changed' && typeof event.payload?.state === 'string') {
+          setTrafficLightState(event.payload.state as TrafficLightState);
+        }
+        if (event.name === 'world.weather.changed' && typeof event.payload?.timeOfDay === 'number') {
+          const hour = event.payload.timeOfDay;
+          const tod: 'day' | 'sunset' | 'night' =
+            hour >= 6 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'sunset' : 'night';
+          setTimeOfDay(tod);
+        }
       });
     } catch (err) {
-      console.warn('[Socket.IO] Servidor indisponível no momento, operando em modo autônomo local.');
+      console.warn('[Socket.IO] Falha na conexão com o servidor autoritativo.');
     }
 
     return () => {
       socket?.disconnect();
+      socketRef.current = null;
     };
   }, []);
 
   const handleToggleTrafficLight = useCallback(() => {
-    setTrafficLightState((prev) => (prev === 'green' ? 'yellow' : prev === 'yellow' ? 'red' : 'green'));
+    setTrafficLightState((prev) => {
+      const next: TrafficLightState = prev === 'green' ? 'yellow' : prev === 'yellow' ? 'red' : 'green';
+      socketRef.current?.emit('traffic_light:set', { state: next });
+      return next;
+    });
   }, []);
 
   const handleToggleTimeOfDay = useCallback(() => {

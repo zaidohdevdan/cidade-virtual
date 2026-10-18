@@ -1,5 +1,5 @@
 // apps/api/src/modules/world/world.service.ts
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger, Optional } from '@nestjs/common';
 import type {
   EventLog,
   EventId,
@@ -8,6 +8,8 @@ import type {
 } from '@cidade-virtual/types';
 import type { TriggerEventInput } from '@cidade-virtual/tools/schemas';
 import { WorldStateRepository, WorldStateRow } from '@cidade-virtual/persistence';
+
+import { WorldGateway } from '../../gateways/world.gateway';
 
 export const VALID_WEATHER_CONDITIONS = ['clear', 'rain', 'storm', 'fog', 'snow'] as const;
 export type WeatherCondition = (typeof VALID_WEATHER_CONDITIONS)[number];
@@ -28,7 +30,10 @@ export class WorldService implements OnModuleInit {
   private readonly logger = new Logger(WorldService.name);
   public static readonly DEFAULT_WORLD_ID = 'rua-central-main';
 
-  constructor(private readonly worldStateRepo: WorldStateRepository) {}
+  constructor(
+    private readonly worldStateRepo: WorldStateRepository,
+    @Optional() private readonly worldGateway?: WorldGateway,
+  ) {}
 
   async onModuleInit() {
     try {
@@ -45,6 +50,8 @@ export class WorldService implements OnModuleInit {
       } else {
         this.logger.log(`Estado persistente do mundo recuperado: ${state.id} (tick: ${state.tickCount})`);
       }
+
+      this.worldGateway?.broadcastWorldState(state);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Banco relacional não acessível no bootstrap (modo offline/resiliente): ${message}`);
@@ -68,21 +75,37 @@ export class WorldService implements OnModuleInit {
    * Avança os ticks de simulação e persiste o progresso.
    */
   async incrementTick(id: string = WorldService.DEFAULT_WORLD_ID, amount: number = 1): Promise<WorldStateRow | null> {
-    return this.worldStateRepo.incrementTick(id, amount);
+    const updated = await this.worldStateRepo.incrementTick(id, amount);
+    if (updated) {
+      this.worldGateway?.broadcastDomainEvent({
+        name: 'world.tick',
+        payload: { scenarioId: id, tickCount: updated.tickCount },
+      });
+    }
+    return updated;
   }
 
   /**
    * Injeta um evento dramático no cenário.
    */
   async triggerEvent(input: TriggerEventInput): Promise<EventLog> {
-    return {
-      id: '00000000-0000-0000-0000-000000000003' as EventId,
+    const eventLog: EventLog = {
+      id: crypto.randomUUID() as EventId,
       type: input.type,
       location: input.location as GeoCoords,
       timestamp: new Date(),
       affectedCitizens: [],
       description: input.description,
     };
+
+    this.logger.log(`[AUDIT] Evento dramático acionado: ${input.type} — ${input.description}`);
+
+    this.worldGateway?.broadcastDomainEvent({
+      name: 'world.event.triggered',
+      payload: eventLog,
+    });
+
+    return eventLog;
   }
 
   /**
@@ -99,6 +122,16 @@ export class WorldService implements OnModuleInit {
     const targetTime = timeOfDay ?? currentState?.timeOfDay ?? 12;
     await this.worldStateRepo.updateEnvironment(scenarioId, targetTime, condition);
     this.logger.log(`Clima do cenário ${scenarioId} alterado para ${condition} (hora: ${targetTime}h)`);
+
+    const updated = await this.getWorldState(scenarioId);
+    if (updated) {
+      this.worldGateway?.broadcastWorldState(updated);
+    }
+
+    this.worldGateway?.broadcastDomainEvent({
+      name: 'world.weather.changed',
+      payload: { scenarioId, condition, timeOfDay: targetTime },
+    });
   }
 
   /**
