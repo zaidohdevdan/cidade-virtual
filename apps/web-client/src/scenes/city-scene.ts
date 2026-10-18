@@ -91,8 +91,8 @@ export class CityScene {
     this.sunLight = new THREE.DirectionalLight(0xffe8c0, 1.4);
     this.sunLight.position.set(40, 60, 30);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.width = 4096;
-    this.sunLight.shadow.mapSize.height = 4096;
+    this.sunLight.shadow.mapSize.width = 2048;
+    this.sunLight.shadow.mapSize.height = 2048;
     this.sunLight.shadow.camera.near = 0.5;
     this.sunLight.shadow.camera.far = 200;
     this.sunLight.shadow.camera.left = -70;
@@ -1120,7 +1120,7 @@ export class CityScene {
     this.scene.add(sign);
   }
 
-  // ──────────────────── TREES ────────────────────
+  // ──────────────────── TREES (INSTANCED MESH) ────────────────────
   private buildTrees(): void {
     const positions = [
       // Ao longo das calçadas da Avenida Norte-Sul
@@ -1133,22 +1133,35 @@ export class CityScene {
       [-32, 12], [-32, 32], [-12, 32],
     ] as [number, number][];
 
+    const trunkGeo = new THREE.CylinderGeometry(0.24, 0.32, 4.5, 8);
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.95 });
-    const foliageColors = [0x2e7d32, 0x388e3c, 0x1b5e20, 0x43a047];
+    const trunkInstances = new THREE.InstancedMesh(trunkGeo, trunkMat, positions.length);
+    trunkInstances.castShadow = true;
+    trunkInstances.receiveShadow = true;
 
-    for (const [tx, tz] of positions) {
-      const h = 4.0 + Math.random() * 1.5;
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, h, 10), trunkMat);
-      trunk.position.set(tx, h / 2, tz);
-      trunk.castShadow = true;
-      this.scene.add(trunk);
+    const foliageGeo = new THREE.DodecahedronGeometry(1.8, 1);
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.85 });
+    const foliageInstances = new THREE.InstancedMesh(foliageGeo, foliageMat, positions.length);
+    foliageInstances.castShadow = true;
+    foliageInstances.receiveShadow = true;
 
-      const fColor = foliageColors[Math.floor(Math.random() * foliageColors.length)];
-      const fMat = new THREE.MeshStandardMaterial({ color: fColor, roughness: 0.85 });
-      const foliage = new THREE.Mesh(new THREE.DodecahedronGeometry(1.6 + Math.random() * 0.4, 1), fMat);
-      foliage.position.set(tx, h + 0.9, tz);
-      foliage.castShadow = true;
-      this.scene.add(foliage);
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < positions.length; i++) {
+      const [tx, tz] = positions[i];
+
+      // Tronco instanciado
+      dummy.position.set(tx, 2.25, tz);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      trunkInstances.setMatrixAt(i, dummy.matrix);
+
+      // Copa instanciada
+      dummy.position.set(tx, 5.0, tz);
+      dummy.rotation.set(0, (i * Math.PI) / 4, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      foliageInstances.setMatrixAt(i, dummy.matrix);
 
       // Collider circular de cada tronco de árvore
       this.colliders.push({
@@ -1159,9 +1172,14 @@ export class CityScene {
         name: 'Tronco de Árvore',
       });
     }
+
+    trunkInstances.instanceMatrix.needsUpdate = true;
+    foliageInstances.instanceMatrix.needsUpdate = true;
+    this.scene.add(trunkInstances);
+    this.scene.add(foliageInstances);
   }
 
-  // ──────────────────── STREET LAMPS ────────────────────
+  // ──────────────────── STREET LAMPS (INSTANCED MESH) ────────────────────
   private buildStreetLamps(): void {
     const positions = [
       // Próximos às calçadas
@@ -1170,25 +1188,38 @@ export class CityScene {
     ] as [number, number][];
 
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x2b2e31, metalness: 0.8, roughness: 0.3 });
+    const poleGeo = new THREE.CylinderGeometry(0.1, 0.13, 5.8, 8);
+    const poleInstances = new THREE.InstancedMesh(poleGeo, poleMat, positions.length);
+    poleInstances.castShadow = true;
+
+    const armGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.8, 6);
+    const armInstances = new THREE.InstancedMesh(armGeo, poleMat, positions.length);
+
     const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfffaed, emissive: 0xffe680, emissiveIntensity: 1.4 });
 
-    for (const [lx, lz] of positions) {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 5.8, 12), poleMat);
-      pole.position.set(lx, 2.9, lz);
-      pole.castShadow = true;
-      this.scene.add(pole);
-
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.8, 8), poleMat);
-      arm.rotation.z = Math.PI / 2;
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < positions.length; i++) {
+      const [lx, lz] = positions[i];
       const dir = lx < 0 ? 1 : -1;
-      arm.position.set(lx + 0.8 * dir, 5.7, lz);
-      this.scene.add(arm);
 
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 10), bulbMat);
+      // Mastro do poste instanciado
+      dummy.position.set(lx, 2.9, lz);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      poleInstances.setMatrixAt(i, dummy.matrix);
+
+      // Haste horizontal instanciada
+      dummy.position.set(lx + 0.8 * dir, 5.7, lz);
+      dummy.rotation.set(0, 0, Math.PI / 2);
+      dummy.updateMatrix();
+      armInstances.setMatrixAt(i, dummy.matrix);
+
+      // Lâmpada e ponto de luz
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), bulbMat);
       bulb.position.set(lx + 1.6 * dir, 5.5, lz);
       this.scene.add(bulb);
 
-      const pLight = new THREE.PointLight(0xffecc4, 1.6, 22);
+      const pLight = new THREE.PointLight(0xffecc4, 1.4, 20);
       pLight.position.set(lx + 1.6 * dir, 5.3, lz);
       pLight.castShadow = true;
       this.scene.add(pLight);
@@ -1202,6 +1233,11 @@ export class CityScene {
         name: 'Poste de Iluminação',
       });
     }
+
+    poleInstances.instanceMatrix.needsUpdate = true;
+    armInstances.instanceMatrix.needsUpdate = true;
+    this.scene.add(poleInstances);
+    this.scene.add(armInstances);
   }
 
   // ──────────────────── VEHICLES (ESTACIONADOS EM VAGAS) ────────────────────

@@ -1,10 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
 import { DanielAvatar, MovementInput } from '../avatars/daniel-avatar';
 import { InteractiveObject, ObstacleCollider } from '../scenes/city-scene';
-
 import { VehicleAgent } from '../vehicles/vehicle-agent';
+import { cityStore } from '../store/city-store';
 
 interface PlayerProps {
   player: DanielAvatar;
@@ -12,8 +11,8 @@ interface PlayerProps {
   colliders: ObstacleCollider[];
   vehicles?: VehicleAgent[];
   interactiveObjects: InteractiveObject[];
-  onTelemetryUpdate: (x: number, z: number, speedKmH: number) => void;
-  onObservationUpdate: (obs: InteractiveObject | null) => void;
+  onTelemetryUpdate?: (x: number, z: number, speedKmH: number) => void;
+  onObservationUpdate?: (obs: InteractiveObject | null) => void;
 }
 
 export const Player: React.FC<PlayerProps> = ({
@@ -108,8 +107,12 @@ export const Player: React.FC<PlayerProps> = ({
     // Atualiza avatar com resposta de colisão e animação de marcha
     player.update(clampedDelta, inputRef.current, cameraAngleY, dynamicColliders);
 
-    // Atualiza telemetria
-    onTelemetryUpdate(player.position.x, player.position.z, player.speed * 3.6);
+    // Atualiza telemetria diretamente no store externo a 60 Hz sem disparar re-render do React
+    const speedKmH = player.speed * 3.6;
+    cityStore.updateTelemetry(player.position.x, player.position.z, speedKmH);
+    if (onTelemetryUpdate) {
+      onTelemetryUpdate(player.position.x, player.position.z, speedKmH);
+    }
 
     // Percepção semântica por proximidade
     let closest: InteractiveObject | null = null;
@@ -121,7 +124,12 @@ export const Player: React.FC<PlayerProps> = ({
         closest = obj;
       }
     }
-    onObservationUpdate(closest);
+
+    // Atualiza observação apenas quando houver transição de alvo
+    cityStore.setObservation(closest);
+    if (onObservationUpdate) {
+      onObservationUpdate(closest);
+    }
   });
 
   return <primitive object={player.mesh} />;

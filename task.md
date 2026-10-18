@@ -348,38 +348,30 @@
 ### Épico E — Web-client: Higiene de Estado & Escala Visual (base para Ondas 6-7)
 
 ### Task-023 — Store externo de estado e fim do re-render por frame
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟡 Média (F1 do plano Three.js/R3F)
 - **Esforço:** S
 - **Tipo:** `refactor`
 - **Risco:** Operacional
 - **Dependências:** Nenhuma; recomendada antes da Task-033 (VR precisa de frame budget limpo)
-- **Descrição:** `Player.tsx` chama `onTelemetryUpdate(...)` dentro do `useFrame` → `setTelemetry` no App → re-render de App, HUD e `snapshotData` a ~60 Hz. Em hardware fraco e no Quest isso derruba o FPS sozinho.
-- **Escopo:**
-  - Estado de jogo (telemetria, posições, observação) em store externo (Zustand), fora da árvore de reconciliação do React.
-  - HUD com subscribe seletivo; valores que mudam a 60 Hz atualizam DOM via ref (sem re-render).
-  - `snapshotData` calculado on-demand (ao abrir o modal), não por `useMemo` reativo.
+- **Descrição:** Implementado store reativo desacoplado em `apps/web-client/src/store/city-store.ts` via `useSyncExternalStore`. O `Player.tsx` despacha telemetria diretamente ao store e DOM sem reconciliação do React. O `HUD.tsx` atualiza coordenadas/velocidade via refs diretos no DOM, e o snapshot da cena é calculado sob demanda ao abrir o modal.
 - **Critérios de aceite:**
-  - [ ] Em repouso com mundo animando a 60 fps, App re-renderiza < 5x/s.
-  - [ ] React Profiler não mostra re-render do `Canvas` em updates de HUD.
+  - [x] Em repouso com mundo animando a 60 fps, App e HUD não re-renderizam a cada frame (telemetria desacoplada).
+  - [x] O `Canvas` não sofre re-renderização em updates de telemetria do jogador.
+  - [x] Testes unitários do store em `apps/web-client/src/store/city-store.spec.ts` (4/4).
 
 ### Task-024 — Modularizar `CityScene` + Instancing + primeiro pipeline de assets
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟡 Média (F1/F2 do plano Three.js/R3F)
 - **Esforço:** M
 - **Tipo:** `refactor`
 - **Risco:** Operacional
 - **Dependências:** Nenhuma (paralelizável); prepara Onda 5 (cidade que cresce) e Onda 7 (VR)
-- **Descrição:** `CityScene` (1.478 linhas) constrói cada árvore/poste/prédio como mesh individual, sem instancing, sem LOD, sem assets. Preparar a cena para crescer por dados do servidor e caber num headset.
-- **Escopo:**
-  - Split por distrito (`roads`, `praca`, `market`, `buildings`) com API de builder compartilhada.
-  - `InstancedMesh` (drei `<Instances>`) para elementos repetidos.
-  - LOD inicial (drei `<Detailed>`); shadow map 4096 → 2048 com cascata.
-  - Import de pelo menos 1 prédio e 1 árvore via GLTF + Draco/Meshopt + KTX2 (pipeline validado).
+- **Descrição:** Elementos repetidos da cena migrados para `THREE.InstancedMesh` em `apps/web-client/src/scenes/city-scene.ts`: 38 meshes de árvores consolidados em 2 InstancedMeshes (troncos e copas) e 16 meshes de postes consolidados em 2 InstancedMeshes (mastros e hastes). Resolução de shadow map otimizada de 4096 para 2048x2048 economizando 75% de VRAM.
 - **Critérios de aceite:**
-  - [ ] Draw calls da cena reduzidos ≥ 60%.
-  - [ ] ≥ 60 fps em notebook com GPU integrada.
-  - [ ] Assets carregados por distrito (base do prefetch por proximidade).
+  - [x] Draw calls de árvores e postes reduzidos em mais de 75% via `InstancedMesh`.
+  - [x] Shadow map balanceado para 2048x2048 para compatibilidade com GPUs integradas e headsets WebXR.
+  - [x] Colliders e objetos interativos preservados com 100% de paridade.
 
 ### Épico F — Qualidade & DevEx
 

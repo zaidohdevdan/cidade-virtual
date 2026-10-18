@@ -4,7 +4,7 @@ import { Physics } from '@react-three/rapier';
 import * as THREE from 'three';
 import { io, Socket } from 'socket.io-client';
 
-import { CityScene, TrafficLightState, InteractiveObject } from './scenes/city-scene';
+import { CityScene, TrafficLightState } from './scenes/city-scene';
 import { DanielAvatar } from './avatars/daniel-avatar';
 import { AgentAvatar, CITY_AGENTS } from './avatars/agent-avatar';
 import { VehicleAgent, CITY_VEHICLES } from './vehicles/vehicle-agent';
@@ -14,34 +14,35 @@ import { Agents } from './components/Agents';
 import { Vehicles } from './components/Vehicles';
 import { CameraController } from './components/CameraController';
 import { HUD } from './components/HUD';
+import { cityStore, useCityStore } from './store/city-store';
 
 export const App: React.FC = () => {
-  // Modelos e simulações urbanas
+  // Modelos e simulações urbanas instanciados de forma estável
   const city = useMemo(() => new CityScene(), []);
   const player = useMemo(() => new DanielAvatar(), []);
   const agents = useMemo(() => CITY_AGENTS.map((cfg) => new AgentAvatar(cfg)), []);
   const vehicles = useMemo(() => CITY_VEHICLES.map((cfg) => new VehicleAgent(cfg)), []);
 
-  // Estados reativos da interface e simulação (Padrão DENATRAN em 2 fases)
-  const [trafficLightState, setTrafficLightState] = useState<TrafficLightState>('green');
-  const [timeOfDay, setTimeOfDay] = useState<'day' | 'sunset' | 'night'>('day');
-  const [isFirstPerson, setIsFirstPerson] = useState<boolean>(false);
-  const [cameraAngleY, setCameraAngleY] = useState<number>(0);
-  const [observation, setObservation] = useState<InteractiveObject | null>(null);
-  const [telemetry, setTelemetry] = useState<{ x: number; z: number; speedKmH: number }>({
-    x: 8.5,
-    z: 12.0,
-    speedKmH: 0,
-  });
+  // Estados locais do shell da aplicação
   const [isSnapshotOpen, setIsSnapshotOpen] = useState<boolean>(false);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [snapshotData, setSnapshotData] = useState<unknown>(null);
   const socketRef = useRef<Socket | null>(null);
 
-  // Conexão em tempo real Socket.IO com o namespace autoritativo /world do backend NestJS (Task-021)
+  // Estados do store externo consumidos seletivamente
+  const trafficLightState = useCityStore((s) => s.trafficLightState);
+  const timeOfDay = useCityStore((s) => s.timeOfDay);
+  const isFirstPerson = useCityStore((s) => s.isFirstPerson);
+  const cameraAngleY = useCityStore((s) => s.cameraAngleY);
+
+  // Conexão em tempo real Socket.IO com o namespace autoritativo /world do backend NestJS
   useEffect(() => {
     let socket: Socket | null = null;
     try {
-      const serverUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001/world' : `http://${window.location.hostname}:3001/world`;
+      const serverUrl =
+        window.location.hostname === 'localhost'
+          ? 'http://localhost:3001/world'
+          : `http://${window.location.hostname}:3001/world`;
+
       socket = io(serverUrl, {
         autoConnect: true,
         transports: ['websocket', 'polling'],
@@ -49,36 +50,36 @@ export const App: React.FC = () => {
       socketRef.current = socket;
 
       socket.on('connect', () => {
-        setIsConnected(true);
+        cityStore.setIsConnected(true);
         console.log('[Socket.IO] Conectado ao servidor autoritativo /world:', socket?.id);
       });
 
       socket.on('disconnect', () => {
-        setIsConnected(false);
+        cityStore.setIsConnected(false);
         console.warn('[Socket.IO] Desconectado do servidor autoritativo.');
       });
 
       socket.on('world:state', (state: { trafficLight?: TrafficLightState; timeOfDay?: number | string }) => {
         if (state.trafficLight) {
-          setTrafficLightState(state.trafficLight);
+          cityStore.setTrafficLightState(state.trafficLight);
         }
         if (state.timeOfDay !== undefined) {
           const hour = typeof state.timeOfDay === 'number' ? state.timeOfDay : 12;
           const tod: 'day' | 'sunset' | 'night' =
             hour >= 6 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'sunset' : 'night';
-          setTimeOfDay(tod);
+          cityStore.setTimeOfDay(tod);
         }
       });
 
       socket.on('world:event', (event: { name: string; payload: Record<string, unknown> }) => {
         if (event.name === 'traffic_light.changed' && typeof event.payload?.state === 'string') {
-          setTrafficLightState(event.payload.state as TrafficLightState);
+          cityStore.setTrafficLightState(event.payload.state as TrafficLightState);
         }
         if (event.name === 'world.weather.changed' && typeof event.payload?.timeOfDay === 'number') {
           const hour = event.payload.timeOfDay;
           const tod: 'day' | 'sunset' | 'night' =
             hour >= 6 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'sunset' : 'night';
-          setTimeOfDay(tod);
+          cityStore.setTimeOfDay(tod);
         }
       });
     } catch (err) {
@@ -92,39 +93,40 @@ export const App: React.FC = () => {
   }, []);
 
   const handleToggleTrafficLight = useCallback(() => {
-    setTrafficLightState((prev) => {
-      const next: TrafficLightState = prev === 'green' ? 'yellow' : prev === 'yellow' ? 'red' : 'green';
-      socketRef.current?.emit('traffic_light:set', { state: next });
-      return next;
-    });
+    const current = cityStore.getState().trafficLightState;
+    const next: TrafficLightState = current === 'green' ? 'yellow' : current === 'yellow' ? 'red' : 'green';
+    cityStore.setTrafficLightState(next);
+    socketRef.current?.emit('traffic_light:set', { state: next });
   }, []);
 
   const handleToggleTimeOfDay = useCallback(() => {
-    setTimeOfDay((prev) => (prev === 'day' ? 'sunset' : prev === 'sunset' ? 'night' : 'day'));
+    const current = cityStore.getState().timeOfDay;
+    const next = current === 'day' ? 'sunset' : current === 'sunset' ? 'night' : 'day';
+    cityStore.setTimeOfDay(next);
   }, []);
 
   const handleToggleFirstPerson = useCallback(() => {
-    setIsFirstPerson((prev) => !prev);
+    cityStore.setIsFirstPerson(!cityStore.getState().isFirstPerson);
   }, []);
 
-  const handleTelemetryUpdate = useCallback((x: number, z: number, speedKmH: number) => {
-    setTelemetry({ x, z, speedKmH });
+  const handleCameraAngleChange = useCallback((angle: number) => {
+    cityStore.setCameraAngleY(angle);
   }, []);
 
-  const handleObservationUpdate = useCallback((obs: InteractiveObject | null) => {
-    setObservation(obs);
-  }, []);
+  // Geração sob demanda do snapshot apenas quando o modal for aberto
+  const handleOpenSnapshot = useCallback(() => {
+    const currentTelemetry = cityStore.getState().telemetry;
+    const currentTL = cityStore.getState().trafficLightState;
+    const currentTOD = cityStore.getState().timeOfDay;
 
-  // Dados do snapshot da cena
-  const snapshotData = useMemo(() => {
-    return {
+    const data = {
       scenarioId: 'synapse-city-01',
       citizens: [
         {
           id: 'player-daniel',
           role: 'Protagonista / Avatar',
-          position: { x: Number(telemetry.x.toFixed(2)), z: Number(telemetry.z.toFixed(2)) },
-          speedKmH: Number(telemetry.speedKmH.toFixed(1)),
+          position: { x: Number(currentTelemetry.x.toFixed(2)), z: Number(currentTelemetry.z.toFixed(2)) },
+          speedKmH: Number(currentTelemetry.speedKmH.toFixed(1)),
         },
         ...agents.map((a) => ({
           id: a.config.id,
@@ -149,13 +151,16 @@ export const App: React.FC = () => {
         position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
       })),
       environment: {
-        trafficLight: trafficLightState,
-        timeOfDay,
+        trafficLight: currentTL,
+        timeOfDay: currentTOD,
         activeColliders: city.colliders.length,
       },
       timestamp: new Date().toISOString(),
     };
-  }, [telemetry, agents, vehicles, city, trafficLightState, timeOfDay]);
+
+    setSnapshotData(data);
+    setIsSnapshotOpen(true);
+  }, [agents, vehicles, city]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
@@ -173,11 +178,7 @@ export const App: React.FC = () => {
       >
         <Suspense fallback={null}>
           <Physics gravity={[0, -9.81, 0]}>
-            <City
-              city={city}
-              trafficLightState={trafficLightState}
-              timeOfDay={timeOfDay}
-            />
+            <City city={city} trafficLightState={trafficLightState} timeOfDay={timeOfDay} />
             <Vehicles
               vehicles={vehicles}
               trafficLights={city.trafficLights}
@@ -190,14 +191,12 @@ export const App: React.FC = () => {
               colliders={city.colliders}
               vehicles={vehicles}
               interactiveObjects={city.interactiveObjects}
-              onTelemetryUpdate={handleTelemetryUpdate}
-              onObservationUpdate={handleObservationUpdate}
             />
             <Agents agents={agents} vehicles={vehicles} colliders={city.colliders} />
             <CameraController
               playerPosition={player.position}
               isFirstPerson={isFirstPerson}
-              onAngleChange={setCameraAngleY}
+              onAngleChange={handleCameraAngleChange}
               onToggleFirstPerson={handleToggleFirstPerson}
             />
           </Physics>
@@ -207,14 +206,9 @@ export const App: React.FC = () => {
       {/* HUD Overlay — Controles, Telemetria, Percepção e Legenda */}
       <HUD
         agentCount={agents.length}
-        trafficLightState={trafficLightState}
         onToggleTrafficLight={handleToggleTrafficLight}
-        timeOfDay={timeOfDay}
         onToggleTimeOfDay={handleToggleTimeOfDay}
-        observation={observation}
-        telemetry={telemetry}
-        isFirstPerson={isFirstPerson}
-        onOpenSnapshot={() => setIsSnapshotOpen(true)}
+        onOpenSnapshot={handleOpenSnapshot}
         isSnapshotOpen={isSnapshotOpen}
         onCloseSnapshot={() => setIsSnapshotOpen(false)}
         snapshotData={snapshotData}

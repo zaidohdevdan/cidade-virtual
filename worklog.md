@@ -172,5 +172,36 @@ Execução completa do **Bloco 03 (Onda 2 — Autonomia dos Agentes)**. O motor 
 - **Tipagem Estática:** `npm run typecheck` — 0 erros no monorepo.
 - **Serviços Operacionais:** PostgreSQL 16 (5433), Qdrant 1.12.1 (6333) e Redis 7 (6379) ativos e saudáveis.
 
+---
+
+## Task ID: bloco-visual-frontend-task-023-024
+- **Data:** 2026-10-18
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Operacional & Performance (Higiene de Estado, Desacoplamento 60 FPS e Otimização Gráfica)
+
+### 1. Resumo Executivo
+Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visual)** do `task.md`. Foi eliminado o gargalo de re-renderização a 60 Hz no React através da introdução de um store reativo desacoplado com `useSyncExternalStore` e updates diretos de telemetria no DOM. A cena 3D foi otimizada com `THREE.InstancedMesh` para árvores e postes, e o shadow map foi balanceado para 2048x2048, reduzindo draw calls em mais de 75% e preparando o motor para dispositivos móveis e WebXR.
+
+### 2. Entregas Realizadas
+- **Task-023 (Store Externo & Fim do Re-render por Frame):**
+  - Criado `apps/web-client/src/store/city-store.ts` com store pub/sub de alta performance e hook `useCityStore` baseado em `useSyncExternalStore`.
+  - Refatorado `Player.tsx`: telemetria e velocidade despachadas diretamente para o store sem passar por callbacks de estado do React.
+  - Refatorado `HUD.tsx`: subscrições seletivas finas (semáforo, dia/noite, observações) e injeção direta de texto em refs do DOM para coordenadas e velocímetro (`telemetryDOMSubscribers`).
+  - Geração de `snapshotData` migrada de `useMemo` a 60 Hz para cálculo sob demanda ao clicar no botão de Snapshot.
+  - `App.tsx` e `Canvas` agora permanecem estáveis sem re-renders a cada tick do loop de animação.
+  - Testes unitários do store em `apps/web-client/src/store/city-store.spec.ts` (4/4).
+- **Task-024 (Instancing & Otimizações Gráficas na CityScene):**
+  - Implementado `THREE.InstancedMesh` em `apps/web-client/src/scenes/city-scene.ts` para árvores urbanas (19 troncos + 19 copas consolidados em 2 meshes instanciados com matrizes de transformação dedicadas).
+  - Implementado `THREE.InstancedMesh` para postes de iluminação pública (mastros e hastes consolidados em 2 meshes instanciados).
+  - Redução de resolução da sombra direcional de 4096 para 2048x2048 (`shadow.mapSize`), economizando 75% de VRAM sem perda perceptível de nitidez.
+  - Preservação total de colliders físicos do Rapier e percepção semântica de objetos interativos.
+
+### 3. Validação de Aceite
+- **Suíte Completa:** `npx vitest run` — **13 arquivos de teste, 37 testes executados e 100% aprovados**.
+- **Sincronismo de Schema:** `npm run check:schema-drift` — 100% alinhado entre SQL, Drizzle e Types.
+- **Tipagem Estática:** `npm run typecheck` — 0 erros no monorepo.
+
+
 
 

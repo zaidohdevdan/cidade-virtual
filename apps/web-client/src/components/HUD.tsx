@@ -1,35 +1,54 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { TrafficLightState, InteractiveObject } from '../scenes/city-scene';
+import { cityStore, useCityStore, TelemetryData } from '../store/city-store';
 
 interface HUDProps {
   agentCount: number;
-  trafficLightState: TrafficLightState;
+  trafficLightState?: TrafficLightState;
   onToggleTrafficLight: () => void;
-  timeOfDay: 'day' | 'sunset' | 'night';
+  timeOfDay?: 'day' | 'sunset' | 'night';
   onToggleTimeOfDay: () => void;
-  observation: InteractiveObject | null;
-  telemetry: { x: number; z: number; speedKmH: number };
-  isFirstPerson: boolean;
+  observation?: InteractiveObject | null;
+  telemetry?: { x: number; z: number; speedKmH: number };
+  isFirstPerson?: boolean;
   onOpenSnapshot: () => void;
   isSnapshotOpen: boolean;
   onCloseSnapshot: () => void;
-  snapshotData: unknown;
+  snapshotData?: unknown;
 }
 
 export const HUD: React.FC<HUDProps> = ({
   agentCount,
-  trafficLightState,
   onToggleTrafficLight,
-  timeOfDay,
   onToggleTimeOfDay,
-  observation,
-  telemetry,
-  isFirstPerson,
   onOpenSnapshot,
   isSnapshotOpen,
   onCloseSnapshot,
   snapshotData,
 }) => {
+  // Subscrições reativas seletivas (só re-renderizam se o valor específico mudar)
+  const trafficLightState = useCityStore((s) => s.trafficLightState);
+  const timeOfDay = useCityStore((s) => s.timeOfDay);
+  const observation = useCityStore((s) => s.observation);
+  const isFirstPerson = useCityStore((s) => s.isFirstPerson);
+
+  // Refs para atualização direta de telemetria no DOM a 60 FPS (zero re-render React)
+  const coordsRef = useRef<HTMLSpanElement>(null);
+  const speedRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const unsubscribe = cityStore.subscribeTelemetryDirect((t: TelemetryData) => {
+      if (coordsRef.current) {
+        coordsRef.current.textContent = `X: ${t.x.toFixed(1)}m | Z: ${t.z.toFixed(1)}m`;
+      }
+      if (speedRef.current) {
+        speedRef.current.textContent = `${t.speedKmH.toFixed(1)} km/h`;
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
   const tlBadgeColors: Record<TrafficLightState, { icon: string; text: string }> = {
     green: { icon: '🟢', text: 'AV. CENTRAL' },
     yellow: { icon: '🟡', text: 'ATENÇÃO (N-S)' },
@@ -176,14 +195,14 @@ export const HUD: React.FC<HUDProps> = ({
           <div className="telemetry-card">
             <div>
               Pos:{' '}
-              <span className="telemetry-val" id="telemetry-coords">
-                X: {telemetry.x.toFixed(1)}m | Z: {telemetry.z.toFixed(1)}m
+              <span className="telemetry-val" id="telemetry-coords" ref={coordsRef}>
+                X: 8.5m | Z: 12.0m
               </span>
             </div>
             <div>
               Vel:{' '}
-              <span className="telemetry-val" id="telemetry-speed">
-                {telemetry.speedKmH.toFixed(1)} km/h
+              <span className="telemetry-val" id="telemetry-speed" ref={speedRef}>
+                0.0 km/h
               </span>
             </div>
             <div className="brand-footer">◆ SYNAPSE CITY</div>
@@ -203,10 +222,12 @@ export const HUD: React.FC<HUDProps> = ({
             </button>
           </div>
           <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '12px' }}>
-            Estado atual da cena retornado pela Tool de Percepção do Agente e sincronizado em tempo real.
+            Estado atual da cena retornado pela Tool de Percepção do Agente e sincronizado sob demanda.
           </p>
           <pre className="json-viewer">
-            <code id="snapshot-json">{JSON.stringify(snapshotData, null, 2)}</code>
+            <code id="snapshot-json">
+              {isSnapshotOpen ? JSON.stringify(snapshotData, null, 2) : ''}
+            </code>
           </pre>
         </div>
       </div>
