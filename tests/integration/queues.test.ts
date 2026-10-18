@@ -17,11 +17,7 @@ describe('Task-005 — BullMQ Queues sobre Redis 7 Real', () => {
 
   beforeAll(async () => {
     const conn = getRedisConnectionOptions();
-    redisClient = new IORedis({
-      host: conn.host,
-      port: conn.port,
-      maxRetriesPerRequest: null,
-    });
+    redisClient = new IORedis(conn);
 
     // Garante que o Redis está respondendo
     const pingRes = await redisClient.ping();

@@ -3,7 +3,7 @@
  * Configuração e gerenciamento de filas assíncronas BullMQ sobre Redis 7.
  * Task-005: 3 filas (simulation, cognition, learning) + DLQ + retries exponenciais + métricas.
  */
-import { Queue, QueueOptions, JobsOptions, ConnectionOptions } from 'bullmq';
+import { Queue, QueueOptions, JobsOptions, ConnectionOptions, RedisOptions } from 'bullmq';
 import type { CitizenId } from '@cidade-virtual/types';
 import { metrics, defaultLogger } from '@cidade-virtual/observability';
 
@@ -44,7 +44,7 @@ export interface DLQJobPayload {
 /**
  * Opções de conexão com Redis compartilhadas entre filas e workers.
  */
-export function getRedisConnectionOptions(): ConnectionOptions {
+export function getRedisConnectionOptions(): RedisOptions {
   return {
     host: process.env.REDIS_HOST || 'localhost',
     port: Number(process.env.REDIS_PORT) || 6379,
