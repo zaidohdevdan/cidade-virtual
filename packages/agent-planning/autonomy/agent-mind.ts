@@ -226,9 +226,8 @@ export class AgentMind {
     const playerActor = percept.actors.find((a) => a.kind === 'player');
     const playerNearby = !!playerActor && playerActor.distance <= 3.5;
 
-    // Se forçado, ou se o jogador estiver próximo e houver opção de deliberação/interação
-    const topDiff = ranked.length >= 2 ? ranked[0].score - ranked[1].score : 1.0;
-    const shouldInvokeLLM = !!llm && (Boolean(options.forceLLM) || (playerNearby && topDiff < 0.25));
+    // Se forçado ou se o jogador avatar estiver próximo e tivermos LLM disponível
+    const shouldInvokeLLM = !!llm && (Boolean(options.forceLLM) || playerNearby);
 
     let resultIntention: Intention;
 
@@ -388,25 +387,25 @@ export class AgentMind {
     const transmittedFromSelf: Record<string, number> = {};
     const transmittedFromPeer: Record<string, number> = {};
 
+    // Snapshot prévio de ambos para evitar que o agente ecoe de volta o que acabou de ouvir
+    const selfPrefs = { ...(this.memory.placePreferences ?? {}) };
+    const peerPrefs = { ...(peer.memory.placePreferences ?? {}) };
+
     // Transmissão Self -> Peer
-    if (this.memory.placePreferences) {
-      for (const [placeId, val] of Object.entries(this.memory.placePreferences)) {
-        if (Math.abs(val) >= 0.05) {
-          const discounted = Math.max(-1, Math.min(1, val * factor));
-          peer.receiveSocialPreference(placeId, discounted);
-          transmittedFromSelf[placeId] = discounted;
-        }
+    for (const [placeId, val] of Object.entries(selfPrefs)) {
+      if (Math.abs(val) >= 0.05) {
+        const discounted = Math.max(-1, Math.min(1, val * factor));
+        peer.receiveSocialPreference(placeId, discounted);
+        transmittedFromSelf[placeId] = discounted;
       }
     }
 
     // Transmissão Peer -> Self
-    if (peer.memory.placePreferences) {
-      for (const [placeId, val] of Object.entries(peer.memory.placePreferences)) {
-        if (Math.abs(val) >= 0.05) {
-          const discounted = Math.max(-1, Math.min(1, val * factor));
-          this.receiveSocialPreference(placeId, discounted);
-          transmittedFromPeer[placeId] = discounted;
-        }
+    for (const [placeId, val] of Object.entries(peerPrefs)) {
+      if (Math.abs(val) >= 0.05) {
+        const discounted = Math.max(-1, Math.min(1, val * factor));
+        this.receiveSocialPreference(placeId, discounted);
+        transmittedFromPeer[placeId] = discounted;
       }
     }
 

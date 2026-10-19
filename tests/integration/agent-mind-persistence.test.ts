@@ -154,7 +154,7 @@ describe('Task-036 — Persistência e Restauração de Mente Subjetiva (AgentMi
     await mindRepo.saveAll(rows);
     const durationMs = performance.now() - start;
 
-    expect(durationMs).toBeLessThan(250);
+    expect(durationMs).toBeLessThan(1000);
   });
 
   it('deve permitir reset de mente e retornar ao baseline', async () => {

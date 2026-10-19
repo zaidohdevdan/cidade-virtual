@@ -29,8 +29,10 @@ describe('Fase 1: Fundação — Persistência e Integridade do Mundo', () => {
     await conn.close();
   });
 
+  const testWorldId = 'test-persistence-world';
+
   it('deve persistir e atualizar o estado autoritativo do mundo', async () => {
-    const worldId = 'rua-central-main';
+    const worldId = testWorldId;
 
     const saved = await worldRepo.upsert({
       id: worldId,
@@ -55,7 +57,7 @@ describe('Fase 1: Fundação — Persistência e Integridade do Mundo', () => {
   });
 
   it('deve garantir continuidade do estado do mundo após reinicialização da conexão', async () => {
-    const worldId = 'rua-central-main';
+    const worldId = testWorldId;
 
     // 1. Fechar conexão existente (simulando crash ou restart do servidor)
     await conn.close();

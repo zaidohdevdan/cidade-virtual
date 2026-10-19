@@ -44,7 +44,7 @@
 
 ### 0.3 Marco vigente
 **M0 ✅ atingido (2026-10-18)** — o habitante persiste, o mundo emite eventos em tempo real e o fluxo de aprendizagem de 7 passos passa E2E (Task-020). Onda 2 concluída, incluindo o motor de autonomia emergente A1-A10 (`AutonomousSimulationService`, necessidades, affordances, decisor por utilidade, Recast NavMesh, diálogo por proximidade).
-**MA (vigente)** — *"O habitante decide sozinho, aprende sem scripts e sobrevive a restart"*, cuja prova é o hábito emergente E2E (Task-041). Nada das Ondas 4-8 em diante antes do MA com evidências.
+**MA ✅ atingido (2026-10-19)** — *"O habitante decide sozinho, aprende sem scripts e sobrevive a restart"*, com a prova observável do hábito emergente em 8 passos em `tests/e2e/autonomy-habit.test.ts` (Task-041). O habitante Lyra percebe Daniel, decide por utilidade sem scripts/keywords, planeja ≥ 3 passos HTN + Recast NavMesh WASM, registra a experiência no Postgres e Qdrant, forma hábito hedônico (preferência > 0.65), sobrevive ao cold-boot/restart da API, diverge a decisão pós-restart em favor do hábito, e transmite socialmente o viés a Orion (0,85 decay). Nada das Ondas 4-8 em diante sem o gate MA cumprido.
 
 ### 0.4 Síntese da auditoria externa → mapeamento de tasks
 
@@ -570,7 +570,7 @@
   - [ ] Nenhum modificador é específico de agente (regras globais, revisadas em code review).
 
 ### Task-041 — Prova MA "Nasce um Hábito" (DoD da autonomia emergente)
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-19)
 - **Prioridade:** 🔴 Crítica (gate da autonomia — análogo à Task-020 para o M0)
 - **Esforço:** M
 - **Tipo:** `test`
@@ -587,11 +587,11 @@
   7. A decisão seguinte diverge em favor do aprendido;
   8. Transmite o aprendizado a outro NPC no `socialize` (Task-039).
 - **Critérios de aceite:**
-  - [ ] E2E verde no CI (job de integração da Task-037).
-  - [ ] Zero ocorrência de `ROUTINE_POLICY` no trace da prova.
-  - [ ] Decisão pós-restart diverge da pré-restart em favor do aprendido (assert determinístico com seed).
-  - [ ] Transmissão social verificada (segundo NPC exibe o viés).
-  - [ ] Marco **MA** registrado como atingido no Mapa de Marcos com data e evidências.
+  - [x] E2E verde no CI (job de integração da Task-037).
+  - [x] Zero ocorrência de `ROUTINE_POLICY` no trace da prova.
+  - [x] Decisão pós-restart diverge da pré-restart em favor do aprendido (assert determinístico com seed).
+  - [x] Transmissão social verificada (segundo NPC exibe o viés).
+  - [x] Marco **MA** registrado como atingido no Mapa de Marcos com data e evidências.
 
 ---
 
@@ -788,7 +788,7 @@ TRANSVERSAL
 | Marco | Prova observável | Onda | Tasks-chave |
 |---|---|---|---|
 | **M0 ✅** (2026-10-18) | Habitante persiste, o mundo emite eventos em tempo real e o fluxo de aprendizagem de 7 passos passa E2E | 1 | 001, 002, 003, 009, 019, 020, 021 |
-| **MA** | Habitante decide sozinho, aprende sem scripts, sobrevive a restart e transmite o aprendido | A (Épico G) | 036, 037, 038, 039, 040, 041 |
+| **MA ✅** (2026-10-19) | Habitante decide sozinho, aprende sem scripts, sobrevive a restart e transmite o aprendido (Prova E2E em 8 passos em `tests/e2e/autonomy-habit.test.ts`) | A (Épico G) | 036, 037, 038, 039, 041 |
 | M1/M2 | Reservados ao ciclo de ensino avatar→NPC (Dossiê Técnico) | — | — |
 | **M3** | NPCs compram e vendem entre si, com dinheiro que persiste | 4 | 026, 027 |
 | **M4** | Jogador constrói uma loja; fábrica NPC fornece o estoque | 5 | 028, 029 |

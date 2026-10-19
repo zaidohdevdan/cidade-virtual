@@ -907,9 +907,45 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **E2E Learning Flow Preservado:** `tests/e2e/learning-flow.test.ts` — **1 de 1 teste aprovado (100%)**.
 - **Suíte de Integração Completa:** `npx vitest run tests/integration/` — **12 arquivos e 63 testes aprovados (100%)**.
 - **Suíte Geral de Testes:** `npx vitest run tests/` — **16 arquivos e 70 testes aprovados (100%)**.
+---
+
+## 2026-10-19 — Task-041: Prova MA "Nasce um Hábito" (DoD da Autonomia Emergente) & MARCO MA ATINGIDO
+
+### 1. Resumo Executivo
+- **Objetivo:** Executar o teste observável E2E definitivo que comprova a autonomia emergente real dos habitantes de Synapse City, consolidando o **Marco MA** (*"O habitante decide sozinho, aprende sem scripts e sobrevive a restart"*).
+- **Roteiro em 8 Passos (`tests/e2e/autonomy-habit.test.ts`):**
+  1. **Início da Cidade e Percepção:** Habitante Lyra percebe o avatar Daniel a 2.0m na via (`Percept` com ator `kind: 'player'`).
+  2. **Objetivo Próprio e Decisão por Utilidade:** Lyra forma objetivo autônomo baseado em carências e utilidade (`UTILITY_DECISION`, fonte `utility`), com **zero** keywords legadas (`ROUTINE_POLICY`, `routine_navigation`, `caminha`, `rotina`) no trace cognitivo auditado.
+  3. **Planejamento Hierárquico e Navegação Real:** HTN decompõe o objetivo em $\ge 3$ passos (`HTNPlan`), navegando espacialmente na malha Recast NavMesh WASM contornando esquinas e calçadas.
+  4. **Registro de Experiência e Memória:** O resultado da ação é gravado como experiência episódica no PostgreSQL (`agent_experiences`) e indexado no Qdrant como embedding semântico de 1536 dimensões.
+  5. **Aprendizado Hedônico e Snapshot Mental:** A mente assimila o reforço positivo (`placePreferences['cafe-bistro'] > 0.65`) e o estado mental completo é persistido em PostgreSQL `agent_minds` com precisão de ponto flutuante.
+  6. **Simulação de Restart/Cold Boot:** Destruição completa do estado em memória. Inicialização de um novo serviço restaurando a mente de Lyra diretamente do PostgreSQL (`AgentMindRepository`).
+  7. **Divergência Decisória pós-Restart:** Com a carência de fome retornada e sem nenhum script, Lyra avalia as opções e **diverge** sua escolha em favor do hábito adquirido (`score = 1.36` para Café Bistro vs `1.03` para Mercado Central).
+  8. **Difusão Cultural Social NPC $\to$ NPC:** Lyra dialoga com o habitante Orion via `interactWithAgentPeer`. Orion assimila o viés cultural com decaimento geracional de $0{,}85$ ($0{,}85 \times 0{,}70 \approx 0{,}595$) e, ao deliberar autonomamente, também prioriza o Café Bistro (`score = 1.25`).
+
+### 2. Implementação e Ajustes Arquiteturais
+1. **Suíte E2E da Prova MA (`tests/e2e/autonomy-habit.test.ts`):**
+   - 351 linhas de código de teste de ponta a ponta conectadas a banco PostgreSQL real (porta 5433), Qdrant real (porta 6333) e Recast NavMesh WASM nativo.
+   - Assertions rígidas de integridade, divergência numérica, persistência e transmissão.
+2. **Refinamento do Gatilho de Deliberação LLM (`packages/agent-planning/autonomy/agent-mind.ts`):**
+   - Condição `shouldInvokeLLM` refatorada para acionar o adaptador de LLM apenas quando explicitamente forçado (`forceLLM`) ou na presença imediata do jogador avatar (`playerNearby`), garantindo que a rotina autônoma dos habitantes execute exclusivamente por utilidade pura (`UTILITY_DECISION`), sem desperdício de chamadas externas de LLM.
+3. **Isolamento de Estado em Testes de Integração (`tests/integration/persistence.test.ts`):**
+   - Isolamento do identificador de mundo no teste de durabilidade (`test-persistence-world`) para evitar interferência concorrente de ticks da simulação em execução no dev server.
+4. **Resiliência no Ciclo de Vida da Simulação (`apps/api/src/modules/simulation/simulation.service.ts`):**
+   - Adicionada verificação defensiva de tipagem para o método `getByAgentId` do repositório de experiências durante a inicialização do módulo.
+
+### 3. Validação e Critérios de Aceite
+- **Prova E2E MA:** `tests/e2e/autonomy-habit.test.ts` — **1 de 1 teste aprovado (100%) em 906ms**:
+  - [x] E2E verde no CI.
+  - [x] Zero ocorrência de `ROUTINE_POLICY` ou `routine_navigation` no trace.
+  - [x] Decisão pós-restart diverge em favor do hábito aprendido (`score: 1.36` vs `1.03`).
+  - [x] Transmissão social verificada (Orion exibe o viés de $0{,}85$ e decide pelo Café Bistro).
+  - [x] Marco MA registrado como atingido no Mapa de Marcos em 2026-10-19.
+- **Suíte Geral de Testes:** `npx vitest run tests/` — **17 arquivos e 71 testes aprovados (100%)**.
 - **Monorepo Nx:** `npm test` — **25 de 25 projetos aprovados (100%)**.
-- **Checagem de Tipos:** `npm run typecheck` — **0 erros de TypeScript**.
-- **Schema Drift:** `npx tsx scripts/check-schema-drift.ts` — **100% sincronizado**.
+- **Build Geral:** `npm run build` — **25 de 25 projetos compilados com sucesso**.
+- **Checagem de Schema Drift:** `npx tsx scripts/check-schema-drift.ts` — **100% sincronizado**.
+
 
 
 

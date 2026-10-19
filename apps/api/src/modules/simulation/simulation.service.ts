@@ -110,7 +110,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         this.logger.log(`[AgentMind] Mente de ${citizen.name} (${citizen.id}) restaurada do PostgreSQL (${prefCount} preferências hedônicas).`);
       }
 
-      if (this.expRepo) {
+      if (this.expRepo && typeof this.expRepo.getByAgentId === 'function') {
         try {
           const pastExps = await this.expRepo.getByAgentId(citizen.id, 50);
           if (pastExps.length > 0) {
