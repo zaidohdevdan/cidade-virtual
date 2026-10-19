@@ -1,8 +1,8 @@
-// apps/api/src/modules/cognition/cognition.service.ts
 import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import type { AgentAction, CitizenId, MemorySnippet } from '@cidade-virtual/types';
 import { CognitiveCycleManager } from '@cidade-virtual/agent-cognition';
 import type { LLMProviderAdapter } from '@cidade-virtual/llm-adapters';
+import { GoalPlanner, type Plan } from '@cidade-virtual/agent-planning';
 import { ExperienceRepository } from '@cidade-virtual/persistence';
 import { defaultLogger } from '@cidade-virtual/observability';
 import { MemoryService } from '../memory/memory.service';
@@ -22,6 +22,7 @@ export interface ProcessCycleOptions {
 export class CognitionService {
   private readonly logger = new Logger(CognitionService.name);
   private cognitiveManager: CognitiveCycleManager;
+  private readonly goalPlanner: GoalPlanner;
 
   constructor(
     @Inject(MemoryService) private readonly memoryService: MemoryService,
@@ -29,6 +30,7 @@ export class CognitionService {
     @Optional() llmAdapter?: LLMProviderAdapter,
   ) {
     this.cognitiveManager = new CognitiveCycleManager(llmAdapter);
+    this.goalPlanner = new GoalPlanner({ llmAdapter });
   }
 
   /**
@@ -36,6 +38,14 @@ export class CognitionService {
    */
   setLLMAdapter(adapter?: LLMProviderAdapter): void {
     this.cognitiveManager = new CognitiveCycleManager(adapter);
+    this.goalPlanner.setLLMAdapter(adapter);
+  }
+
+  /**
+   * Retorna o GoalPlanner associado ao serviço de cognição.
+   */
+  getGoalPlanner(): GoalPlanner {
+    return this.goalPlanner;
   }
 
   /**
@@ -65,13 +75,33 @@ export class CognitionService {
       (m) => `[Memória Anterior ${m.memoryType ?? 'geral'}]: ${m.content}`,
     );
 
+    // 2. Planejamento hierárquico estruturado via GoalPlanner
+    let activePlan: Plan | undefined;
+    if (context.activeGoal) {
+      try {
+        activePlan = await this.goalPlanner.generatePlan(context.activeGoal, {
+          agentId: context.citizenId,
+          requiresLLM: options?.forceLLM,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Falha ao gerar plano para objetivo '${context.activeGoal}': ${(err as Error).message}`,
+        );
+      }
+    }
+
     const fullContext = [
       ...memoryContexts,
       `Objetivo Ativo: ${context.activeGoal ?? 'manter rotina urbana segura'}`,
+      ...(activePlan
+        ? [
+            `Plano Ativo (${activePlan.strategy}, conf: ${activePlan.confidence}): ${activePlan.steps.map((s) => `${s.stepIndex}.${s.action}`).join(' -> ')}`,
+          ]
+        : []),
       ...(context.nearbyObjects.length ? [`Objetos Próximos: ${context.nearbyObjects.join(', ')}`] : []),
     ];
 
-    // 2. Avaliação da ação através do CognitiveCycleManager
+    // 3. Avaliação da ação através do CognitiveCycleManager
     const targetId = context.nearbyObjects[0];
     const action = await this.cognitiveManager.evaluateAction(
       context.citizenId,
@@ -86,6 +116,13 @@ export class CognitionService {
     action.parameters = {
       ...action.parameters,
       retrievedMemoriesCount: relevantMemories.length,
+      ...(activePlan
+        ? {
+            activePlanId: activePlan.id,
+            activePlanStrategy: activePlan.strategy,
+            activePlanStepsCount: activePlan.steps.length,
+          }
+        : {}),
     };
 
     // 3. Persistência do resultado da ação em agent_experiences (PostgreSQL)

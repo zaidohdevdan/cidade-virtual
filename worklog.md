@@ -1,6 +1,38 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
-## Task: Fechamento dos Workers da Onda 2 (Task-007 SimulationWorker & Task-008 LearningWorker)
+## Task: Task-014 — GoalPlanner Real e Memória Procedural no agent-planning
+- **Data:** 2026-10-18
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Estrutural / Cognitivo e Planejamento Hierárquico (HTN, LLM, Memória Procedural)
+
+### 1. Resumo Executivo
+Substituição integral do stub anterior de planejamento por um subsistema canônico completo em `@cidade-virtual/agent-planning`. O `GoalPlanner` agora suporta:
+1. **Decomposição Hierárquica (HTN)**: Metas de alto nível (ex: "ir à praça") são decompostas em sequências operacionais ordenadas de ≥4 passos distintos (`observe_environment`, `navigate_to_waypoint`, `avoid_obstacles`, `cross_pedestrian_walkway`, `arrive_at_destination`), contemplando navegação, contorno de obstáculos e respeito a faixas de pedestres.
+2. **Memória Procedural (`InMemoryProceduralMemoryStore`)**: Cache de estratégias e planos eficazes. Ao registrar execução bem-sucedida (`recordPlanSuccess`), o histórico é atualizado (`successCount++`, `executionsCount++`) e a confiança (`confidence`) é elevada (ex: 0.75 → 0.90), retornando com estratégia `'procedural_cache'`.
+3. **Plano de Contingência e Replanejamento (`PlanRevisionService`)**: Reação ativa diante de falhas, injetando desvios (`avoid_obstacle_detour`) sob obstruções e passos de espera (`wait_for_green_signal`) diante de semáforo fechado.
+4. **Deliberação LLM (`llmAdapter`)**: Fallback deliberativo para metas abertas e complexas com geração estruturada JSON.
+5. **Políticas de Arquétipo e Avaliação (`BehaviorPolicy` e `PlanEvaluator`)**: Filtragem de metas coerentes com os arquétipos dos habitantes e métricas de progresso de execução.
+6. **Integração no Ciclo Cognitivo (`CognitionService`)**: Conexão com o `CognitionService` do NestJS para decompor `context.activeGoal` e enriquecer o contexto de deliberação dos habitantes.
+
+### 2. Implementações Realizadas
+- `packages/agent-planning/types.ts`: Tipos canônicos `PlanStep`, `Plan`, `PlanStrategy`, `PlanStatus`, `ProceduralMemoryStore`, `GoalPlanningOptions`, `PlanRevisionRequest`, `BehaviorPolicyRule`.
+- `packages/agent-planning/memory-store.ts`: `InMemoryProceduralMemoryStore` com normalização fonética/diacrítica de chaves (`normalizeGoalKey`).
+- `packages/agent-planning/htn-decomposer.ts`: `HTNDecomposer` para praça, patrulha, trabalho, comércio e genérico.
+- `packages/agent-planning/plan-revision.ts`: `PlanRevisionService` com injeção de contingência.
+- `packages/agent-planning/behavior-policy.ts`: `BehaviorPolicy` com regras de arquétipos.
+- `packages/agent-planning/plan-evaluator.ts`: `PlanEvaluator` com cálculo de progresso e viabilidade.
+- `packages/agent-planning/goal-planner.ts`: `GoalPlanner` orquestrador unificado.
+- `packages/agent-planning/goal-planner.spec.ts`: 11 testes unitários cobrindo HTN, cache procedural, revisão e LLM.
+- `tests/unit/goal-planner.test.ts`: 3 testes de conformidade com os critérios de aceite do marco.
+- `apps/api/src/modules/cognition/cognition.service.ts`: Integração com `goalPlanner` na resolução do ciclo cognitivo.
+
+### 3. Validação de Aceite
+- `npx vitest run`: **22 arquivos de teste, 113 testes executados e 100% aprovados** (0 falhas).
+- `npm run typecheck`: **0 erros de tipagem** em todos os projetos.
+- `npm run check:schema-drift`: 100% alinhado.
+
+---
 - **Data:** 2026-10-18
 - **Status:** Concluído
 - **Responsável:** Agente Antigravity (Parceiro de Implementação)

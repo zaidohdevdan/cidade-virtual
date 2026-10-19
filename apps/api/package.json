@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@cidade-virtual/agent-planning": "*",
     "@cidade-virtual/config": "*",
     "@cidade-virtual/memory": "*",
     "@cidade-virtual/persistence": "*",

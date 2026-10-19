@@ -10,7 +10,8 @@
     "test": "node -e \"console.log('@cidade-virtual/agent-planning: test ok')\""
   },
   "dependencies": {
-    "@cidade-virtual/types": "*"
+    "@cidade-virtual/types": "*",
+    "@cidade-virtual/llm-adapters": "*"
   },
   "devDependencies": {
     "@types/node": "^22.8.0",

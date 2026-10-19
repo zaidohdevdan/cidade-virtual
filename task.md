@@ -221,20 +221,23 @@
   - [x] Ação deliberada é persistida em `agent_experiences` com `sourceType: 'action_result'`.
 
 ### Task-014 — Implementar `GoalPlanner` real em `agent-planning`
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟡 Média (P1 da auditoria: "navegação e planejamento incompletos")
 - **Esforço:** M
 - **Tipo:** `feat`
 - **Risco:** Estrutural
 - **Dependências:** Task-004
-- **Descrição:** Atualmente `generatePlan(goal)` retorna 2 passos hardcoded. Substituir por planner real.
+- **Descrição:** Implementado planejador canônico em `@cidade-virtual/agent-planning` substituindo stubs anteriores. Suporta decomposição hierárquica de tarefas (HTN) para comportamentos urbanos, deliberação LLM via `LLMProviderAdapter`, cache e reutilização com elevação de confiança na memória procedural (`InMemoryProceduralMemoryStore`), replanejamento com injeção de contingência diante de falhas (`PlanRevisionService`), validação de arquétipos com `BehaviorPolicy` e avaliação de execução com `PlanEvaluator`. Integrado com `CognitionService` no módulo de cognição.
 - **Escopo:**
   - Decompor objetivo em passos via heurística HTN ou LLM (se `requiresLLM`).
   - Reutilizar planos bem-sucedidos (cache em memória `procedural`).
-  - `PlanRevisionService` para replanejar diante de falhas.
+  - `PlanRevisionService` para replanejar diante de falhas (obstáculos, semáforo fechado).
+  - Suíte de testes unitários em `packages/agent-planning/goal-planner.spec.ts` e `tests/unit/goal-planner.test.ts`.
 - **Critérios de aceite:**
-  - [ ] Plano de "ir à praça" gera ≥4 passos distintos (navegar, evitar obstáculo, atravessar faixa, chegar).
-  - [ ] Plano reutilizado após sucesso tem `confidence` maior que a primeira execução.
+  - [x] Plano de "ir à praça" gera ≥4 passos distintos (navegar, evitar obstáculo, atravessar faixa, chegar).
+  - [x] Plano reutilizado após sucesso tem `confidence` maior que a primeira execução.
+  - [x] Contingência de desvio (`avoid_obstacle_detour`) e espera semafórica (`wait_for_green_signal`) injetadas dinamicamente sob falha.
+  - [x] `CognitionService` integra geração de plano estruturado com o ciclo deliberativo do habitante.
 
 ### Task-015 — Implementar `NavigationService` com recast-navigation
 - **Status:** ⬜ Pendente

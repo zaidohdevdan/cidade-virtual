@@ -39,7 +39,9 @@
       "@cidade-virtual/persistence": ["packages/persistence/index.ts"],
       "@cidade-virtual/persistence/*": ["packages/persistence/*"],
       "@cidade-virtual/learning-system": ["packages/learning-system/index.ts"],
-      "@cidade-virtual/learning-system/*": ["packages/learning-system/*"]
+      "@cidade-virtual/learning-system/*": ["packages/learning-system/*"],
+      "@cidade-virtual/agent-planning": ["packages/agent-planning/index.ts"],
+      "@cidade-virtual/agent-planning/*": ["packages/agent-planning/*"]
     }
   }
 }
