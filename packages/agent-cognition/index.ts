@@ -44,28 +44,12 @@ export class CognitiveCycleManager {
 
   private buildGraph() {
     return new StateGraph(CognitiveStateAnnotation)
-      // 1 & 2: Interpretação da situação a partir do estímulo percebido
+      // 1 & 2: Interpretação da situação a partir do estímulo percebido (sem palavras-chave rígidas)
       .addNode('interpretSituation', async (state) => {
-        const obsLower = state.observation.toLowerCase();
-        const isRoutine = obsLower.includes('caminha') ||
-                          obsLower.includes('parado') ||
-                          obsLower.includes('aguarda') ||
-                          obsLower.includes('patrulha') ||
-                          obsLower.includes('verde') ||
-                          obsLower.includes('vermelho') ||
-                          obsLower.includes('amarelo') ||
-                          obsLower.includes('semáforo') ||
-                          obsLower.includes('rua') ||
-                          obsLower.includes('localizado') ||
-                          obsLower.includes('trabalho') ||
-                          obsLower.includes('rotina');
-
-        const needsDeliberation = state.requiresLLM || (!isRoutine && (state.confidence ?? 0.5) < 0.7);
-
         return {
           situation: `Situação identificada: ${state.observation}`,
-          requiresLLM: needsDeliberation && !!this.llmAdapter,
-          confidence: isRoutine ? 0.85 : (state.confidence ?? 0.6),
+          requiresLLM: Boolean(state.requiresLLM && this.llmAdapter),
+          confidence: state.confidence ?? 0.85,
         };
       })
 
@@ -78,7 +62,7 @@ export class CognitiveCycleManager {
         };
       })
 
-      // 5, 6 & 7: Seleção de Ação deliberada (Determinística ou via LLM)
+      // 5, 6 & 7: Seleção de Ação deliberada (Baseada em Utilidade ou via LLM)
       .addNode('selectAction', async (state) => {
         if (state.requiresLLM && this.llmAdapter) {
           metrics.increment('llm.calls');
@@ -103,30 +87,30 @@ export class CognitiveCycleManager {
           return { chosenAction: action };
         }
 
-        // Ação rotineira determinística (sem custo de inferência)
-        const routineAction: AgentAction = {
+        // Ação autônoma orientada a utilidade e affordances do mundo (Task-038)
+        const utilityAction: AgentAction = {
           agentId: state.agentId,
-          actionType: 'routine_navigation',
+          actionType: 'autonomous_navigation',
           targetId: state.targetId,
           parameters: {
             observation: state.observation,
             contextCount: state.relevantContext.length,
           },
-          reasonCode: 'ROUTINE_POLICY',
-          expectedOutcome: 'Deslocamento urbano seguro conforme normas de trânsito',
+          reasonCode: 'UTILITY_EVALUATION',
+          expectedOutcome: 'Deslocamento autônomo baseado em utilidade e affordances urbanas',
         };
 
-        return { chosenAction: routineAction };
+        return { chosenAction: utilityAction };
       })
 
-      // 8 & 9: Validação da ação conforme regras do mundo
+      // 8 & 9: Validação e instrumentação de auditoria da ação conforme regras do mundo
       .addNode('validateAction', async (state) => {
         const boostedConfidence = Math.min(1.0, (state.confidence ?? 0.8) + 0.1);
         if (state.chosenAction) {
           cognitiveAudit.logDecision(
             state.agentId,
             state.chosenAction,
-            state.chosenAction.reasonCode ?? 'POLICY',
+            state.chosenAction.reasonCode ?? 'UTILITY_EVALUATION',
             boostedConfidence,
           );
         }

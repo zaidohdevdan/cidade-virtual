@@ -2,9 +2,20 @@ import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import type { AgentAction, CitizenId, MemorySnippet } from '@cidade-virtual/types';
 import { CognitiveCycleManager } from '@cidade-virtual/agent-cognition';
 import type { LLMProviderAdapter } from '@cidade-virtual/llm-adapters';
-import { GoalPlanner, type Plan } from '@cidade-virtual/agent-planning';
+import {
+  GoalPlanner,
+  type Plan,
+  AgentMind,
+  type AgentMindConfig,
+  type Vec3,
+  type Percept,
+  type PerceivedActor,
+  type TrafficLight,
+  SYNAPSE_WORLD_ENTITIES,
+  distance2D,
+} from '@cidade-virtual/agent-planning';
 import { ExperienceRepository } from '@cidade-virtual/persistence';
-import { defaultLogger } from '@cidade-virtual/observability';
+import { defaultLogger, metrics, cognitiveAudit } from '@cidade-virtual/observability';
 import { MemoryService } from '../memory/memory.service';
 
 export interface CognitiveContext {
@@ -12,6 +23,9 @@ export interface CognitiveContext {
   currentObservation: string;
   nearbyObjects: string[];
   activeGoal?: string;
+  currentPosition?: Vec3;
+  percept?: Percept;
+  mind?: AgentMind;
 }
 
 export interface ProcessCycleOptions {
@@ -24,6 +38,7 @@ export class CognitionService {
   private cognitiveManager: CognitiveCycleManager;
   private readonly goalPlanner: GoalPlanner;
   private llmAdapter?: LLMProviderAdapter;
+  private readonly minds = new Map<string, AgentMind>();
 
   constructor(
     @Inject(MemoryService) private readonly memoryService: MemoryService,
@@ -59,12 +74,59 @@ export class CognitionService {
   }
 
   /**
-   * Executa o ciclo cognitivo deliberativo conectando percepção, memória vetorial e grafo LangGraph:
+   * Retorna o CognitiveCycleManager (instrumentação e auditoria do ciclo).
+   */
+  getCognitiveManager(): CognitiveCycleManager {
+    return this.cognitiveManager;
+  }
+
+  /**
+   * Registra a mente subjetiva de um habitante (AgentMind) no serviço de cognição.
+   */
+  registerMind(mind: AgentMind): void {
+    this.minds.set(mind.id, mind);
+  }
+
+  /**
+   * Obtém a mente ativa de um habitante caso já registrada.
+   */
+  getMind(citizenId: string): AgentMind | undefined {
+    return this.minds.get(citizenId);
+  }
+
+  /**
+   * Obtém ou inicializa transparentemente uma mente autônoma para o habitante.
+   */
+  getOrCreateMind(citizenId: string, customConfig?: Partial<AgentMindConfig>): AgentMind {
+    let mind = this.minds.get(citizenId);
+    if (!mind) {
+      mind = new AgentMind({
+        id: citizenId,
+        name: customConfig?.name ?? citizenId,
+        role: customConfig?.role ?? 'citizen',
+        biography: customConfig?.biography ?? 'Habitante autônomo da cidade virtual',
+        personality: customConfig?.personality ?? {
+          openness: 0.7,
+          conscientiousness: 0.6,
+          extraversion: 0.6,
+          agreeableness: 0.7,
+          neuroticism: 0.3,
+        },
+        initialNeeds: customConfig?.initialNeeds,
+        initialMemory: customConfig?.initialMemory,
+      });
+      this.minds.set(citizenId, mind);
+    }
+    return mind;
+  }
+
+  /**
+   * Executa o ciclo cognitivo deliberativo unificado (Task-038: Cérebro Único):
    * 1. Recupera memórias semânticas pertinentes no Qdrant
-   * 2. Constrói contexto unificado com nearbyObjects e memórias anteriores
-   * 3. Executa o grafo cognitivo (LangGraph) para decidir a ação (rotineira ou deliberada via LLM)
-   * 4. Persiste a ação decidida no PostgreSQL como experiência do tipo 'action_result'
-   * 5. Emite auditoria cognitiva estruturada
+   * 2. Planeja hierarquicamente via GoalPlanner (se houver objetivo ativo)
+   * 3. Orquestra a deliberação EXCLUSIVAMENTE via AgentMind.decideNextIntention (+ llm-deliberator)
+   * 4. Instrumenta e audita a decisão via cognitiveAudit e telemetria
+   * 5. Persiste a experiência em agent_experiences (PostgreSQL)
    */
   async processCycle(context: CognitiveContext, options?: ProcessCycleOptions): Promise<AgentAction> {
     const startTime = Date.now();
@@ -81,11 +143,7 @@ export class CognitionService {
       this.logger.warn(`Falha ao recuperar memórias no Qdrant para ${context.citizenId}: ${(err as Error).message}`);
     }
 
-    const memoryContexts = relevantMemories.map(
-      (m) => `[Memória Anterior ${m.memoryType ?? 'geral'}]: ${m.content}`,
-    );
-
-    // 2. Planejamento hierárquico estruturado via GoalPlanner
+    // 2. Planejamento hierárquico estruturado via GoalPlanner (se houver meta explícita)
     let activePlan: Plan | undefined;
     if (context.activeGoal) {
       try {
@@ -100,42 +158,91 @@ export class CognitionService {
       }
     }
 
-    const fullContext = [
-      ...memoryContexts,
-      `Objetivo Ativo: ${context.activeGoal ?? 'manter rotina urbana segura'}`,
-      ...(activePlan
-        ? [
-            `Plano Ativo (${activePlan.strategy}, conf: ${activePlan.confidence}): ${activePlan.steps.map((s) => `${s.stepIndex}.${s.action}`).join(' -> ')}`,
-          ]
-        : []),
-      ...(context.nearbyObjects.length ? [`Objetos Próximos: ${context.nearbyObjects.join(', ')}`] : []),
-    ];
+    // 3. Orquestração exclusiva via AgentMind (Task-038: Cérebro Único)
+    const mind = context.mind ?? this.getOrCreateMind(context.citizenId);
 
-    // 3. Avaliação da ação através do CognitiveCycleManager
-    const targetId = context.nearbyObjects[0];
-    const action = await this.cognitiveManager.evaluateAction(
-      context.citizenId,
-      context.currentObservation,
-      targetId,
+    const currentPos: Vec3 = context.currentPosition ?? { x: 0, y: 0.19, z: 0 };
+    const perceivedEntities = SYNAPSE_WORLD_ENTITIES.map((e) => ({
+      entity: e,
+      distance: distance2D(currentPos, e.approach ?? e.position),
+    }));
+
+    const perceivedActors: PerceivedActor[] = [];
+    const isPlayerNearby = (context.nearbyObjects ?? []).some((obj) =>
+      /daniel|avatar|player/i.test(obj),
+    );
+    if (isPlayerNearby) {
+      perceivedActors.push({
+        id: 'avatar-daniel',
+        name: 'Daniel',
+        kind: 'player',
+        position: { x: currentPos.x + 1.5, y: currentPos.y ?? 0.19, z: currentPos.z + 1.5 },
+        distance: 2.0,
+      });
+    }
+
+    const trafficLight: TrafficLight = /vermelho|red/i.test(context.currentObservation) ? 'red' : 'green';
+
+    const percept: Percept = context.percept ?? {
+      position: currentPos,
+      entities: perceivedEntities,
+      actors: perceivedActors,
+      trafficLight,
+    };
+
+    if (options?.forceLLM && this.llmAdapter) {
+      metrics.increment('llm.calls');
+    }
+
+    const intention = await mind.decideNextIntention(
+      currentPos,
+      percept,
+      this.llmAdapter,
       {
-        relevantContext: fullContext,
         forceLLM: options?.forceLLM,
       },
     );
 
-    action.parameters = {
-      ...action.parameters,
-      retrievedMemoriesCount: relevantMemories.length,
-      ...(activePlan
-        ? {
-            activePlanId: activePlan.id,
-            activePlanStrategy: activePlan.strategy,
-            activePlanStepsCount: activePlan.steps.length,
-          }
-        : {}),
+    const isLLM = intention.source === 'llm';
+    const actionType = isLLM
+      ? 'llm_deliberated_action'
+      : (intention.candidate.affordance || 'autonomous_navigation');
+    const reasonCode = isLLM ? 'LLM_REASONING' : 'UTILITY_DECISION';
+
+    const action: AgentAction = {
+      agentId: context.citizenId,
+      actionType,
+      targetId: intention.candidate.targetId,
+      parameters: {
+        destination: intention.candidate.destination,
+        targetLabel: intention.candidate.targetLabel,
+        affordance: intention.candidate.affordance,
+        score: intention.candidate.score,
+        source: intention.source,
+        speech: intention.speech,
+        observation: context.currentObservation,
+        retrievedMemoriesCount: relevantMemories.length,
+        ...(activePlan
+          ? {
+              activePlanId: activePlan.id,
+              activePlanStrategy: activePlan.strategy,
+              activePlanStepsCount: activePlan.steps.length,
+            }
+          : {}),
+      },
+      reasonCode,
+      expectedOutcome: intention.reason,
     };
 
-    // 3. Persistência do resultado da ação em agent_experiences (PostgreSQL)
+    // 4. Instrumentação e auditoria do ciclo via CognitiveCycleManager / cognitiveAudit
+    cognitiveAudit.logDecision(
+      context.citizenId,
+      action,
+      reasonCode,
+      isLLM ? 0.95 : 0.85,
+    );
+
+    // 5. Persistência do resultado da ação em agent_experiences (PostgreSQL)
     if (this.expRepo) {
       try {
         await this.expRepo.record({
@@ -145,13 +252,15 @@ export class CognitionService {
           sourceType: 'action_result',
           confidence: '1.00',
           importance: '0.70',
-          relatedEntityIds: context.nearbyObjects,
+          relatedEntityIds: context.nearbyObjects ?? [],
           metadata: {
             actionType: action.actionType,
             reasonCode: action.reasonCode,
             expectedOutcome: action.expectedOutcome,
             observation: context.currentObservation,
             memoriesConsulted: relevantMemories.length,
+            intentionSource: intention.source,
+            affordance: intention.candidate.affordance,
           },
         });
       } catch (err) {
@@ -159,7 +268,7 @@ export class CognitionService {
       }
     }
 
-    // 4. Auditoria cognitiva estruturada
+    // 6. Auditoria de telemetria estruturada
     const durationMs = Date.now() - startTime;
     this.logger.log(
       `[AUDIT] [COGNITION] Habitante ${context.citizenId} decidiu ação '${action.actionType}' (motivo: ${action.reasonCode}) em ${durationMs}ms`,
@@ -170,6 +279,7 @@ export class CognitionService {
       reasonCode: action.reasonCode,
       durationMs,
       memoriesUsed: relevantMemories.length,
+      intentionSource: intention.source,
     });
 
     return action;

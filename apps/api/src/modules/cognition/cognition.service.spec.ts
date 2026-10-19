@@ -42,23 +42,24 @@ describe('CognitionService — Ciclo Cognitivo Real (Task-004)', () => {
     cognitionService = new CognitionService(mockMemoryService, mockExpRepo, mockLLMAdapter);
   });
 
-  it('deve executar ação rotineira determinística sem chamar LLM', async () => {
+  it('deve executar ação autônoma por utilidade sem chamar LLM', async () => {
     const initialLLMCalls = metrics.getSnapshot().counters['llm.calls'] ?? 0;
 
     const action = await cognitionService.processCycle({
       citizenId: 'citizen-test-1' as CitizenId,
-      currentObservation: 'Caminhando pela calçada em direção ao trabalho',
+      currentObservation: 'Observando a calçada e arredores da praça',
       nearbyObjects: ['calcada-central', 'poste-luz'],
-      activeGoal: 'chegar ao trabalho',
+      activeGoal: 'explorar a cidade',
     });
 
     expect(action).toBeDefined();
     expect(action.agentId).toBe('citizen-test-1');
-    expect(action.reasonCode).toBe('ROUTINE_POLICY');
+    expect(action.reasonCode).toBe('UTILITY_DECISION');
+    expect(action.actionType).toBeDefined();
     expect(mockMemoryService.semanticQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         citizenId: 'citizen-test-1',
-        queryText: 'Caminhando pela calçada em direção ao trabalho',
+        queryText: 'Observando a calçada e arredores da praça',
       }),
     );
     expect(mockExpRepo.record).toHaveBeenCalledWith(
@@ -103,7 +104,7 @@ describe('CognitionService — Ciclo Cognitivo Real (Task-004)', () => {
 
   it('deve gerar diálogo conversacional via LLM enriquecido com memórias e arquétipo', async () => {
     (mockLLMAdapter.complete as any).mockResolvedValueOnce({
-      content: 'Olá Daniel! A patrulha da via principal está operando com total atenção.',
+      content: 'Olá Daniel! A circulação da via principal está fluindo com total atenção.',
     });
 
     const dialogue = await cognitionService.generateConversationalDialogue({
@@ -117,7 +118,7 @@ describe('CognitionService — Ciclo Cognitivo Real (Task-004)', () => {
       trafficLight: 'green',
     });
 
-    expect(dialogue).toBe('Olá Daniel! A patrulha da via principal está operando com total atenção.');
+    expect(dialogue).toBe('Olá Daniel! A circulação da via principal está fluindo com total atenção.');
     expect(mockMemoryService.semanticQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         citizenId: 'agent-vega',

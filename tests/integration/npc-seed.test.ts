@@ -72,7 +72,7 @@ describe('Task-013 — Popular 3-5 NPCs com Fase Meta de Consciência', () => {
 
   it('cada NPC deve possuir no mínimo 3 memórias/experiências episódicas iniciais no PostgreSQL', async () => {
     for (const config of SEED_CITIZENS) {
-      const experiences = await citizensService.getCitizenExperiences(config.id);
+      const experiences = await citizensService.getCitizenExperiences(config.id, 50, 'direct_observation');
       expect(experiences.length).toBeGreaterThanOrEqual(3);
 
       for (const exp of experiences) {

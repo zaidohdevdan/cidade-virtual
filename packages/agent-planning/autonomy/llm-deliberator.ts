@@ -138,6 +138,14 @@ Qual opção você decide seguir agora? Responda no formato JSON solicitado.`;
         source: 'llm',
       };
     }
+
+    if (response.content && response.content.trim().length > 0) {
+      return {
+        candidate: topCandidate,
+        reason: response.content.trim(),
+        source: 'llm',
+      };
+    }
   } catch {
     // Em caso de falha de rede/timeout, prossegue sem interrupção
   }

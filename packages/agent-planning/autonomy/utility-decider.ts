@@ -32,6 +32,7 @@ export interface DeciderOptions {
   maxDistance?: number;
   explorationNoise?: number;
   rng?: () => number;
+  forceLLM?: boolean;
 }
 
 export function distance2D(a: Vec3, b: Vec3): number {

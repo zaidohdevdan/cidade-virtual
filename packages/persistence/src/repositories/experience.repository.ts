@@ -1,4 +1,4 @@
-import { eq, desc, gte, inArray } from 'drizzle-orm';
+import { eq, desc, gte, inArray, and } from 'drizzle-orm';
 import { AppDatabase } from '../client';
 import { agentExperiencesTable, AgentExperienceRow, NewAgentExperienceRow } from '../schema';
 
@@ -14,11 +14,15 @@ export class ExperienceRepository {
     return rows[0];
   }
 
-  async getByAgentId(agentId: string, limit: number = 50): Promise<AgentExperienceRow[]> {
+  async getByAgentId(agentId: string, limit: number = 50, sourceType?: string): Promise<AgentExperienceRow[]> {
+    const conditions = [eq(agentExperiencesTable.agentId, agentId)];
+    if (sourceType) {
+      conditions.push(eq(agentExperiencesTable.sourceType, sourceType as any));
+    }
     return this.db
       .select()
       .from(agentExperiencesTable)
-      .where(eq(agentExperiencesTable.agentId, agentId))
+      .where(and(...conditions))
       .orderBy(desc(agentExperiencesTable.occurredAt))
       .limit(limit);
   }

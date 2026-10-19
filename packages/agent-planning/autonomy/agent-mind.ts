@@ -202,9 +202,9 @@ export class AgentMind {
     const playerActor = percept.actors.find((a) => a.kind === 'player');
     const playerNearby = !!playerActor && playerActor.distance <= 3.5;
 
-    // Se o jogador estiver muito próximo, ou se o top 2 estiver quase empatado e tivermos LLM
+    // Se forçado, ou se o jogador estiver próximo e houver opção de deliberação/interação
     const topDiff = ranked.length >= 2 ? ranked[0].score - ranked[1].score : 1.0;
-    const shouldInvokeLLM = !!llm && (playerNearby || topDiff < 0.12);
+    const shouldInvokeLLM = !!llm && (Boolean(options.forceLLM) || (playerNearby && topDiff < 0.25));
 
     let resultIntention: Intention;
 

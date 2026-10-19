@@ -122,6 +122,8 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         goalIndex: 0,
         isDeliberating: false,
       });
+
+      this.cognitionService?.registerMind?.(mind);
     }
 
     // 3. Conecta este serviço ao WorldGateway para receber diálogos e eventos do jogador
@@ -322,6 +324,8 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
             currentObservation: observation,
             nearbyObjects: ['avatar-daniel', 'calcada-central'],
             activeGoal: `interagir com Daniel ou prosseguir com ${agent.lastAction}`,
+            mind: agent.mind,
+            currentPosition: nextPos,
           },
           { forceLLM: true },
         );
@@ -443,12 +447,14 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     const currentPos = agent.currentPosition || config.initialPosition;
 
     try {
-      // 1. Delibera ação no ciclo cognitivo conectando Qdrant e LangGraph
+      // 1. Delibera ação no ciclo cognitivo conectando Qdrant e AgentMind (Task-038: Cérebro Único)
       const action = await this.cognitionService.processCycle({
         citizenId: config.id as any,
         currentObservation: `O habitante Daniel aproximou-se em [${currentPos.x.toFixed(1)}, ${currentPos.z.toFixed(1)}] e perguntou: "${playerMessage}". Sinal está ${trafficLight}.`,
         nearbyObjects: ['avatar-daniel', 'calcada-central', 'semaforo-1'],
         activeGoal: `conversar com o habitante Daniel conforme o papel de ${config.role}`,
+        mind: agent.mind,
+        currentPosition: currentPos,
       });
 
       // 2. Delibera resposta conversacional via LLM conectada (se ativa).
@@ -735,6 +741,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
           neuroticism: 0.25,
         },
       });
+      this.cognitionService?.registerMind?.(state.mind);
       this.logger.log(`[Task-036] Mente do agente ${agentId} redefinida para baseline.`);
     }
   }

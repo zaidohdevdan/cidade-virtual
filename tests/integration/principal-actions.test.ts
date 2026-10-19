@@ -248,7 +248,8 @@ describe('Task-025 — Contrato Principal + AgentAction API e RBAC', () => {
       expect(actionRequest.principal.id).toBe(`principal_${agentId}`);
       expect(actionRequest.principal.type).toBe('npc');
       expect(actionRequest.principal.roles).toContain('citizen');
-      expect(actionRequest.actionType).toBe('routine_navigation');
+      expect(actionRequest.actionType).toBe('autonomous_navigation');
+      expect(actionRequest.reasonCode).toBe('UTILITY_EVALUATION');
       expect(actionRequest.correlationId).toBeDefined();
 
       // 2. ActionsService processa a ação resultante com autorização e sucesso

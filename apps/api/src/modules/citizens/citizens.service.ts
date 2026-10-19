@@ -132,15 +132,14 @@ export class CitizensService implements OnModuleInit {
    * Obtém as experiências registradas de um habitante.
    */
   async getCitizenExperiences(citizenId: string, limit: number = 50, sourceType?: string) {
-    const list = await this.expRepo.getByAgentId(citizenId, 300);
     if (sourceType) {
-      return list.filter((e) => e.sourceType === sourceType).slice(0, limit);
+      return this.expRepo.getByAgentId(citizenId, limit, sourceType);
     }
-    const directObservations = list.filter((e) => e.sourceType === 'direct_observation');
+    const directObservations = await this.expRepo.getByAgentId(citizenId, limit, 'direct_observation');
     if (directObservations.length >= 3) {
-      return directObservations.slice(0, limit);
+      return directObservations;
     }
-    return list.slice(0, limit);
+    return this.expRepo.getByAgentId(citizenId, limit);
   }
 
   /**

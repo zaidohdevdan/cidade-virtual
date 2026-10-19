@@ -51,7 +51,7 @@ export class ActionsService {
       case 'move':
         return this.handleMoveAction(request, now);
 
-      case 'routine_navigation':
+      case 'autonomous_navigation':
       case 'llm_deliberated_action':
         this.logger.log(
           `[AUDIT] [ACTION_API] Deliberação cognitiva '${actionType}' aprovada para Principal ${principal.id}`,
@@ -101,7 +101,7 @@ export class ActionsService {
   private getRequiredPermission(actionType: string): string {
     switch (actionType) {
       case 'move':
-      case 'routine_navigation':
+      case 'autonomous_navigation':
       case 'llm_deliberated_action':
         return 'action:move';
       case 'observe':

@@ -822,5 +822,45 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **Suíte Completa:** `npm test` — **25 de 25 projetos aprovados**.
 - **Checagem de Tipos:** `npm run typecheck` — **0 erros de TypeScript em todo o monorepo**.
 
+---
+
+## [2026-10-19] — Task-038: Cérebro Único — Aposentadoria da Política por Palavra-Chave
+
+### 1. Diagnóstico do Problema (Divergência de Cérebros)
+- O subsistema de cognição continha um resíduo legado em `packages/agent-cognition/index.ts`: o nó `interpretSituation` utilizava correspondência hardcoded de strings (`obsLower.includes('caminha') || ... ('patrulha') ... ('rotina')`), roteando o agente para uma ação enlatada `routine_navigation` com `reasonCode: 'ROUTINE_POLICY'`.
+- Essa lógica coexistia em paralelo ao cérebro orgânico `AgentMind` + `utility-decider` + `llm-deliberator`, violando o princípio fundamental do projeto de **zero comportamento pré-fixado**.
+
+### 2. Mudanças Estruturais Realizadas
+1. **Erradicação Completa de Palavras-chave em `packages/agent-cognition`:**
+   - Removidas todas as checagens por palavras-chave (`caminha`, `patrulha`, `rotina`, etc.).
+   - Removidos os códigos legados `ROUTINE_POLICY` e `routine_navigation`.
+   - Substituídos por avaliação autônoma orientada a utilidade (`actionType: 'autonomous_navigation'`, `reasonCode: 'UTILITY_EVALUATION'`) e deliberação por LLM (`LLM_REASONING`).
+2. **Orquestração Exclusiva via `AgentMind` em `CognitionService` (`apps/api`):**
+   - `CognitionService.processCycle(...)` agora orquestra a tomada de decisão exclusivamente através de `AgentMind.decideNextIntention(...)`.
+   - Registrador de mentes (`registerMind`, `getMind`, `getOrCreateMind`) garantindo que `SimulationService` e `CognitionService` compartilhem o mesmo cérebro subjetivo sem discrepâncias.
+   - Percepção de entidades (`SYNAPSE_WORLD_ENTITIES`), semáforo e proximidade de atores (como o avatar Daniel) alimentam diretamente a função de utilidade hedônica.
+3. **Harmonização do `ActionsService` (`apps/api`):**
+   - Atualizados os manipuladores e permissões RBAC para `autonomous_navigation`.
+4. **Resiliência e Tolerância de Deliberação (`packages/agent-planning`):**
+   - `DeciderOptions` estendido com `forceLLM?: boolean`.
+   - `shouldInvokeLLM` ajustado para ativar a LLM quando forçado pelo ciclo ou na presença próxima do avatar Daniel com ambivalência de escolhas (`topDiff < 0.25`).
+   - `deliberateWithLLM` enriquecido para aceitar respostas em texto puro quando o modelo não responder estritamente em JSON, preservando o status `source: 'llm'`.
+5. **Otimização de Consulta em `ExperienceRepository` (`packages/persistence`):**
+   - `getByAgentId` agora suporta filtragem atômica de `sourceType` no banco PostgreSQL via `drizzle-orm`, prevenindo truncamento em bancos com alto volume de ações.
+
+### 3. Validação e Critérios de Aceite
+- **Zero Ocorrências em Caminhos de Decisão:** `rg "includes\('caminha'|ROUTINE_POLICY|routine_navigation"` retorna **0** ocorrências em todo o código do monorepo.
+- **Auditoria 100% Utilitária / LLM:** Todas as decisões registradas nos testes e no runtime produzem `reasonCode` prefixado por `UTILITY_*` (`UTILITY_DECISION`, `UTILITY_EVALUATION`) ou `LLM_*` (`LLM_REASONING`).
+- **Suíte de Testes 100% Verde:**
+  - `apps/api/src/modules/cognition/cognition.service.spec.ts` — **4 de 4 testes aprovados**.
+  - `tests/integration/principal-actions.test.ts` — **10 de 10 testes aprovados**.
+  - `tests/integration/agent-mind-persistence.test.ts` — **3 de 3 testes aprovados**.
+  - `tests/integration/npc-seed.test.ts` — **4 de 4 testes aprovados**.
+  - `tests/e2e/learning-flow.test.ts` — **1 de 1 teste aprovado**.
+  - `npx vitest run tests/` — **15 de 15 arquivos de teste e 69 de 69 testes aprovados**.
+  - `npm test` — **25 de 25 projetos Nx aprovados**.
+  - `npm run typecheck` — **0 erros de TypeScript**.
+  - `scripts/check-schema-drift.ts` — **100% sincronizado**.
+
 
 
