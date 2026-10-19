@@ -8,13 +8,19 @@ import {
   Body,
   HttpCode,
   HttpStatus,
+  Inject,
+  Optional,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import type { AuthPrincipal } from './auth.types';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  private readonly authService: AuthService;
+
+  constructor(@Optional() @Inject(AuthService) authService?: AuthService) {
+    this.authService = authService ?? new AuthService();
+  }
 
   /**
    * Endpoint público para o cliente 3D obter um token de sessão de convidado (Guest Principal).
