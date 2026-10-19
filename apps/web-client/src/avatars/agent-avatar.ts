@@ -454,8 +454,14 @@ export class AgentAvatar {
    * Emite uma fala ou pensamento visível em balão estilizado sobre o avatar (Task-026).
    * Os balões de conversa só são emitidos quando o avatar do jogador estiver próximo (<= 3.5m)
    * ou se forceShow for explicitamente verdadeiro (ex: diálogo interativo face a face).
+   * Alertas sobre bloqueios e desvios não emitem áudio TTS.
    */
-  public say(message: string, durationSeconds: number = 4.0, forceShow: boolean = false): void {
+  public say(
+    message: string,
+    durationSeconds: number = 4.0,
+    forceShow: boolean = false,
+    playAudio: boolean = true,
+  ): void {
     const isAllowed = forceShow || this.isNearPlayer;
     if (!isAllowed) {
       return;
@@ -498,11 +504,14 @@ export class AgentAvatar {
     this.speechBubble.style.opacity = '1';
     this.speechBubble.style.display = 'block';
 
-    // Dispara síntese de voz TTS apenas quando autorizado por proximidade
-    try {
-      speechSynth.speak(this.config.id, message).catch(() => {});
-    } catch {
-      // Ignora silenciosamente se o navegador bloquear autoplay
+    // Alertas sobre bloqueios físicos, fuga de becos e locais livres NÃO disparam áudio TTS
+    const isBlockageAlert = /bloqueio|obstru|saída|travad|beco|livre|obstáculo/i.test(message);
+    if (playAudio && !isBlockageAlert) {
+      try {
+        speechSynth.speak(this.config.id, message).catch(() => {});
+      } catch {
+        // Ignora silenciosamente se o navegador bloquear autoplay
+      }
     }
   }
 
@@ -1026,7 +1035,7 @@ export class AgentAvatar {
       'Passagem travada! Memorizei o obstáculo e rumei para área desobstruída.',
     ];
     const phrase = phrases[Math.floor(Math.random() * phrases.length)];
-    this.say(phrase, 4.0, true);
+    this.say(phrase, 4.0, true, false);
 
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       window.dispatchEvent(
@@ -1265,7 +1274,7 @@ export class AgentAvatar {
         this.escapeTarget = null;
         this.waitTimer = 2.5; // Permanece no local livre alcançado
         this.speed = 0;
-        this.say('Ufa! Encontrei a saída e cheguei a um local livre.', 3.5, true);
+        this.say('Ufa! Encontrei a saída e cheguei a um local livre.', 3.5, true, false);
         return;
       }
       if (isServerTarget) {
@@ -1407,15 +1416,11 @@ export class AgentAvatar {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OS 7 CIDADÃOS ESTELARES DA CIDADE VIRTUAL
-// Inspirados nas estrelas da Constelação de Lira:
-//   1. Vega (Alpha Lyrae) — Estrela branco-azulada mais brilhante da Lira
-//   2. Sulafat (Gamma Lyrae) — Segunda estrela mais brilhante
-//   3. Sheliak (Beta Lyrae) — Famosa estrela binária eclipsante
-//   4. Epsilon (Epsilon Lyrae) — Famoso sistema quádruplo "Dupla Dupla"
-//   5. Aladfar (Delta Lyrae) — Estrela carmesim nobre da Lira
-//   6. Xihe (Zeta Lyrae) — Deusa solar e estrela característica
-//   7. Chasoň (Eta Lyrae) — Radiante estrela de energia jovem
+// OS 3 CIDADÃOS ESTELARES ATIVOS NA CIDADE VIRTUAL
+// Reduzido para exatamente 3 NPCs principais:
+//   1. Vega (Alpha Lyrae) — Pioneira & Navegadora
+//   2. Sulafat (Gamma Lyrae) — Cientista & Ecologista
+//   3. Sheliak (Beta Lyrae) — Engenheiro & Atleta
 // ─────────────────────────────────────────────────────────────────────────────
 export const CITY_AGENTS: AgentConfig[] = [
   {
@@ -1482,94 +1487,6 @@ export const CITY_AGENTS: AgentConfig[] = [
       new THREE.Vector3(0, 0.19, 75.5),    // Banco Perimetral Sul
       new THREE.Vector3(72, 0.19, 72),     // Mirante Panorâmico Sudeste
       new THREE.Vector3(55.5, 0.19, 9.5),  // Conector Leste
-    ],
-  },
-  {
-    id: 'agent-epsilon',
-    name: 'Epsilon',
-    starDesignation: 'Epsilon Lyrae (ε Lyr)',
-    role: 'Filósofo & Analista',
-    color: 0x5e35b1, // Violeta cósmico
-    accentColor: 0xd1c4e9, // Lavanda suave
-    hairColor: 0xdcdde1, // Prateado platinado
-    hairStyle: 'long',
-    skinColor: 0xffe0bd,
-    pantsColor: 0x263238,
-    shoeColor: 0x121212,
-    accessory: 'glasses',
-    labelColor: 'linear-gradient(135deg, rgba(81, 45, 168, 0.9), rgba(126, 87, 194, 0.9))',
-    startPosition: new THREE.Vector3(20, 0.19, 8),
-    patrolPoints: [
-      new THREE.Vector3(20, 0.19, 8),
-      new THREE.Vector3(55.5, 0.19, 9.5),
-      new THREE.Vector3(75.5, 0.19, 0),    // Banco Perimetral Leste
-      new THREE.Vector3(55.5, 0.19, -9.5),
-    ],
-  },
-  {
-    id: 'agent-aladfar',
-    name: 'Aladfar',
-    starDesignation: 'Delta Lyrae (δ Lyr)',
-    role: 'Artista & Designer',
-    color: 0xad1457, // Carmesim rubi profundo
-    accentColor: 0xf48fb1, // Rosa quartzo
-    hairColor: 0x1a1a1a, // Preto ônix
-    hairStyle: 'beanie',
-    skinColor: 0x8d5524, // Negra nobre retinta
-    pantsColor: 0x1e1e24,
-    shoeColor: 0x4a148c,
-    accessory: 'satchel',
-    labelColor: 'linear-gradient(135deg, rgba(173, 20, 87, 0.9), rgba(233, 30, 99, 0.9))',
-    startPosition: new THREE.Vector3(-16, 0.19, 16),
-    patrolPoints: [
-      new THREE.Vector3(-16, 0.19, 28),
-      new THREE.Vector3(-28, 0.19, 28),
-      new THREE.Vector3(-28, 0.19, 16),
-      new THREE.Vector3(-16, 0.19, 16),
-    ],
-  },
-  {
-    id: 'agent-xihe',
-    name: 'Xihe',
-    starDesignation: 'Zeta Lyrae (ζ Lyr)',
-    role: 'Arquiteta & Botânica',
-    color: 0x00838f, // Turquesa petróleo
-    accentColor: 0x80deea, // Ciano brilhante
-    hairColor: 0x3e2723, // Castanho chocolate
-    hairStyle: 'curly',
-    skinColor: 0xc68642, // Parda quente
-    pantsColor: 0x283593,
-    shoeColor: 0x004d40,
-    accessory: 'smartwatch',
-    labelColor: 'linear-gradient(135deg, rgba(0, 131, 143, 0.9), rgba(0, 172, 193, 0.9))',
-    startPosition: new THREE.Vector3(-10, 0.19, -20),
-    patrolPoints: [
-      new THREE.Vector3(-10, 0.19, -20),
-      new THREE.Vector3(-18.5, 0.19, -45), // Alameda Noroeste do Super Market
-      new THREE.Vector3(0, 0.19, -75.5),   // Banco Perimetral Norte
-      new THREE.Vector3(18.5, 0.19, -45),  // Alameda Nordeste do Super Market
-    ],
-  },
-  {
-    id: 'agent-chason',
-    name: 'Chasoň',
-    starDesignation: 'Eta Lyrae (η Lyr)',
-    role: 'Mensageiro & Skatista',
-    color: 0xf9a825, // Amarelo solar / ouro
-    accentColor: 0xfff59d, // Amarelo pastel
-    hairColor: 0xd4a373, // Louro caramelo
-    hairStyle: 'cap',
-    skinColor: 0xf1c27d, // Bronzeado natural
-    pantsColor: 0x455a64,
-    shoeColor: 0x263238,
-    accessory: 'cap_reverse',
-    labelColor: 'linear-gradient(135deg, rgba(245, 127, 23, 0.9), rgba(251, 192, 45, 0.9))',
-    startPosition: new THREE.Vector3(10, 0.19, 14),
-    patrolPoints: [
-      new THREE.Vector3(10, 0.19, 24),
-      new THREE.Vector3(-9.5, 0.19, 52),
-      new THREE.Vector3(0, 0.19, 72),
-      new THREE.Vector3(10, 0.19, 14),
     ],
   },
 ];

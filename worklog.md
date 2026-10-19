@@ -1202,7 +1202,37 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 ### 3. Validação
 - `npx vitest run apps/web-client`: **8 arquivos e 51 testes aprovados (100%)**.
 - `npx vitest run tests/`: **22 arquivos e 112 testes aprovados (100%)**.
-- Vite Dev Server ativo e funcionando na porta 3000.
+---
+
+## Task ID: silenciamento-alertas-3-npcs-avatar-sem-aurea
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Baixo / UX & Performance Visual
+
+### 1. Resumo Executivo
+Atendimento à solicitação de refinamento de experiência urbana e visual:
+1. **Silenciamento dos Alertas de Áudio de Bloqueio:** As notificações e falas de NPCs sobre bloqueios, obstáculos, saídas ou busca de locais livres continuam sendo expressas visualmente nos balões de fala 3D, porém com o áudio TTS (`speechSynth`) completamente suprimido.
+2. **Redução para 3 NPCs Agentes Ativos:** O conjunto de cidadãos simulados na cidade foi otimizado para exatamente 3 agentes (`Vega`, `Sulafat` e `Sheliak`), mantendo suas rotas, papéis e desvios inteligentes de forma concentrada e fluida.
+3. **Remoção da Áurea Mística do Avatar Daniel:** Eliminadas todas as cascas de fogo azul transparente, coroa de chamas, luz mística central, halos de piso e partículas de labaredas do DanielAvatar, mantendo o avatar com geometria limpa e colisão física íntegra.
+
+### 2. Implementações Realizadas
+- **Silenciamento de Áudio em Bloqueios (`agent-avatar.ts`):**
+  - Adicionado parâmetro `playAudio: boolean = true` em `AgentAvatar.say()`.
+  - Inserida verificação regex para mensagens de alerta de bloqueio/obstrução/saída/beco/livre/obstáculo (`isBlockageAlert`), suprimindo chamadas a `speechSynth.speak` caso verdadeiro ou caso `playAudio === false`.
+  - Chamadas de alerta de fuga e chegada a local livre configuradas com `playAudio = false`.
+- **Redução do Censo de NPCs para 3 Agentes (`agent-avatar.ts`):**
+  - Reduzido o array `CITY_AGENTS` para conter os 3 agentes canônicos: `Vega`, `Sulafat` e `Sheliak`.
+- **Limpeza do Avatar Daniel (`daniel-avatar.ts`):**
+  - Removidos os campos `auraGroup`, `innerFlameShell`, `outerFlameShell`, `flameCrownShell`, `auraLight`, `flameParticles`, `auraGroundRing`, `auraGroundGlow` e `auraTime`.
+  - Removidos os métodos `buildBlueFlameAura` e `updateBlueFlameAura`.
+- **Testes Unitários Atualizados:**
+  - `agent-avatar.spec.ts`: atualizado para testar exatamente os 3 NPCs ativos e verificar que alertas de bloqueio/fuga não disparam `speechSynth.speak`.
+  - `daniel-avatar.spec.ts`: adicionado teste de integridade assegurando que Daniel não possui PointLight nem cascas de áurea mística.
+
+### 3. Validação
+- `npx vitest run apps/web-client`: **8 arquivos e 53 testes aprovados (100%)**.
+- `npm test`: **26/26 projetos NX aprovados (100%)**.
 
 
 

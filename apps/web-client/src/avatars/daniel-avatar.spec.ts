@@ -51,4 +51,15 @@ describe('DanielAvatar — Locomoção Urbana e Acesso ao Anel Viário Perimetra
     expect(player.position.x).toBeGreaterThanOrEqual(70);
     expect(player.position.x).toBeLessThanOrEqual(82);
   });
+
+  it('Daniel deve ser construído como avatar padrão limpo, sem áurea mística de chamas/luzes', () => {
+    // Não deve haver PointLight ou grupos de áurea anexados ao modelo
+    let hasPointLight = false;
+    player.mesh.traverse((child) => {
+      if ((child as any).isPointLight) {
+        hasPointLight = true;
+      }
+    });
+    expect(hasPointLight).toBe(false);
+  });
 });

@@ -44,17 +44,31 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     agent.dispose();
   });
 
-  it('deve possuir exatamente os 7 cidadãos estelares inspirados na Constelação de Lira', () => {
-    expect(CITY_AGENTS).toHaveLength(7);
+  it('deve possuir exatamente os 3 cidadãos estelares ativos (Vega, Sulafat e Sheliak)', () => {
+    expect(CITY_AGENTS).toHaveLength(3);
 
     const names = CITY_AGENTS.map((a) => a.name);
-    expect(names).toContain('Vega');
-    expect(names).toContain('Sulafat');
-    expect(names).toContain('Sheliak');
-    expect(names).toContain('Epsilon');
-    expect(names).toContain('Aladfar');
-    expect(names).toContain('Xihe');
-    expect(names).toContain('Chasoň');
+    expect(names).toEqual(['Vega', 'Sulafat', 'Sheliak']);
+  });
+
+  it('alertas de bloqueio, fuga e memória de obstáculo NÃO devem emitir áudio de voz pelo speechSynth', () => {
+    const speakSpy = vi.spyOn(speechSynth, 'speak').mockResolvedValue(true);
+    agent.isNearPlayer = true;
+
+    // Mensagens de bloqueio / fuga devem mostrar balão, mas áudio deve ser silenciado
+    agent.say('Detectei um bloqueio recorrente! Calculando saída...');
+    expect(agent.speechBubble).toBeDefined();
+    expect(agent.speechBubble?.innerHTML).toContain('bloqueio');
+    expect(speakSpy).not.toHaveBeenCalled();
+
+    agent.say('Encontrei uma saída segura! Indo para local livre.');
+    expect(speakSpy).not.toHaveBeenCalled();
+
+    // Mensagem comum sem bloqueio deve acionar áudio normalmente
+    agent.say('Olá Daniel, como vai você?');
+    expect(speakSpy).toHaveBeenCalledWith('agent-vega', 'Olá Daniel, como vai você?');
+
+    speakSpy.mockRestore();
   });
 
   it('todos os agentes devem possuir IDs únicos, designações estelares e pontos de patrulha válidos', () => {
@@ -300,7 +314,7 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     expect(agent.checkCollision(learnedEscape.x, learnedEscape.z, colliders)).toBe(false);
     // Deve ter emitido balão de fala expressando a descoberta da saída e memorização
     expect(agent.speechBubble).toBeDefined();
-    expect(agent.speechBubble?.innerHTML).toMatch(/saída|bloqueio|memória|obstruído|livre/i);
+    expect(agent.speechBubble?.innerHTML).toMatch(/saída|bloqueio|memori|obstáculo|travad|livre|desobstru/i);
   });
 
   it('findEscapeRoute deve calcular com inteligência geométrica uma rota de saída desimpedida para área livre fora de becos', () => {
