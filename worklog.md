@@ -536,4 +536,33 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **Tipagem Estática:** `npm run typecheck` — 0 erros no monorepo.
 - **Sincronismo de Schema:** `npm run check:schema-drift` — 100% síncrono.
 
+---
+
+## 2026-10-19 — Autonomia Real & Diálogo Bidirecional dos Atores com o Avatar Daniel
+
+### 1. Contexto & Motivação
+- O usuário requisitou que os habitantes de Synapse City deixassem de ser NPCs estáticos e se tornassem atores autônomos com cognição real, capazes de perceber proativamente a proximidade do avatar protagonista Daniel, cumprimentá-lo de forma espontânea e engajar em diálogos bidirecionais interativos.
+
+### 2. Implementações Realizadas
+- **Motor de Simulação Autônoma em Runtime (`AutonomousSimulationService`):**
+  - Integração contínua do ciclo cognitivo (`CognitionService`), memória vetorial no Qdrant, planejamento de metas (`GoalPlanner`) e rotas reais via Recast NavMesh WASM (`NavigationService`).
+  - Execução contínua a cada 3.5 segundos sem interferir com workers assíncronos do BullMQ em suítes de teste.
+- **Percepção e Atenção à Proximidade de Daniel:**
+  - `AutonomousSimulationService` e `WorldGateway` mantêm rastreamento das posições do jogador via `avatar:position` e calculam proximidade com `getClosestPlayer(point)`.
+  - Ao aproximar-se a menos de 3.5 metros, os habitantes desaceleram o passo, voltam o olhar na direção de Daniel e emitem saudações personalizadas de acordo com seus arquétipos (ex: Vega verifica conformidade, Sulafat aborda questões de zeladoria/reparos, Sheliak reflete sobre fluxo de dados).
+- **Interface e Mecânica de Diálogo (`DialogueModal.tsx` & `App.tsx`):**
+  - Criado componente em React com estética glassmorphism cyberpunk escuro para conversa ao vivo com o habitante selecionado.
+  - O HUD exibe indicador flutuante `[💬 Pressione E para conversar com <Nome>]` quando Daniel está próximo de um habitante.
+  - Ao pressionar `[E]`, a interface de diálogo é aberta com histórico, chips de perguntas rápidas contextuais, suporte a `Enter` para envio e `Esc` para fechar.
+  - Isolamento de eventos de teclado no modal para que digitação (W, A, S, D) não movimente o avatar acidentalmente.
+- **Balões de Fala 3D Bidirecionais:**
+  - Implementado `say()` em `daniel-avatar.ts` projetando balão de fala ciano sobre o protagonista.
+  - Respostas dos habitantes são transmitidas via WebSocket (`agent:dialogue`) e projetadas simultaneamente no balão flutuante 3D e no modal de chat.
+  - Registro de todas as interações no PostgreSQL (`agent_experiences`) como memória social contextual com entidade `avatar-daniel`.
+
+### 3. Validação de Aceite
+- **Suíte Completa:** `npx vitest run --fileParallelism=false` — **25 arquivos de teste, 123 testes executados e 100% aprovados**.
+- **Tipagem Estática:** `npm run typecheck` — 0 erros no monorepo.
+- **Sincronismo de Branches:** Atualizadas e mescladas `feat/1-mvp-rua-central` e `main`.
+
 
