@@ -166,62 +166,64 @@ export class CityScene {
       this.scene.add(m);
     }
 
-    // 5. Setas Indicativas de Sentido de Circulação (SIC - Padrão CONTRAN / Manual de Sinalização Horizontal)
-    // Pintadas no asfalto com setas brancas em relevo indicando visualmente a mão de direção corrente no Brasil:
+    // 5. Setas Indicativas de Sentido de Circulação (SIC 01 "Siga em Frente" — Padrão Oficial CONTRAN)
+    // Pintadas no asfalto com malha sólida de polígono contínuo (THREE.ShapeGeometry),
+    // proporcionando formato nítido, ponta triangular com aletas e haste uniforme sem emendas.
+    const arrowMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.35,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
+
     const arrowPositions = [
       // Av. Central (Norte-Sul):
-      { x: -3.5, z: -20, rotY: 0 },
-      { x: -3.5, z: -34, rotY: 0 },
-      { x: -3.5, z: 20, rotY: 0 },
-      { x: -3.5, z: 34, rotY: 0 },
-      { x: 3.5, z: 20, rotY: Math.PI },
-      { x: 3.5, z: 34, rotY: Math.PI },
-      { x: 3.5, z: -20, rotY: Math.PI },
-      { x: 3.5, z: -34, rotY: Math.PI },
+      { x: -3.5, z: -24, rotY: 0 },          // Pista Oeste: aproximação descendo para o Sul (+Z)
+      { x: -3.5, z: 24, rotY: 0 },           // Pista Oeste: saída continuando para o Sul (+Z)
+      { x: 3.5, z: 24, rotY: Math.PI },      // Pista Leste: aproximação subindo para o Norte (-Z)
+      { x: 3.5, z: -24, rotY: Math.PI },     // Pista Leste: saída continuando para o Norte (-Z)
       // Rua Transversal (Leste-Oeste):
-      { x: -20, z: 3.5, rotY: Math.PI / 2 },
-      { x: -34, z: 3.5, rotY: Math.PI / 2 },
-      { x: 20, z: 3.5, rotY: Math.PI / 2 },
-      { x: 34, z: 3.5, rotY: Math.PI / 2 },
-      { x: 20, z: -3.5, rotY: -Math.PI / 2 },
-      { x: 34, z: -3.5, rotY: -Math.PI / 2 },
-      { x: -20, z: -3.5, rotY: -Math.PI / 2 },
-      { x: -34, z: -3.5, rotY: -Math.PI / 2 },
+      { x: -24, z: 3.5, rotY: Math.PI / 2 },   // Pista Sul: aproximação indo para o Leste (+X)
+      { x: 24, z: 3.5, rotY: Math.PI / 2 },    // Pista Sul: saída continuando para o Leste (+X)
+      { x: 24, z: -3.5, rotY: -Math.PI / 2 },  // Pista Norte: aproximação indo para o Oeste (-X)
+      { x: -24, z: -3.5, rotY: -Math.PI / 2 }, // Pista Norte: saída continuando para o Oeste (-X)
     ];
     for (const a of arrowPositions) {
-      this.buildRoadDirectionalArrow(a.x, a.z, a.rotY, stopLineMat);
+      this.buildRoadDirectionalArrow(a.x, a.z, a.rotY, arrowMat);
     }
   }
 
   /**
-   * Constrói seta indicativa de sentido de circulação (SIC - padrão CONTRAN) no asfalto
+   * Constrói seta indicativa de sentido de circulação (SIC 01 - padrão CONTRAN) no asfalto.
+   * Utiliza THREE.ShapeGeometry sólido com proporções regulamentares de trânsito:
+   * ponta triangular nítida com aletas e haste retangular uniforme contínua.
    */
   private buildRoadDirectionalArrow(x: number, z: number, rotY: number, mat: THREE.Material): void {
+    const shape = new THREE.Shape();
+    // No plano 2D com rotação x = -Math.PI / 2:
+    // -y se torna +z no mundo (frente local / Sul)
+    // Coordenadas traçadas no sentido anti-horário:
+    shape.moveTo(0, -1.8);       // Vértice pontiagudo frontal da seta
+    shape.lineTo(0.60, -0.35);   // Aleta da asa direita
+    shape.lineTo(0.20, -0.50);   // Rebaixo interno direito na haste
+    shape.lineTo(0.20, 1.8);     // Canto base direito da haste
+    shape.lineTo(-0.20, 1.8);    // Canto base esquerdo da haste
+    shape.lineTo(-0.20, -0.50);  // Rebaixo interno esquerdo na haste
+    shape.lineTo(-0.60, -0.35);  // Aleta da asa esquerda
+    shape.closePath();
+
+    const geom = new THREE.ShapeGeometry(shape);
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.receiveShadow = true;
+
     const group = new THREE.Group();
     group.position.set(x, 0.035, z);
     group.rotation.y = rotY;
-
-    // Haste longitudinal da seta (2.4m de comprimento, 0.34m de largura)
-    const shaftGeom = new THREE.BoxGeometry(0.34, 0.02, 2.2);
-    const shaft = new THREE.Mesh(shaftGeom, mat);
-    shaft.position.set(0, 0, -0.2);
-    shaft.receiveShadow = true;
-    group.add(shaft);
-
-    // Ponta da seta em "V" voltada para a frente (+Z local)
-    const tipGeom = new THREE.BoxGeometry(0.28, 0.02, 1.15);
-
-    const tipLeft = new THREE.Mesh(tipGeom, mat);
-    tipLeft.position.set(-0.35, 0, 0.7);
-    tipLeft.rotation.y = -Math.PI / 4;
-    tipLeft.receiveShadow = true;
-    group.add(tipLeft);
-
-    const tipRight = new THREE.Mesh(tipGeom, mat);
-    tipRight.position.set(0.35, 0, 0.7);
-    tipRight.rotation.y = Math.PI / 4;
-    tipRight.receiveShadow = true;
-    group.add(tipRight);
+    group.add(mesh);
 
     this.scene.add(group);
   }
