@@ -27,6 +27,11 @@ export class AgentAvatar {
   public speed: number = 0;
   public config: AgentConfig;
   public label!: HTMLDivElement;
+  public speechBubble?: HTMLDivElement;
+  public speechTimer: number = 0;
+  public targetPosition: THREE.Vector3 | null = null;
+  public isWaitingAtCrosswalk: boolean = false;
+  public emotionState: string = 'calm';
 
   private leftLeg!: THREE.Mesh;
   private rightLeg!: THREE.Mesh;
@@ -45,7 +50,9 @@ export class AgentAvatar {
     this.position = this.mesh.position;
     this.position.copy(config.startPosition);
     this.buildModel();
-    this.buildLabel();
+    if (typeof document !== 'undefined') {
+      this.buildLabel();
+    }
   }
 
   private buildModel(): void {
@@ -440,6 +447,64 @@ export class AgentAvatar {
     document.body.appendChild(this.label);
   }
 
+  /**
+   * Emite uma fala ou pensamento visível em balão estilizado sobre o avatar (Task-026).
+   */
+  public say(message: string, durationSeconds: number = 4.0): void {
+    this.speechTimer = durationSeconds;
+    if (!this.speechBubble) {
+      this.speechBubble = document.createElement('div');
+      this.speechBubble.className = 'agent-speech-bubble';
+      this.speechBubble.style.cssText = `
+        position: absolute;
+        max-width: 220px;
+        padding: 8px 12px;
+        background: rgba(15, 23, 42, 0.90);
+        border: 1.5px solid rgba(255, 255, 255, 0.3);
+        border-radius: 12px;
+        color: #f8fafc;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        font-size: 11.5px;
+        line-height: 1.35;
+        font-weight: 500;
+        pointer-events: none;
+        transform: translate(-50%, -100%);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 10px rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        z-index: 105;
+        text-align: center;
+        transition: opacity 0.25s ease;
+      `;
+      document.body.appendChild(this.speechBubble);
+    }
+
+    this.speechBubble.innerHTML = `
+      <div style="font-size: 9px; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; color: #94a3b8;">
+        💬 ${this.config.name}
+      </div>
+      <div>${message}</div>
+    `;
+    this.speechBubble.style.opacity = '1';
+    this.speechBubble.style.display = 'block';
+  }
+
+  /**
+   * Define novo destino de navegação disparado pelo servidor via AgentAction API (Task-025/026).
+   */
+  public setTargetPosition(pos: { x: number; y?: number; z: number }): void {
+    this.targetPosition = new THREE.Vector3(pos.x, pos.y ?? this.position.y, pos.z);
+    this.waitTimer = 0; // Acorda de pausas locais para navegar ao destino
+  }
+
+  /**
+   * Interrompe o movimento do agente imediatamente.
+   */
+  public stopMovement(): void {
+    this.targetPosition = null;
+    this.waitTimer = 1.0;
+    this.speed = 0;
+  }
+
   public updateLabel(camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
     const screenPos = this.position.clone().add(new THREE.Vector3(0, 2.35, 0));
     screenPos.project(camera);
@@ -454,8 +519,26 @@ export class AgentAvatar {
       this.label.style.display = 'block';
       this.label.style.left = `${x}px`;
       this.label.style.top = `${y}px`;
+
+      // Atualiza posição do balão de fala se estiver ativo
+      if (this.speechBubble && this.speechTimer > 0) {
+        const bubblePos = this.position.clone().add(new THREE.Vector3(0, 2.95, 0));
+        bubblePos.project(camera);
+        const bx = (bubblePos.x * 0.5 + 0.5) * w;
+        const by = (-bubblePos.y * 0.5 + 0.5) * h;
+        if (bubblePos.z < 1) {
+          this.speechBubble.style.display = 'block';
+          this.speechBubble.style.left = `${bx}px`;
+          this.speechBubble.style.top = `${by}px`;
+        } else {
+          this.speechBubble.style.display = 'none';
+        }
+      }
     } else {
       this.label.style.display = 'none';
+      if (this.speechBubble) {
+        this.speechBubble.style.display = 'none';
+      }
     }
   }
 
@@ -493,7 +576,20 @@ export class AgentAvatar {
     return false;
   }
 
-  public update(delta: number, colliders: ObstacleCollider[] = []): void {
+  public update(delta: number, colliders: ObstacleCollider[] = [], trafficLightState: string = 'green'): void {
+    // Atualiza temporizador do balão de fala
+    if (this.speechTimer > 0) {
+      this.speechTimer -= delta;
+      if (this.speechTimer <= 0 && this.speechBubble) {
+        this.speechBubble.style.opacity = '0';
+        setTimeout(() => {
+          if (this.speechTimer <= 0 && this.speechBubble) {
+            this.speechBubble.style.display = 'none';
+          }
+        }, 250);
+      }
+    }
+
     if (this.waitTimer > 0) {
       this.waitTimer -= delta;
       this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 10);
@@ -505,15 +601,43 @@ export class AgentAvatar {
       return;
     }
 
-    const target = this.config.patrolPoints[this.patrolIndex];
+    // Respeito ao semáforo nas imediações da faixa de pedestres central (|x| < 4.5 e |z| < 6)
+    const isNearCrosswalk = Math.abs(this.position.x) < 4.5 && Math.abs(this.position.z) < 6;
+    if (isNearCrosswalk && trafficLightState === 'green') {
+      // Sinal veicular verde = pedestre aguarda na calçada
+      this.isWaitingAtCrosswalk = true;
+      this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
+      this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
+      this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, delta * 8);
+      return;
+    }
+    this.isWaitingAtCrosswalk = false;
+
+    // Prioriza destino de navegação recebido do servidor; caso contrário, segue rota local
+    let target: THREE.Vector3;
+    let isServerTarget = false;
+
+    if (this.targetPosition) {
+      target = this.targetPosition;
+      isServerTarget = true;
+    } else {
+      target = this.config.patrolPoints[this.patrolIndex];
+    }
+
     const flat = new THREE.Vector3(target.x, this.position.y, target.z);
     const dir = flat.clone().sub(this.position);
     const dist = dir.length();
 
-    if (dist < 0.6) {
-      this.patrolIndex = (this.patrolIndex + 1) % this.config.patrolPoints.length;
-      this.waitTimer = 1.5 + Math.random() * 2;
-      return;
+    if (dist < 0.5) {
+      if (isServerTarget) {
+        this.targetPosition = null;
+        this.waitTimer = 1.0;
+        return;
+      } else {
+        this.patrolIndex = (this.patrolIndex + 1) % this.config.patrolPoints.length;
+        this.waitTimer = 1.5 + Math.random() * 2;
+        return;
+      }
     }
 
     dir.normalize();
@@ -571,7 +695,8 @@ export class AgentAvatar {
   }
 
   public dispose(): void {
-    if (this.label.parentNode) this.label.parentNode.removeChild(this.label);
+    if (this.label?.parentNode) this.label.parentNode.removeChild(this.label);
+    if (this.speechBubble?.parentNode) this.speechBubble.parentNode.removeChild(this.speechBubble);
   }
 }
 

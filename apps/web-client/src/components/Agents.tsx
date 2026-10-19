@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { AgentAvatar } from '../avatars/agent-avatar';
 import { VehicleAgent } from '../vehicles/vehicle-agent';
 import { ObstacleCollider } from '../scenes/city-scene';
+import { cityStore } from '../store/city-store';
 
 interface AgentsProps {
   agents: AgentAvatar[];
@@ -19,15 +20,14 @@ export const Agents: React.FC<AgentsProps> = ({ agents, vehicles, colliders = []
     // Garante que as labels DOM dos agentes sejam limpas caso o componente seja desmontado
     return () => {
       agents.forEach((a) => {
-        if (a.label && a.label.parentNode) {
-          a.label.parentNode.removeChild(a.label);
-        }
+        a.dispose();
       });
     };
   }, [agents]);
 
   useFrame((_, delta) => {
     const clampedDelta = Math.min(delta, 0.1);
+    const trafficLight = cityStore.getState().trafficLightState;
 
     // Reúne colisores base: cidade, veículos dinâmicos e avatar do jogador
     const baseColliders: ObstacleCollider[] = colliders.slice();
@@ -64,7 +64,7 @@ export const Agents: React.FC<AgentsProps> = ({ agents, vehicles, colliders = []
         });
       }
 
-      agent.update(clampedDelta, agentColliders);
+      agent.update(clampedDelta, agentColliders, trafficLight);
       agent.updateLabel(camera, gl);
     }
 

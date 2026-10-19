@@ -273,6 +273,26 @@
   - [x] Movimentos físicos com colisão e extrapolação de fronteira rejeitados autoritativamente com `PHYSICAL_CONSTRAINT_VIOLATION`.
   - [x] Suíte de testes de integração e contrato em `tests/integration/principal-actions.test.ts` (10/10 passando).
 
+### Task-026B — Ciclo Autônomo dos NPCs no Frontend (Balões de Fala, Navegação Servidor & Faixa)
+- **Status:** ✅ Concluída (2026-10-18)
+- **Prioridade:** 🟠 Alta (conexão do ciclo autoritativo com o cliente 3D)
+- **Esforço:** S
+- **Tipo:** `feat`
+- **Risco:** Operacional
+- **Dependências:** Task-025, Task-013, Task-003
+- **Descrição:** Conecta os avatares dos NPCs do Three.js aos eventos autoritativos de servidor em tempo real (`agent.moved`, `agent.speech`, `npc.alert`, semáforo municipal).
+- **Escopo:**
+  - Navegação suave por interpolação em direção ao `targetPosition` determinado pelo servidor (`setTargetPosition`).
+  - Balões de fala/pensamento flutuantes em glassmorphism (`say(message, durationSeconds)`) posicionados acima da cabeça do avatar.
+  - Segurança viária: pedestres aguardam na calçada próximo à faixa central se o semáforo veicular estiver verde (`trafficLightState === 'green'`) e prosseguem quando vermelho (`'red'`).
+  - Integração no `App.tsx` para despachar `agent.moved`, `agent.speech` e `npc.alert` aos avatares correspondentes.
+  - Testes unitários com mock de DOM e Three.js em `apps/web-client/src/avatars/agent-avatar.spec.ts`.
+- **Critérios de aceite:**
+  - [x] Avatares navegam para destinos definidos pelo servidor sem teleportar abruptamente.
+  - [x] Balões de fala exibem mensagem com auto-fechamento e descarte de recursos no DOM.
+  - [x] Pedestres respeitam semáforo na faixa central sem congelar o loop de renderização.
+  - [x] Suíte de testes unitários aprovada com 6/6 testes em `agent-avatar.spec.ts`.
+
 ### Épico D — Workers & Mensageria (P2 da auditoria)
 
 ### Task-005 — Adicionar BullMQ sobre Redis

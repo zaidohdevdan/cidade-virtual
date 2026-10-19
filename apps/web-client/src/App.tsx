@@ -111,6 +111,40 @@ export const App: React.FC = () => {
               hour >= 6 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'sunset' : 'night';
             cityStore.setTimeOfDay(tod);
           }
+          // Sincronização e Ciclo Autônomo dos NPCs (Task-026)
+          if (event.name === 'agent.moved' && event.payload) {
+            const { agentId, principalId, position } = event.payload as {
+              agentId?: string;
+              principalId?: string;
+              position?: { x: number; y?: number; z: number };
+            };
+            const id = agentId || (principalId?.startsWith('principal_') ? principalId.replace('principal_', '') : principalId);
+            const agent = agents.find((a) => a.config.id === id);
+            if (agent && position) {
+              agent.setTargetPosition(position);
+            }
+          }
+          if (event.name === 'agent.speech' && event.payload) {
+            const { agentId, principalId, message } = event.payload as {
+              agentId?: string;
+              principalId?: string;
+              message?: string;
+            };
+            const id = agentId || (principalId?.startsWith('principal_') ? principalId.replace('principal_', '') : principalId);
+            const agent = agents.find((a) => a.config.id === id);
+            if (agent && message) {
+              agent.say(message);
+            }
+          }
+          if (event.name === 'npc.alert' && event.payload) {
+            const { message, citizenIds } = event.payload as { message?: string; citizenIds?: string[] };
+            if (message) {
+              const targets = citizenIds && citizenIds.length > 0
+                ? agents.filter((a) => citizenIds.includes(a.config.id))
+                : agents;
+              targets.forEach((a) => a.say(`⚠️ ${message}`, 5));
+            }
+          }
         });
       } catch (err) {
         console.warn('[Socket.IO] Falha na conexão com o servidor autoritativo.');

@@ -405,3 +405,37 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **Tipagem Estática:** `npm run typecheck` — 0 erros em todos os projetos.
 - **Sincronismo de Schema:** `npm run check:schema-drift` — 100% síncrono.
 
+---
+
+## 2026-10-18 — Task-026B: Ciclo Autônomo dos NPCs no Frontend (WebSockets & Balões de Fala)
+
+### 1. Contexto & Motivação
+- Com a persistência dos 5 NPCs canônicos (Task-013) e o contrato unificado `AgentAction API` (Task-025), era necessário conectar o motor gráfico Three.js/R3F do frontend (`apps/web-client`) para refletir a autonomia dos habitantes em tempo real.
+- O cliente precisava deixar de ser apenas um loop de patrulha cego e passar a reagir dinamicamente a comandos de deslocamento server-side (`agent.moved`), comunicação verbal/pensamento (`agent.speech`, `npc.alert`) e sinalização semafórica de pedestres na Avenida Central.
+
+### 2. Implementações Realizadas
+- **Comunicação e Expressão nos Avatares (`agent-avatar.ts`):**
+  - Implementado método `say(message, durationSeconds = 4.0)` com balões de fala/pensamento flutuantes em glassmorphism moderno (`rgba(15, 23, 42, 0.90)`), bordas translúcidas e animações suaves de entrada/saída.
+  - Projeção tridimensional na tela em `updateLabel(camera, renderer)` logo acima da tag de identificação do habitante.
+  - Limpeza automática de elementos DOM no `dispose()`.
+- **Navegação Orientada pelo Servidor (`setTargetPosition` & `stopMovement`):**
+  - O avatar agora aceita `targetPosition: THREE.Vector3 | null` emitido pelo servidor.
+  - Prioriza a navegação orientada pelo backend com rotação angular suave (`lerp`), velocidade dinâmica e animação proporcional dos membros (`walkCycleTime`). Ao atingir o objetivo, conclui o trajeto e retoma pausas ou rotinas locais.
+- **Reação Cívica e Viária ao Semáforo:**
+  - O método `update(delta, colliders, trafficLightState)` agora recebe o estado autoritativo do semáforo municipal.
+  - Quando um agente se aproxima da faixa de pedestres central e o sinal veicular está verde (`trafficLightState === 'green'`), ele interrompe a travessia e aguarda na calçada (`isWaitingAtCrosswalk = true`), retomando a marcha com segurança quando o sinal fecha para veículos (`'red'`).
+- **Sincronização em Tempo Real (`App.tsx` & `Agents.tsx`):**
+  - Registrados listeners de `world:event` no Socket.IO:
+    - `agent.moved`: localiza o `AgentAvatar` pelo ID e despacha `setTargetPosition(position)`.
+    - `agent.speech`: aciona `agent.say(message)`.
+    - `npc.alert`: aciona balão de advertência `⚠️` para os habitantes impactados.
+  - No `Agents.tsx`, o estado do semáforo é lido de forma reativa a cada frame via `cityStore.getState().trafficLightState` sem provocar re-renderizações React.
+- **Suíte de Testes Unitários (`apps/web-client/src/avatars/agent-avatar.spec.ts`):**
+  - 6 testes cobrindo instanciação dos 7 agentes de Lira, balões de fala, navegação por `targetPosition`, respeito ao semáforo na faixa e descarte de nós DOM.
+
+### 3. Validação de Aceite
+- **Suíte Completa:** `npx vitest run` — **20 arquivos de teste, 99 testes executados e 100% aprovados**.
+- **Tipagem Estática:** `npm run typecheck` — 0 erros no monorepo.
+- **Sincronismo de Schema:** `npm run check:schema-drift` — 100% síncrono.
+
+
