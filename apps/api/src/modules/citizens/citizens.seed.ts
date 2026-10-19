@@ -214,3 +214,70 @@ export const SEED_CITIZENS: SeedCitizenConfig[] = [
     ],
   },
 ];
+
+/**
+ * Habitantes adicionais da Constelação de Lira presentes no frontend (Aladfar e Xihe).
+ */
+export const EXTRA_CITIZENS: SeedCitizenConfig[] = [
+  {
+    id: 'agent-aladfar',
+    name: 'Aladfar',
+    archetype: 'citizen',
+    starDesignation: 'Delta Lyrae (δ Lyr)',
+    role: 'Artista & Designer',
+    backstorySeed: 'Artista e designer apaixonada pela estética urbana, luzes e contrastes de Synapse City.',
+    activeGoals: ['explorar arquitetura da praça', 'dialogar com pedestres', 'estudar contrastes de iluminação'],
+    initialPosition: { x: -16, y: 0.19, z: 16 },
+    initialEmotion: 'joyful',
+    initialExperiences: [
+      {
+        eventType: 'art_inspiration_observed',
+        description: 'Observou as reflexões de luz neon no asfalto molhado perto da praça.',
+        sourceType: 'direct_observation',
+        confidence: '0.94',
+        importance: '0.80',
+        locationId: 'calcada-central',
+      },
+      {
+        eventType: 'urban_design_appreciated',
+        description: 'Admirou a tipografia das placas de sinalização e os murais arquitetônicos da Rua Central.',
+        sourceType: 'direct_observation',
+        confidence: '0.92',
+        importance: '0.75',
+        locationId: 'praca-central',
+      },
+    ],
+  },
+  {
+    id: 'agent-xihe',
+    name: 'Xihe',
+    archetype: 'worker',
+    starDesignation: 'Zeta Lyrae (ζ Lyr)',
+    role: 'Arquiteta & Botânica',
+    backstorySeed: 'Especialista em botânica urbana, arborização e arquitetura sustentável de Synapse City.',
+    activeGoals: ['catalogar botânica urbana', 'projetar espaços verdes', 'cuidar da arborização'],
+    initialPosition: { x: -10, y: 0.19, z: -20 },
+    initialEmotion: 'curious',
+    initialExperiences: [
+      {
+        eventType: 'botany_species_cataloged',
+        description: 'Catalogou as espécies botânicas presentes nos canteiros ao redor da avenida.',
+        sourceType: 'direct_observation',
+        confidence: '0.96',
+        importance: '0.85',
+        locationId: 'canteiro-central',
+      },
+      {
+        eventType: 'shade_architecture_planned',
+        description: 'Mapeou a projeção de sombra dos edifícios sobre a vegetação nativa da calçada.',
+        sourceType: 'direct_observation',
+        confidence: '0.91',
+        importance: '0.78',
+        locationId: 'calcada-norte',
+      },
+    ],
+  },
+];
+
+export const ALL_CITIZENS: SeedCitizenConfig[] = [...SEED_CITIZENS, ...EXTRA_CITIZENS];
+

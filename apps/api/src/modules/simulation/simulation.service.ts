@@ -6,7 +6,7 @@ import { WorldGateway } from '../../gateways/world.gateway';
 import { CognitionService } from '../cognition/cognition.service';
 import { WorldService } from '../world/world.service';
 import { CitizensService } from '../citizens/citizens.service';
-import { SEED_CITIZENS, SeedCitizenConfig } from '../citizens/citizens.seed';
+import { SEED_CITIZENS, EXTRA_CITIZENS, ALL_CITIZENS, SeedCitizenConfig } from '../citizens/citizens.seed';
 
 export interface AutonomousAgentRuntimeState {
   config: SeedCitizenConfig;
@@ -271,14 +271,30 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     playerMessage: string,
     playerId: string = 'avatar-daniel',
   ): Promise<{ response: string; agentId: string }> {
-    const agent = this.agentStates.get(targetAgentId);
-    const config = agent?.config || SEED_CITIZENS.find((c) => c.id === targetAgentId);
+    let agent = this.agentStates.get(targetAgentId);
+    const config = agent?.config || ALL_CITIZENS.find((c) => c.id === targetAgentId);
     if (!config) {
       return { response: 'Habitante não encontrado.', agentId: targetAgentId };
     }
 
+    // Registra no mapa de estados se ainda não estiver presente
+    if (!agent) {
+      agent = {
+        config,
+        currentPosition: { ...config.initialPosition },
+        targetDestination: null,
+        waypoints: [],
+        waypointIndex: 0,
+        lastAction: 'dialogue_initiated',
+        lastSpeech: '',
+        goalIndex: 0,
+        isDeliberating: false,
+      };
+      this.agentStates.set(targetAgentId, agent);
+    }
+
     const trafficLight = this.worldGateway.getTrafficLightState();
-    const currentPos = agent?.currentPosition || config.initialPosition;
+    const currentPos = agent.currentPosition || config.initialPosition;
 
     try {
       // 1. Delibera ação no ciclo cognitivo conectando Qdrant e LangGraph
@@ -400,6 +416,10 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
           return 'Saudações fraternas, Daniel. A convivência nesta cidade floresce quando cada cidadão compartilha respeito e empatia.';
         case 'agent-chason':
           return 'E aí Daniel! Beleza pura? Tô aproveitando a calçada livre pra dar umas manobras de skate, mas sempre respeitando quem tá a pé!';
+        case 'agent-aladfar':
+          return 'Oi Daniel! Que bom ver você por aqui. As linhas, luzes e reflexos dessa avenida são pura inspiração visual!';
+        case 'agent-xihe':
+          return 'Olá Daniel! Tudo ótimo! Estava catalogando a copa das árvores e conferindo a umidade dos canteiros da calçada.';
         default:
           return `Olá Daniel! Prazer em falar com você. O que gostaria de saber sobre nosso distrito?`;
       }
@@ -414,6 +434,10 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
           return 'Nossos semáforos operam no padrão DENATRAN com 8s de verde, 3s de atenção amarela e 8s de transversal. Uma sincronização matemática precisa!';
         case 'agent-chason':
           return 'Quando o sinal fecha pros carros, a faixa de pedestres fica liberada pra gente cruzar! Mas no verde deles, fico esperando na calçada.';
+        case 'agent-aladfar':
+          return `Adoro como as luzes do semáforo criam um ritmo na cidade! No momento está ${trafficLight === 'green' ? 'verde para veículos — pedestres aguardam' : 'vermelho para veículos — travessia liberada'}!`;
+        case 'agent-xihe':
+          return `O semáforo está em estado ${trafficLight}. Uma mobilidade equilibrada garante a segurança dos pedestres e a integridade dos canteiros verdes.`;
         default:
           return `O semáforo está em estado ${trafficLight}. Respeitar as faixas de retenção garante a integridade de todos na cidade.`;
       }
@@ -426,6 +450,10 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
           return 'Seguimos a Lei Federal 12.305/10 (Política Nacional de Resíduos Sólidos). A lixeira municipal fica em frente à placa de advertência ecológica.';
         case 'agent-epsilon':
           return 'As regras urbanas não são prisões, Daniel, mas a partitura que permite que mentes diversas convivam em harmonia.';
+        case 'agent-aladfar':
+          return 'O design urbano só é verdadeiramente belo quando o espaço público é limpo e respeitado por todos nós.';
+        case 'agent-xihe':
+          return 'A separação correta de resíduos e a proteção da flora da praça são fundamentais para o ecossistema de Synapse City!';
         default:
           return 'A preservação dos espaços públicos e a destinação correta dos resíduos são deveres de todos os cidadãos da cidade.';
       }
@@ -443,6 +471,10 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         return `Suas palavras ecoam a eterna busca humana por sentido na urbe, Daniel. Cada encontro na praça enriquece nossa memória coletiva.`;
       case 'agent-chason':
         return `Maneiro falar contigo, Daniel! Se precisar de uma dica das melhores rotas de skate pela calçada, é só chamar!`;
+      case 'agent-aladfar':
+        return `Excelente perspectiva, Daniel! Cada diálogo como esse me inspira a pensar novas formas de arte e harmonia urbana.`;
+      case 'agent-xihe':
+        return `Com certeza, Daniel. A sustentabilidade e o convívio urbano florescem quando cada cidadão faz a sua parte.`;
       default:
         return `Entendi perfeitamente sua mensagem, Daniel. Vamos juntos fazer da Cidade Virtual um lugar cada vez melhor!`;
     }
@@ -479,13 +511,13 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
           : 'Sinal vermelho para carros! Hora de cruzar para a praça.';
 
       case 'agent-aladfar':
-        return 'A luz do entardecer reflete tons incríveis nas fachadas da Rua Central!';
+        return 'Observando a harmonia das cores nos edifícios e o contraste dos reflexos de vidro na calçada.';
 
       case 'agent-xihe':
-        return 'Catalogando as mudas e a umidade do solo nos canteiros da calçada oeste.';
+        return 'Monitorando o desenvolvimento das mudas e a distribuição de sombra natural pela praça.';
 
       default:
-        return action.expectedOutcome || `Executando plano: ${action.actionType}`;
+        return 'Em patrulhamento ativo pelas vias municipais.';
     }
   }
 
