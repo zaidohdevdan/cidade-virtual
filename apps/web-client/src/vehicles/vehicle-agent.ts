@@ -998,26 +998,30 @@ export class VehicleAgent {
     if (this.state === 'DEADLOCK_ESCAPE' || this.state === 'PARKED') return;
 
     const distToCenter = Math.hypot(this.position.x, this.position.z);
-    const inIntersectionZone = distToCenter < 22; // Cruzamento e vias de aproximação imediata
+    const inIntersectionZone = distToCenter < 24; // Cruzamento e vias de aproximação imediata
     const isStopped = Math.abs(this.speed) < 0.25;
-    const isBlockedByVehicle =
-      (this.state === 'OBSTACLE_BRAKING' || this.state === 'TURNING' || this.state === 'APPROACHING_INTERSECTION') &&
-      perception.kind === 'vehicle' &&
-      perception.gap < 3.5;
 
-    if (inIntersectionZone && isStopped && isBlockedByVehicle) {
+    // Um veículo está bloqueado se estiver parado na zona de conflito e:
+    // a) Teve obstáculo frontal detectado (outro veículo, pedestre ou player a < 5m)
+    // b) OU está próximo a outro veículo (< 6.5m)
+    // c) OU está em estado de frenagem/curva interrompida
+    const hasObstacleAhead = perception.kind !== 'none' && perception.gap < 5.0;
+    const hasNearbyCar = others.some((o) => o !== this && o.position.distanceTo(this.position) < 6.5);
+    const isImpeded = hasObstacleAhead || hasNearbyCar || this.state === 'OBSTACLE_BRAKING' || this.state === 'TURNING';
+
+    if (inIntersectionZone && isStopped && isImpeded) {
       this.deadlockTimer += delta;
     } else {
       this.deadlockTimer = Math.max(0, this.deadlockTimer - delta * 1.5);
       return;
     }
 
-    // Se o engavetamento persistir por mais de 2.0s:
-    if (this.deadlockTimer > 2.0) {
+    // Se o engavetamento persistir por mais de 1.8 segundos:
+    if (this.deadlockTimer > 1.8) {
       // Identifica o grupo de veículos engavetados (conflito mútuo)
       const cluster = others.filter((o) => {
         const d = o.position.distanceTo(this.position);
-        return d < 14 && Math.hypot(o.position.x, o.position.z) < 24;
+        return d < 16 && Math.hypot(o.position.x, o.position.z) < 24;
       });
       cluster.push(this);
 
@@ -1027,7 +1031,7 @@ export class VehicleAgent {
       }
 
       // Avalia quem é o "carro mais livre" (maior espaço livre na traseira e capacidade de manobra)
-      let bestVehicle: VehicleAgent = this;
+      let bestVehicle: VehicleAgent | null = null;
       let bestFreedom = -1;
 
       for (const v of cluster) {
@@ -1035,14 +1039,18 @@ export class VehicleAgent {
         if (freedom > bestFreedom) {
           bestFreedom = freedom;
           bestVehicle = v;
-        } else if (Math.abs(freedom - bestFreedom) < 0.2 && v.config.id < bestVehicle.config.id) {
+        } else if (Math.abs(freedom - bestFreedom) < 0.2 && bestVehicle && v.config.id < bestVehicle.config.id) {
           bestVehicle = v;
         }
       }
 
       // O carro mais livre assume a responsabilidade de manobrar para livrar os demais!
-      if (bestVehicle === this && bestFreedom >= 2.8) {
-        this.startDeadlockEscape();
+      // Cooperatividade total: o carro bloqueado ativa a marcha à ré do carro mais livre do cluster!
+      if (bestVehicle && bestFreedom >= 2.5) {
+        bestVehicle.startDeadlockEscape();
+        for (const v of cluster) {
+          v.deadlockTimer = 0;
+        }
       }
     }
   }

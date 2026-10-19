@@ -44,6 +44,7 @@ export class AgentAvatar {
   private walkCycleTime: number = 0;
   private patrolIndex: number = 0;
   private waitTimer: number = 0;
+  private blockedObstacleTimer: number = 0;
 
   private readonly walkSpeed = 2.2 + Math.random() * 1.5;
   public readonly radius = 0.4; // Raio corporal de colisão do pedestre (40 cm)
@@ -759,9 +760,28 @@ export class AgentAvatar {
     // Se o agente estiver totalmente obstruído por um veículo ou obstáculo à frente
     const isBlocked = nextX === currX && nextZ === currZ && (desiredDx !== 0 || desiredDz !== 0);
     if (isBlocked) {
-      // Desacelera e aguarda o veículo desobstruir o caminho
-      this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 10);
+      this.blockedObstacleTimer += delta;
+      // Se bloqueado por mais de 0.6s por um veículo parado, contorna lateralmente (desvio tangencial)
+      if (this.blockedObstacleTimer > 0.6) {
+        const perpX = -dir.z * step * 0.9;
+        const perpZ = dir.x * step * 0.9;
+        const altX1 = currX + perpX;
+        const altZ1 = currZ + perpZ;
+        const altX2 = currX - perpX;
+        const altZ2 = currZ - perpZ;
+
+        if (!this.checkCollision(altX1, altZ1, colliders)) {
+          this.position.x = altX1;
+          this.position.z = altZ1;
+        } else if (!this.checkCollision(altX2, altZ2, colliders)) {
+          this.position.x = altX2;
+          this.position.z = altZ2;
+        }
+      }
+      // Desacelera suavemente enquanto aguarda ou contorna
+      this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
     } else {
+      this.blockedObstacleTimer = 0;
       this.speed = THREE.MathUtils.lerp(this.speed, this.walkSpeed, delta * 6);
       this.position.x = nextX;
       this.position.z = nextZ;

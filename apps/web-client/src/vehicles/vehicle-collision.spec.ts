@@ -175,4 +175,26 @@ describe('Vehicle & Agent Collision Physics (Unit Tests — Web Client)', () => 
     const currentDist = carA.position.distanceTo(carB.position);
     expect(currentDist).toBeGreaterThan(initialDist);
   });
+
+  it('Em engavetamento com pedestre travando o carro da frente, o carro mais livre de trás deve cooperar e dar ré', () => {
+    // Cenário idêntico ao vídeo:
+    // Carro Líder (SUV) em x=-3.5, z=5.0 (sentido Sul, dir = 1), bloqueado por um pedestre a 1.2m na frente
+    // Carro Seguidor (Coupé) em x=-3.5, z=0.0 (sentido Sul, dir = 1) com a traseira norte totalmente livre
+    const pedPos = new THREE.Vector3(-3.5, 0, 6.2); // Pedestre na frente do SUV
+    const suv = createTestCar('suv', -3.5, 5.0, 'NS', 1);
+    const coupe = createTestCar('coupe', -3.5, 0.0, 'NS', 1);
+
+    const vehicles = [suv, coupe];
+
+    // Simula bloqueio por mais de 2.0s
+    for (let i = 0; i < 60; i++) {
+      suv.update(0.04, [], [pedPos], new THREE.Vector3(100, 0, 100), vehicles);
+      coupe.update(0.04, [], [pedPos], new THREE.Vector3(100, 0, 100), vehicles);
+    }
+
+    // O Coupé (carro mais livre da fila) deve ter sido acionado para DEADLOCK_ESCAPE
+    expect(coupe.state).toBe('DEADLOCK_ESCAPE');
+    // Deve recuar para o Norte (z diminuindo, afastando-se do SUV)
+    expect(coupe.position.z).toBeLessThan(0.0);
+  });
 });
