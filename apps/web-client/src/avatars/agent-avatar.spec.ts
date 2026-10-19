@@ -69,7 +69,8 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     }
   });
 
-  it('deve emitir balão de fala estilizado através do método say() (Task-026)', () => {
+  it('deve emitir balão de fala estilizado através do método say() quando próximo (Task-026)', () => {
+    agent.isNearPlayer = true;
     agent.say('Avenida limpa e fluxo seguro!');
 
     expect(agent.speechTimer).toBe(4.0);
@@ -111,7 +112,7 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
   });
 
   it('deve limpar elementos DOM do label e speechBubble ao chamar dispose()', () => {
-    agent.say('Olá mundo');
+    agent.say('Olá mundo', 4.0, true);
     expect(document.body.contains(agent.label)).toBe(true);
     expect(document.body.contains(agent.speechBubble!)).toBe(true);
 
@@ -120,26 +121,55 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     expect(document.body.contains(agent.speechBubble!)).toBe(false);
   });
 
-  it('só deve disparar áudio TTS quando o jogador estiver próximo ou playAudio for true', () => {
+  it('os balões de conversações só devem ser emitidos quando o avatar se aproxima do agente', () => {
     const speakSpy = vi.spyOn(speechSynth, 'speak').mockResolvedValue(true);
 
-    // 1. Agente longe do jogador e playAudio não especificado -> Não fala áudio
+    // 1. Agente longe do jogador e forceShow falso -> NÃO emite balão e NÃO dispara áudio
     agent.isNearPlayer = false;
     agent.say('Pensamento distante...');
+    expect(agent.speechBubble).toBeUndefined();
     expect(speakSpy).not.toHaveBeenCalled();
 
-    // 2. Agente próximo do jogador (isNearPlayer = true) -> Dispara áudio TTS
+    // 2. Agente próximo do jogador (isNearPlayer = true) -> Emite balão estilizado E dispara áudio
     agent.isNearPlayer = true;
     agent.say('Olá Daniel, bem-vindo!');
+    expect(agent.speechBubble).toBeDefined();
+    expect(agent.speechBubble?.innerHTML).toContain('Olá Daniel, bem-vindo!');
+    expect(document.body.contains(agent.speechBubble!)).toBe(true);
     expect(speakSpy).toHaveBeenCalledWith('agent-vega', 'Olá Daniel, bem-vindo!');
 
     speakSpy.mockClear();
 
-    // 3. playAudio = true explícito (ex: diálogo interativo) -> Dispara áudio mesmo se isNearPlayer for falso
+    // 3. forceShow = true explícito (ex: diálogo interativo face a face) -> Emite balão e áudio mesmo se isNearPlayer for falso
     agent.isNearPlayer = false;
     agent.say('Resposta no chat', 5, true);
+    expect(agent.speechBubble?.innerHTML).toContain('Resposta no chat');
     expect(speakSpy).toHaveBeenCalledWith('agent-vega', 'Resposta no chat');
 
     speakSpy.mockRestore();
+  });
+
+  it('ao afastar o avatar do jogador (> 3.5m), o balão de fala ativo deve ser fechado e o áudio cancelado', () => {
+    const stopSpy = vi.spyOn(speechSynth, 'stop').mockImplementation(() => {});
+
+    // Inicia fala em proximidade
+    agent.position.set(0, 0, 0);
+    const closePlayerPos = new THREE.Vector3(1, 0, 1); // Distância ~1.41m (<= 3.5m)
+    agent.update(0.1, [], 'green', closePlayerPos);
+    expect(agent.isNearPlayer).toBe(true);
+
+    agent.say('Conversa ativa na calçada');
+    expect(agent.speechTimer).toBeGreaterThan(0);
+
+    // Jogador se afasta para além de 3.5m
+    const farPlayerPos = new THREE.Vector3(15, 0, 15); // Distância > 20m
+    agent.update(0.1, [], 'green', farPlayerPos);
+
+    expect(agent.isNearPlayer).toBe(false);
+    expect(agent.speechTimer).toBe(0);
+    expect(agent.speechBubble?.style.display).toBe('none');
+    expect(stopSpy).toHaveBeenCalled();
+
+    stopSpy.mockRestore();
   });
 });

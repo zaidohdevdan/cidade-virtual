@@ -453,8 +453,15 @@ export class AgentAvatar {
 
   /**
    * Emite uma fala ou pensamento visível em balão estilizado sobre o avatar (Task-026).
+   * Os balões de conversa só são emitidos quando o avatar do jogador estiver próximo (<= 3.5m)
+   * ou se forceShow for explicitamente verdadeiro (ex: diálogo interativo face a face).
    */
-  public say(message: string, durationSeconds: number = 4.0, playAudio?: boolean): void {
+  public say(message: string, durationSeconds: number = 4.0, forceShow: boolean = false): void {
+    const isAllowed = forceShow || this.isNearPlayer;
+    if (!isAllowed) {
+      return;
+    }
+
     this.speechTimer = durationSeconds;
     this.speechText = message;
     if (!this.speechBubble) {
@@ -492,15 +499,11 @@ export class AgentAvatar {
     this.speechBubble.style.opacity = '1';
     this.speechBubble.style.display = 'block';
 
-    // O áudio TTS só é reproduzido quando o avatar do jogador está próximo (<= 3.5m)
-    // ou quando playAudio for explicitamente solicitado (ex: resposta direta no modal de diálogo)
-    const shouldSpeak = playAudio !== undefined ? playAudio : this.isNearPlayer;
-    if (shouldSpeak) {
-      try {
-        speechSynth.speak(this.config.id, message).catch(() => {});
-      } catch {
-        // Ignora silenciosamente se o navegador bloquear autoplay
-      }
+    // Dispara síntese de voz TTS apenas quando autorizado por proximidade
+    try {
+      speechSynth.speak(this.config.id, message).catch(() => {});
+    } catch {
+      // Ignora silenciosamente se o navegador bloquear autoplay
     }
   }
 
@@ -655,7 +658,16 @@ export class AgentAvatar {
           return;
         }
       } else {
-        this.isNearPlayer = false;
+        if (this.isNearPlayer) {
+          this.isNearPlayer = false;
+          // Se o jogador se afastar da proximidade (> 3.5m), encerra balão e áudio imediatamente
+          if (this.speechBubble && this.speechTimer > 0) {
+            this.speechTimer = 0;
+            this.speechBubble.style.opacity = '0';
+            this.speechBubble.style.display = 'none';
+            speechSynth.stop();
+          }
+        }
       }
     } else {
       this.isNearPlayer = false;
