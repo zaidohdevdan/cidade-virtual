@@ -682,8 +682,53 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
   - Registro de todas as interações no PostgreSQL (`agent_experiences`) como memória social contextual com entidade `avatar-daniel`.
 
 ### 3. Validação de Aceite
-- **Suíte Completa:** `npx vitest run --fileParallelism=false` — **25 arquivos de teste, 123 testes executados e 100% aprovados**.
-- **Tipagem Estática:** `npm run typecheck` — 0 erros no monorepo.
-- **Sincronismo de Branches:** Atualizadas e mescladas `feat/1-mvp-rua-central` e `main`.
+---
+
+## 2026-10-19 — Autonomia Emergente Real: Zero Dependência Pré-fixada (Fases 1 & 2)
+
+### 1. Contexto & Diretriz do Usuário
+- "Cidade de agentes autônomos com zero dependência pré-fixada do tipo: 'cuidar das árvores', 'ande pela calçada'; o foco é os agentes decidirem aonde irem, o que fazerem, por conta própria com base na interação com o ambiente e com o avatar."
+- Eliminação completa de roteiros hardcoded (`URBAN_DESTINATIONS`, patrulhas cíclicas fixas, saudações estáticas com `switch/case`).
+
+### 2. Implementações Realizadas
+
+#### A. Arquitetura de Autonomia Emergente (`packages/agent-planning/autonomy`)
+1. **Registro de Entidades e Affordances Físicas (`world-affordances.ts`):**
+   - Mapeamento das affordances do mundo (`rest`, `eat`, `socialize`, `observe`, `contemplate`, `shop`, `explore`) para entidades reais da cidade: Fonte Monumental (`fountain-monumental`), Mercado Central (`market-central`), Café Bistro (`cafe-bistro`), Mesas Externas, Bancos da Praça Norte/Sul/Leste/Oeste, Ponto de Ônibus Central, Árvores do Boulevard e Letreiros.
+2. **Dinâmica Biológica e Psicológica de Necessidades (`needs.ts`):**
+   - 5 necessidades internas (`energy`, `hunger`, `social`, `curiosity`, `fun`).
+   - Decaimento contínuo ponderado pelo perfil de personalidade Big Five (Abertura, Conscienciosidade, Extroversão, Amabilidade, Neuroticismo).
+   - Efeitos restauradores físicos mapeados por affordance (`AFFORDANCE_EFFECTS` e `AFFORDANCE_DURATION_TICKS`).
+3. **Decisor Autônomo por Utilidade & Anti-Repetição (`utility-decider.ts`):**
+   - Cálculo de utilidade marginal não-linear ($u = \text{déficit}^{1.6}$).
+   - Amortização por custo de deslocamento espacial euclidiano.
+   - Penalidade de repetição recente (`repetitionPenalty` via `visitCounts` e `lastVisitedAt`) e bônus de novidade para impedir loops locais.
+4. **Deliberação Estruturada com LLM (`llm-deliberator.ts`):**
+   - Prompt de deliberação gerando JSON estruturado (`chosenCandidateId`, `thought`, `speech`).
+   - Fallback gracioso para a melhor escolha por utilidade matemática caso a API do LLM esteja indisponível ou em timeout.
+5. **Mente Autônoma do Agente (`agent-mind.ts`):**
+   - Mantém estado interno, memória de curto prazo, atividades em andamento e atualizações de bem-estar.
+
+#### B. Interação Dinâmica e Aprendizado Contínuo (Fase 2)
+6. **Autoridade do Servidor e Repouso no Cliente (A7 em `agent-avatar.ts`):**
+   - Adicionada flag `hasReceivedServerTarget`. Quando o agente alcança seu destino determinado pelo servidor, repousa no local realizando sua atividade em repouso em vez de retornar para rotas locais hardcoded.
+7. **Estímulo e Sugestões do Avatar Daniel (A8):**
+   - Método `receivePlayerInteraction(playerMessage)`: detecta menções contextuais a locais ("café", "mercado", "praça", "banco", "árvore"), incrementa a afinidade com Daniel e ativa um bônus atrativo transitório (`suggestedTargets`).
+8. **Interação Mútua Espontânea entre Habitantes (A9):**
+   - Método `interactWithAgentPeer(peer)`: quando dois agentes autônomos se encontram em proximidade, interagem mutuamente, restauram suas carências sociais e constroem afinidade interpessoal recíproca.
+9. **Aprendizado Hedônico de Preferências por Locais (A10):**
+   - Ao concluir uma atividade em uma entidade física, calcula a variação de bem-estar ($\Delta \text{wellbeing}$) e ajusta `placePreferences[targetId]`. Locais que proporcionam experiências satisfatórias tornam-se "locais favoritos" orgânicos do agente.
+10. **Integração no Serviço de Simulação (`AutonomousSimulationService`):**
+    - Removido `URBAN_DESTINATIONS`.
+    - Os 7 cidadãos de Lira instanciam mentes autônomas completas com seus perfis Big Five (`citizens.seed.ts`).
+    - Ciclo de simulação gera percepção espacial do ambiente, detecta proximidade entre agentes para conversas espontâneas e processa sugestões do avatar Daniel.
+
+### 3. Validação de Aceite
+- **Testes Unitários de Autonomia:** `packages/agent-planning/autonomy.spec.ts` — **10 testes aprovados (100%)**.
+- **Testes de Avatares no Cliente:** `apps/web-client/src/avatars/agent-avatar.spec.ts` — **9 testes aprovados (100%)**.
+- **Testes de Simulação:** `apps/api/src/modules/simulation/simulation.service.spec.ts` — **4 testes aprovados (100%)**.
+- **Suíte Completa do Monorepo:** `npm test` — **25 de 25 projetos aprovados (100%)**.
+- **Verificação de Tipos:** `npm run typecheck` — **0 erros de TypeScript**.
+- **Controle de Versão:** Commits `ef679172` (Fase 1) e `355ceb2c` (Fase 2) mesclados em `main` e `feat/1-mvp-rua-central` e sincronizados no GitHub.
 
 
