@@ -197,4 +197,46 @@ describe('Vehicle & Agent Collision Physics (Unit Tests — Web Client)', () => 
     // Deve recuar para o Norte (z diminuindo, afastando-se do SUV)
     expect(coupe.position.z).toBeLessThan(0.0);
   });
+
+  it('Veículo bloqueado por agente/pedestre parado na pista deve executar manobra de contorno (OBSTACLE_BYPASS)', () => {
+    // Carro em x = 3.5, z = 25.0, sentido Norte (-Z, dir = -1)
+    const car = createTestCar('car-bypass', 3.5, 25.0, 'NS', -1);
+    // Pedestre estático bloqueando a faixa em z = 22.0 (3m à frente)
+    const pedPos = new THREE.Vector3(3.5, 0, 22.0);
+
+    // Simula 2.5 segundos de bloqueio contínuo até acionar o contorno
+    for (let i = 0; i < 70; i++) {
+      car.update(0.04, [], [pedPos], new THREE.Vector3(100, 0, 100), [car]);
+    }
+
+    // O carro deve ter iniciado a manobra de contorno
+    expect(car.state).toBe('OBSTACLE_BYPASS');
+
+    // Ao avançar na manobra de contorno (completando a ré preparatória e avançando pelo arco Bézier)
+    for (let i = 0; i < 90; i++) {
+      car.update(0.04, [], [pedPos], new THREE.Vector3(100, 0, 100), [car]);
+    }
+
+    // Deve ter havido deslocamento lateral desviando do pedestre
+    expect(Math.abs(car.position.x - 3.5)).toBeGreaterThan(0.5);
+  });
+
+  it('Veículo bloqueado por outro carro parado na via deve executar manobra de ultrapassagem/contorno', () => {
+    // Carro seguidor em x = -3.5, z = 20.0 (sentido Sul, dir = 1)
+    const follower = createTestCar('follower', -3.5, 20.0, 'NS', 1);
+    follower.speed = 0;
+    // Carro líder quebrado/parado em x = -3.5, z = 24.5
+    const brokenCar = createTestCar('broken', -3.5, 24.5, 'NS', 1);
+    brokenCar.speed = 0;
+
+    const vehicles = [follower, brokenCar];
+
+    // Simula bloqueio por mais de 2.2 segundos
+    for (let i = 0; i < 70; i++) {
+      follower.update(0.04, [], [], new THREE.Vector3(100, 0, 100), vehicles);
+    }
+
+    // O carro seguidor deve assumir a manobra de contorno
+    expect(follower.state).toBe('OBSTACLE_BYPASS');
+  });
 });

@@ -14,7 +14,8 @@ export type VehicleBehaviorState =
   | 'PARKING_MANEUVER'
   | 'PARKED'
   | 'UNPARKING_MANEUVER'
-  | 'DEADLOCK_ESCAPE';
+  | 'DEADLOCK_ESCAPE'
+  | 'OBSTACLE_BYPASS';
 
 export interface VehicleConfig {
   id: string;
@@ -196,6 +197,11 @@ export class VehicleAgent {
   private deadlockTimer = 0;
   private deadlockReverseRemaining = 0;
   private deadlockYieldTimer = 0;
+
+  // Manobra de contorno ativo de obstáculo (ultrapassagem/desvio)
+  private bypassSide: 'LEFT' | 'RIGHT' = 'LEFT';
+  private bypassReverseRemaining = 0;
+
 
   // Sinalização
   private turnSignalState: SignalLamp = 'OFF';
@@ -500,12 +506,13 @@ export class VehicleAgent {
       case 'APPROACHING_INTERSECTION':
       case 'WAITING_SIGNAL':
       case 'OBSTACLE_BRAKING':
-        this.updateLaneFollowing(delta, perception, trafficLights, otherVehicles);
+        this.updateLaneFollowing(delta, perception, trafficLights, otherVehicles, pedestrianPositions, playerPos);
         break;
       case 'TURNING':
       case 'PARKING_MANEUVER':
       case 'UNPARKING_MANEUVER':
       case 'U_TURN_MANEUVER':
+      case 'OBSTACLE_BYPASS':
         this.updateManeuver(delta, perception);
         break;
       case 'DEADLOCK_ESCAPE':
@@ -777,7 +784,9 @@ export class VehicleAgent {
     delta: number,
     perception: Perception,
     trafficLights: TrafficLightRef[],
-    others: VehicleAgent[]
+    others: VehicleAgent[],
+    pedestrians: THREE.Vector3[] = [],
+    playerPos?: THREE.Vector3
   ): void {
     const along = this.along();
     const dist = Math.abs(along);
@@ -826,20 +835,32 @@ export class VehicleAgent {
       this.state = 'CRUISING';
     }
 
-    // 6. Bloqueio persistente por pedestre/avatar → buzina e, se insistir, retorno em U.
-    //    Veículos parados à frente (fila) NUNCA disparam retorno: o carro apenas aguarda.
-    const blockedByPerson =
-      this.state === 'OBSTACLE_BRAKING' && stopped && (perception.kind === 'pedestrian' || perception.kind === 'player');
-    if (blockedByPerson) {
+    // 6. Bloqueio por obstáculo (carro, pedestre ou avatar) → manobra ativa para contornar e sair!
+    const isObstacleBlocking =
+      (this.state === 'OBSTACLE_BRAKING' || this.state === 'APPROACHING_INTERSECTION') &&
+      stopped &&
+      perception.kind !== 'none' &&
+      perception.gap < 5.0;
+
+    if (isObstacleBlocking) {
       this.blockedTimer += delta;
     } else {
       this.blockedTimer = Math.max(0, this.blockedTimer - delta * 2); // decaimento (robusto a oscilações)
       if (this.blockedTimer === 0) this.honked = false;
     }
-    if (this.blockedTimer > 2.0 && !this.honked) {
-      VehicleAudioEngine.playHorn(0.14);
+
+    if (this.blockedTimer > 1.4 && !this.honked) {
+      VehicleAudioEngine.playHorn(0.12);
       this.honked = true;
     }
+
+    // Se persistir bloqueado por mais de 2.0s: executa manobra ativa de contorno (desvio e saída)
+    if (this.blockedTimer > 2.0) {
+      const needsReverse = perception.gap < 1.8;
+      this.startObstacleBypass(others, pedestrians, playerPos, needsReverse);
+      return;
+    }
+
     const nearIntersection = dist < 18;
     if (this.blockedTimer > 6.0 && !nearIntersection && this.oppositeLaneClear(others)) {
       this.startUTurn(true);
@@ -998,7 +1019,7 @@ export class VehicleAgent {
     if (this.state === 'DEADLOCK_ESCAPE' || this.state === 'PARKED') return;
 
     const distToCenter = Math.hypot(this.position.x, this.position.z);
-    const inIntersectionZone = distToCenter < 24; // Cruzamento e vias de aproximação imediata
+    const inIntersectionZone = distToCenter < 16.0; // Cruzamento e retenção imediata
     const isStopped = Math.abs(this.speed) < 0.25;
 
     // Um veículo está bloqueado se estiver parado na zona de conflito e:
@@ -1217,6 +1238,147 @@ export class VehicleAgent {
     this.beginPath(this.buildPath(p0, p1, p2, p3, false), 3.0, 'UNPARKING_MANEUVER', this.currentAxis, this.currentDirection);
   }
 
+  // ──────────────────── CONTORNO ATIVO DE OBSTÁCULOS ────────────────────
+  /**
+   * Avalia a melhor rota de contorno do obstáculo (esquerda vs direita).
+   */
+  private chooseBypassSide(
+    others: VehicleAgent[],
+    pedestrians: THREE.Vector3[] = [],
+    playerPos?: THREE.Vector3
+  ): 'LEFT' | 'RIGHT' {
+    const fwd = this.forward();
+    const right = this.rightVec();
+    const p0 = this.position;
+
+    const testLeft = p0.clone().addScaledVector(fwd, 3.5).addScaledVector(right, -2.4);
+    const testRight = p0.clone().addScaledVector(fwd, 3.5).addScaledVector(right, 2.4);
+
+    let leftScore = 10;
+    let rightScore = 10;
+
+    // 1. Limite da via / meio-fio (±6.2m)
+    if (this.currentAxis === 'NS') {
+      if (Math.abs(testRight.x) > 6.2) rightScore -= 8;
+      if (Math.abs(testLeft.x) > 6.2) leftScore -= 8;
+    } else {
+      if (Math.abs(testRight.z) > 6.2) rightScore -= 8;
+      if (Math.abs(testLeft.z) > 6.2) leftScore -= 8;
+    }
+
+    // 2. Obstáculos (outros veículos)
+    for (const o of others) {
+      if (o === this) continue;
+      for (const c of o.getColliders()) {
+        const cx = c.cx ?? o.position.x;
+        const cz = c.cz ?? o.position.z;
+        const cp = new THREE.Vector3(cx, this.position.y, cz);
+        if (cp.distanceTo(testLeft) < 2.5) leftScore -= 6;
+        if (cp.distanceTo(testRight) < 2.5) rightScore -= 6;
+      }
+    }
+
+    // 3. Pedestres / Avatar
+    const people = [...pedestrians];
+    if (playerPos) people.push(playerPos);
+    for (const p of people) {
+      if (p.distanceTo(testLeft) < 1.8) leftScore -= 5;
+      if (p.distanceTo(testRight) < 1.8) rightScore -= 5;
+    }
+
+    if (leftScore >= 6) return 'LEFT';
+    if (rightScore > leftScore) return 'RIGHT';
+    return 'LEFT';
+  }
+
+  /**
+   * Avalia se há espaço livre viável para contornar o obstáculo lateralmente.
+   */
+  public canBypassObstacle(
+    others: VehicleAgent[],
+    pedestrians: THREE.Vector3[] = [],
+    playerPos?: THREE.Vector3
+  ): boolean {
+    const fwd = this.forward();
+    const right = this.rightVec();
+    const p0 = this.position;
+
+    // Testa ambos os lados (±2.4m)
+    for (const side of ['LEFT', 'RIGHT'] as const) {
+      const latOffset = (side === 'LEFT' ? -1 : 1) * 2.4;
+      const testPoint = p0.clone().addScaledVector(fwd, 4.0).addScaledVector(right, latOffset);
+
+      // 1. Limite da via: se for calçada, invalida
+      if (this.currentAxis === 'NS' && Math.abs(testPoint.x) > 6.2) continue;
+      if (this.currentAxis === 'EW' && Math.abs(testPoint.z) > 6.2) continue;
+
+      // 2. Veículos no ponto de contorno
+      let blockedByCar = false;
+      for (const o of others) {
+        if (o === this) continue;
+        for (const c of o.getColliders()) {
+          const cx = c.cx ?? o.position.x;
+          const cz = c.cz ?? o.position.z;
+          if (Math.hypot(cx - testPoint.x, cz - testPoint.z) < 2.4) {
+            blockedByCar = true;
+            break;
+          }
+        }
+        if (blockedByCar) break;
+      }
+      if (blockedByCar) continue;
+
+      // 3. Pedestres no ponto de contorno
+      const people = [...pedestrians];
+      if (playerPos) people.push(playerPos);
+      const blockedByPed = people.some((p) => Math.hypot(p.x - testPoint.x, p.z - testPoint.z) < 1.6);
+      if (blockedByPed) continue;
+
+      return true;
+    }
+
+    return false;
+  }
+
+  public startObstacleBypass(
+    others: VehicleAgent[],
+    pedestrians: THREE.Vector3[] = [],
+    playerPos?: THREE.Vector3,
+    withReverse: boolean = false
+  ): void {
+    this.state = 'OBSTACLE_BYPASS';
+    this.path = null;
+    this.bypassSide = this.chooseBypassSide(others, pedestrians, playerPos);
+    this.turnSignalState = this.bypassSide;
+    this.bypassReverseRemaining = withReverse ? 1.8 : 0;
+    VehicleAudioEngine.playHorn(0.12);
+
+    if (!withReverse) {
+      this.buildBypassArc(this.bypassSide);
+    }
+  }
+
+  private buildBypassArc(side: 'LEFT' | 'RIGHT'): void {
+    const f = this.forward();
+    const r = this.rightVec();
+    const latOffset = (side === 'LEFT' ? -1 : 1) * 2.4;
+    const p0 = this.position.clone();
+
+    // Ponto de saída lateral ao lado do obstáculo
+    const p1 = p0.clone().addScaledVector(f, 3.2).addScaledVector(r, latOffset);
+    // Ponto de transposição além do obstáculo mantendo o desvio lateral
+    const p2 = p0.clone().addScaledVector(f, 7.5).addScaledVector(r, latOffset);
+    // Ponto de reingresso na linha central da faixa original
+    const targetAlong = this.along() + this.currentDirection * 12.0;
+    const laneX = laneLateral(this.currentAxis, this.currentDirection);
+    const p3 = this.currentAxis === 'NS'
+      ? new THREE.Vector3(laneX, p0.y, targetAlong)
+      : new THREE.Vector3(targetAlong, p0.y, laneX);
+
+    this.turnSignalState = side;
+    this.beginPath(this.buildPath(p0, p1, p2, p3, false), 3.0, 'OBSTACLE_BYPASS', this.currentAxis, this.currentDirection);
+  }
+
   // ──────────────────── EXECUÇÃO DE MANOBRAS ────────────────────
   private updateManeuver(_delta: number, perception: Perception): void {
     // Fase de ré do retorno em U
@@ -1227,8 +1389,23 @@ export class VehicleAgent {
       return;
     }
 
+    // Fase de ré preparatória de abertura de ângulo para contorno de obstáculo
+    if (this.state === 'OBSTACLE_BYPASS' && this.bypassReverseRemaining > 0) {
+      this.turnSignalState = 'HAZARD';
+      this.targetSpeed = -Math.min(1.4, Math.sqrt(2 * COMFORT_DECEL * this.bypassReverseRemaining));
+      return;
+    }
+
     if (!this.path) {
       this.finishManeuver();
+      return;
+    }
+
+    // Durante o arco de contorno, avança pelo caminho contornando o obstáculo lateralmente
+    if (this.state === 'OBSTACLE_BYPASS') {
+      const progress = this.pathS / this.path.length;
+      this.turnSignalState = progress > 0.55 ? (this.bypassSide === 'LEFT' ? 'RIGHT' : 'LEFT') : this.bypassSide;
+      this.targetSpeed = this.pathMaxSpeed;
       return;
     }
 
@@ -1335,6 +1512,20 @@ export class VehicleAgent {
       this.rotationY = laneAngle(this.currentAxis, this.currentDirection);
       this.mesh.rotation.y = this.rotationY;
       this.mesh.position.copy(this.position);
+      return;
+    }
+
+    // Ré preparatória da manobra de contorno de obstáculo (abertura de raio de esterçamento)
+    if (this.state === 'OBSTACLE_BYPASS' && this.bypassReverseRemaining > 0) {
+      const ds = this.speed * delta; // negativo
+      this.position.addScaledVector(this.forward(), ds);
+      this.bypassReverseRemaining = Math.max(0.001, this.bypassReverseRemaining - Math.abs(ds));
+      this.targetSteeringAngle = 0;
+      if (this.bypassReverseRemaining < 0.05 && Math.abs(this.speed) < 0.15) {
+        this.bypassReverseRemaining = 0;
+        this.speed = 0;
+        this.buildBypassArc(this.bypassSide);
+      }
       return;
     }
 
