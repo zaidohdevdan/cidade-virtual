@@ -1,5 +1,33 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Refatoração do Chat (Canto Padrão) e Remoção de Balões de Nomes dos NPCs
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** UX / Interface Conversacional e Limpeza Visual da Cena 3D
+
+### 1. Resumo Executivo
+Atendimento à solicitação de desobstrução visual e ajuste ergonômico da interface de diálogo e do campo de visão da cidade 3D:
+1. **Remoção dos Balões Estáticos Flutuantes de Nomes dos NPCs (`AgentAvatar` & `style.css`)**:
+   - Desativados os elementos HTML flutuantes gerados em `this.label` no `agent-avatar.ts` (`✦ NOME DO NPC / Designação Estelar / Cargo`), que ficavam permanentemente projetados sobre os 7 NPCs na cena 3D e se aglomeravam na praça/vias.
+   - Atualizado `style.css` com `.agent-label { display: none !important; }` para blindagem contra renderização.
+   - Atualizado `updateLabel()` para não reativar `this.label.style.display = 'block'`.
+   - O balão de fala dinâmico (`speechBubble`) permanece ativo exclusivamente durante emissões de diálogo real (`agent.say()`) quando o jogador está próximo.
+   - Atualizada a suíte de testes `agent-avatar.spec.ts` para verificar que balões estáticos não são anexados ao DOM e que a limpeza no `dispose()` é preservada.
+2. **Reposicionamento do Chat no Canto Padrão de Aplicações/Jogos (`DialogueModal.tsx`)**:
+   - Eliminado o overlay fullscreen escuro opaco (`inset: 0`, `backgroundColor: rgba(5, 10, 20, 0.65)` e `backdropFilter: blur(8px)`) que bloqueava a visualização do mundo 3D.
+   - O diálogo agora é renderizado como widget de chat compacto e moderno no **canto inferior direito** (`bottom: 20px; right: 20px; width: 380px; height: 520px; max-height: calc(100vh - 40px)`).
+   - Glassmorphism refinado (`rgba(15, 23, 42, 0.94)`, borda `rgba(56, 189, 248, 0.35)`, sombra com glow ciano e animação `chatSlideIn`).
+   - Fechamento ergonômico por botão `✕`, tecla `Escape` e clique fora do card (clicar no mundo 3D fecha o chat).
+   - Chips compactos de perguntas rápidas, histórico rolável e input responsivo com envio via `Enter`.
+3. **Desobstrução do HUD (`App.tsx`)**:
+   - `nearbyAgent` é temporariamente silenciado no HUD enquanto o chat estiver aberto, impedindo sobreposição do card "Pressione E para conversar".
+4. **Validação de Testes**:
+   - `npx vitest run apps/web-client`: 8 arquivos e 44 testes aprovados (100% green).
+   - Monorepo completo (`npx vitest run`): 44 arquivos de teste e 251 testes aprovados (100% green).
+
+---
+
 ## Task: Task-040 — Mundo que afeta a mente: clima, hora e tráfego no decisor
 - **Data:** 2026-10-19
 - **Status:** Concluído

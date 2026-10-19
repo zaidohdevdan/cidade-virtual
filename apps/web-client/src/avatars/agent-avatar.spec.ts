@@ -119,9 +119,10 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     expect(agent.isWaitingAtCrosswalk).toBe(false);
   });
 
-  it('deve limpar elementos DOM do label e speechBubble ao chamar dispose()', () => {
+  it('não deve anexar balões estáticos de nomes de NPCs ao DOM e deve limpar speechBubble ao chamar dispose()', () => {
     agent.say('Olá mundo', 4.0, true);
-    expect(document.body.contains(agent.label)).toBe(true);
+    // Balão de nome do NPC não deve estar no DOM para evitar poluição visual
+    expect(document.body.contains(agent.label)).toBe(false);
     expect(document.body.contains(agent.speechBubble!)).toBe(true);
 
     agent.dispose();

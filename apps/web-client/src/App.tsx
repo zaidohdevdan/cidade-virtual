@@ -480,7 +480,7 @@ export const App: React.FC = () => {
         isSnapshotOpen={isSnapshotOpen}
         onCloseSnapshot={() => setIsSnapshotOpen(false)}
         snapshotData={snapshotData}
-        nearbyAgent={nearbyAgent}
+        nearbyAgent={isDialogueOpen ? null : nearbyAgent}
         onOpenDialogue={handleOpenDialogueForNearbyAgent}
       />
 

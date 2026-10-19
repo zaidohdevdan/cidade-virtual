@@ -418,39 +418,11 @@ export class AgentAvatar {
   }
 
   private buildLabel(): void {
+    // Balões com nomes estáticos dos NPCs foram retirados para evitar poluição visual na cena 3D.
+    // Instancia o elemento oculto em memória para compatibilidade sem anexá-lo ao DOM.
     this.label = document.createElement('div');
     this.label.className = 'agent-label';
-    this.label.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: center; gap: 5px;">
-        <span style="font-size: 13px; text-shadow: 0 0 6px rgba(255,255,255,0.9);">✦</span>
-        <span style="letter-spacing: 0.6px; font-weight: 800;">${this.config.name.toUpperCase()}</span>
-      </div>
-      <div style="font-size: 9.5px; opacity: 0.92; font-weight: 500; margin-top: 1px; letter-spacing: 0.2px;">
-        ${this.config.starDesignation}
-      </div>
-      <div style="font-size: 8.5px; opacity: 0.78; font-weight: 400; margin-top: 1px; font-style: italic;">
-        ${this.config.role}
-      </div>
-    `;
-    this.label.style.cssText = `
-      position: absolute;
-      padding: 4px 10px;
-      border-radius: 9px;
-      font-size: 11px;
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      color: #ffffff;
-      background: ${this.config.labelColor};
-      pointer-events: none;
-      transform: translate(-50%, -100%);
-      white-space: nowrap;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.45), 0 0 10px rgba(255,255,255,0.2);
-      border: 1.5px solid rgba(255,255,255,0.45);
-      backdrop-filter: blur(8px);
-      z-index: 100;
-      text-align: center;
-      transition: transform 0.08s ease;
-    `;
-    document.body.appendChild(this.label);
+    this.label.style.display = 'none';
   }
 
   /**
@@ -529,41 +501,27 @@ export class AgentAvatar {
   }
 
   public updateLabel(camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
-    const screenPos = this.position.clone().add(new THREE.Vector3(0, 2.35, 0));
-    screenPos.project(camera);
+    if (this.label) {
+      this.label.style.display = 'none';
+    }
 
-    const w = renderer.domElement.clientWidth;
-    const h = renderer.domElement.clientHeight;
-
-    const x = (screenPos.x * 0.5 + 0.5) * w;
-    const y = (-screenPos.y * 0.5 + 0.5) * h;
-
-    if (screenPos.z < 1) {
-      this.label.style.display = 'block';
-      this.label.style.left = `${x}px`;
-      this.label.style.top = `${y}px`;
-
-      // Atualiza posição do balão de fala se estiver ativo e o avatar Daniel estiver próximo
-      if (this.speechBubble) {
-        if (this.speechTimer > 0 && this.isNearPlayer) {
-          const bubblePos = this.position.clone().add(new THREE.Vector3(0, 2.95, 0));
-          bubblePos.project(camera);
-          const bx = (bubblePos.x * 0.5 + 0.5) * w;
-          const by = (-bubblePos.y * 0.5 + 0.5) * h;
-          if (bubblePos.z < 1) {
-            this.speechBubble.style.display = 'block';
-            this.speechBubble.style.left = `${bx}px`;
-            this.speechBubble.style.top = `${by}px`;
-          } else {
-            this.speechBubble.style.display = 'none';
-          }
+    // Atualiza posição do balão de fala dinâmico apenas se estiver ativo e próximo
+    if (this.speechBubble) {
+      if (this.speechTimer > 0 && this.isNearPlayer) {
+        const bubblePos = this.position.clone().add(new THREE.Vector3(0, 2.95, 0));
+        bubblePos.project(camera);
+        const w = renderer.domElement.clientWidth;
+        const h = renderer.domElement.clientHeight;
+        const bx = (bubblePos.x * 0.5 + 0.5) * w;
+        const by = (-bubblePos.y * 0.5 + 0.5) * h;
+        if (bubblePos.z < 1) {
+          this.speechBubble.style.display = 'block';
+          this.speechBubble.style.left = `${bx}px`;
+          this.speechBubble.style.top = `${by}px`;
         } else {
           this.speechBubble.style.display = 'none';
         }
-      }
-    } else {
-      this.label.style.display = 'none';
-      if (this.speechBubble) {
+      } else {
         this.speechBubble.style.display = 'none';
       }
     }

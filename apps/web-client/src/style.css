@@ -398,18 +398,22 @@ html, body {
   letter-spacing: 0.04em;
 }
 
-/* ── AGENT LABELS ─────────────────────────────────────── */
+/* ── AGENT LABELS (Desativados para evitar poluição visual de balões estáticos de nomes) ── */
 .agent-label {
-  position: fixed;
-  pointer-events: none;
-  z-index: 50;
-  font-family: var(--font) !important;
-  animation: labelPop 0.3s ease;
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
-@keyframes labelPop {
-  from { transform: translate(-50%, -80%) scale(0.8); opacity: 0; }
-  to   { transform: translate(-50%, -100%) scale(1); opacity: 1; }
+@keyframes chatSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* ── MODAL ────────────────────────────────────────────── */
