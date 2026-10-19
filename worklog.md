@@ -1093,6 +1093,26 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **Monorepo Nx:** `npm test` — **26 de 26 projetos aprovados (100%)**.
 - **Checagem de Schema Drift:** `npm run check:schema-drift` — **100% sincronizado**.
 
+---
+
+## 2026-10-19 — Correção da Orientação das Setas Indicativas de Sentido (SIC 01 - CTB / CONTRAN)
+
+### 1. Resumo do Problema
+- Na sinalização horizontal das Avenidas Perimetrais Sul ($z = +68\text{m}$) e Norte ($z = -68\text{m}$), os ângulos de rotação `rotY` das setas direcionais desenhadas no asfalto estavam invertidos em 180° em relação ao fluxo regulamentar dos veículos (mão direita conforme CTB):
+  - Na Perimetral Sul, a pista externa ($z = +71.5\text{m}$) apontava para o Oeste em vez de Leste, e a pista interna ($z = +64.5\text{m}$) apontava para o Leste em vez de Oeste.
+  - Na Perimetral Norte, a pista externa ($z = -71.5\text{m}$) apontava para o Leste em vez de Oeste, e a pista interna ($z = -64.5\text{m}$) apontava para o Oeste em vez de Leste.
+
+### 2. Correções Aplicadas
+- **Alinhamento em [city-scene.ts](file:///home/zaidoh/dsw/cidade-virtual/apps/web-client/src/scenes/city-scene.ts):**
+  - **Perimetral Sul:** Pista externa ($z = +71.5\text{m}$) ajustada para `rotY = Math.PI / 2` (Leste, $+X$); pista interna ($z = +64.5\text{m}$) ajustada para `rotY = -Math.PI / 2` (Oeste, $-X$).
+  - **Perimetral Norte:** Pista externa ($z = -71.5\text{m}$) ajustada para `rotY = -Math.PI / 2` (Oeste, $-X$); pista interna ($z = -64.5\text{m}$) ajustada para `rotY = Math.PI / 2` (Leste, $+X$).
+  - **Alamedas de Contorno:** Adicionadas setas direcionais nas alamedas laterais do Super Market (Alameda Noroeste com `rotY = Math.PI` para o Norte e Alameda Nordeste com `rotY = 0` para o Sul).
+- **Cobertura de Testes:** Criado [perimeter-arrows.spec.ts](file:///home/zaidoh/dsw/cidade-virtual/apps/web-client/src/scenes/perimeter-arrows.spec.ts) validando formalmente os ângulos de rotação de cada uma das setas do anel viário e conectores contra as regras de trânsito brasileiras.
+
+### 3. Validação
+- `npx vitest run apps/web-client`: **8 arquivos e 44 testes aprovados (100%)**.
+- `npx vitest run tests/`: **22 arquivos e 112 testes aprovados (100%)**.
+
 
 
 

@@ -480,37 +480,49 @@ export class CityScene {
     // 6. SETAS DE CIRCULAÇÃO NOVO ANEL VIÁRIO (MÃO DIREITA — CTB)
     // ─────────────────────────────────────────────────────────────
     const ringArrows = [
-      // Perimetral Sul (z = +68):
-      { x: -35, z: ringCoord + 3.5, rotY: -Math.PI / 2 },
-      { x: 35, z: ringCoord + 3.5, rotY: -Math.PI / 2 },
-      { x: -35, z: ringCoord - 3.5, rotY: Math.PI / 2 },
-      { x: 35, z: ringCoord - 3.5, rotY: Math.PI / 2 },
+      // Perimetral Sul (z = +68, mão direita CTB):
+      // - Pista externa (z = +71.5): fluxo regulamentar para o LESTE (+X)
+      { x: -35, z: ringCoord + 3.5, rotY: Math.PI / 2 },
+      { x: 35, z: ringCoord + 3.5, rotY: Math.PI / 2 },
+      // - Pista interna (z = +64.5): fluxo regulamentar para o OESTE (-X)
+      { x: -35, z: ringCoord - 3.5, rotY: -Math.PI / 2 },
+      { x: 35, z: ringCoord - 3.5, rotY: -Math.PI / 2 },
 
-      // Perimetral Norte (z = -68):
-      { x: -35, z: -ringCoord - 3.5, rotY: Math.PI / 2 },
-      { x: 35, z: -ringCoord - 3.5, rotY: Math.PI / 2 },
-      { x: -35, z: -ringCoord + 3.5, rotY: -Math.PI / 2 },
-      { x: 35, z: -ringCoord + 3.5, rotY: -Math.PI / 2 },
+      // Perimetral Norte (z = -68, mão direita CTB):
+      // - Pista externa (z = -71.5): fluxo regulamentar para o OESTE (-X)
+      { x: -35, z: -ringCoord - 3.5, rotY: -Math.PI / 2 },
+      { x: 35, z: -ringCoord - 3.5, rotY: -Math.PI / 2 },
+      // - Pista interna (z = -64.5): fluxo regulamentar para o LESTE (+X)
+      { x: -35, z: -ringCoord + 3.5, rotY: Math.PI / 2 },
+      { x: 35, z: -ringCoord + 3.5, rotY: Math.PI / 2 },
 
-      // Perimetral Oeste (x = -68):
+      // Perimetral Oeste (x = -68, mão direita CTB):
+      // - Pista externa (x = -71.5): fluxo regulamentar para o SUL (+Z)
       { x: -ringCoord - 3.5, z: -35, rotY: 0 },
       { x: -ringCoord - 3.5, z: 35, rotY: 0 },
+      // - Pista interna (x = -64.5): fluxo regulamentar para o NORTE (-Z)
       { x: -ringCoord + 3.5, z: -35, rotY: Math.PI },
       { x: -ringCoord + 3.5, z: 35, rotY: Math.PI },
 
-      // Perimetral Leste (x = +68):
+      // Perimetral Leste (x = +68, mão direita CTB):
+      // - Pista externa (x = +71.5): fluxo regulamentar para o NORTE (-Z)
       { x: ringCoord + 3.5, z: -35, rotY: Math.PI },
       { x: ringCoord + 3.5, z: 35, rotY: Math.PI },
+      // - Pista interna (x = +64.5): fluxo regulamentar para o SUL (+Z)
       { x: ringCoord - 3.5, z: -35, rotY: 0 },
       { x: ringCoord - 3.5, z: 35, rotY: 0 },
 
-      // Conectores:
-      { x: 3.5, z: 55, rotY: Math.PI },
-      { x: -3.5, z: 55, rotY: 0 },
-      { x: 55, z: 3.5, rotY: Math.PI / 2 },
-      { x: 55, z: -3.5, rotY: -Math.PI / 2 },
-      { x: -55, z: 3.5, rotY: Math.PI / 2 },
-      { x: -55, z: -3.5, rotY: -Math.PI / 2 },
+      // Conectores das Artérias Centrais (mão direita CTB):
+      { x: 3.5, z: 55, rotY: Math.PI },         // Conector Sul: subindo para o Norte (-Z)
+      { x: -3.5, z: 55, rotY: 0 },              // Conector Sul: descendo para o Sul (+Z)
+      { x: 55, z: 3.5, rotY: Math.PI / 2 },     // Conector Leste: saindo para o Leste (+X)
+      { x: 55, z: -3.5, rotY: -Math.PI / 2 },   // Conector Leste: retornando para o Oeste (-X)
+      { x: -55, z: 3.5, rotY: Math.PI / 2 },    // Conector Oeste: retornando para o Leste (+X)
+      { x: -55, z: -3.5, rotY: -Math.PI / 2 },  // Conector Oeste: saindo para o Oeste (-X)
+
+      // Alamedas de Contorno do Super Market:
+      { x: -18.5, z: -48, rotY: Math.PI },      // Alameda Noroeste: sentido Perimetral Norte (-Z)
+      { x: 18.5, z: -48, rotY: 0 },             // Alameda Nordeste: sentido Centro (+Z)
     ];
 
     for (const a of ringArrows) {
