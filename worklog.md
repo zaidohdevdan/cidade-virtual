@@ -731,4 +731,58 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **Verificação de Tipos:** `npm run typecheck` — **0 erros de TypeScript**.
 - **Controle de Versão:** Commits `ef679172` (Fase 1) e `355ceb2c` (Fase 2) mesclados em `main` e `feat/1-mvp-rua-central` e sincronizados no GitHub.
 
+---
+
+## 2026-10-19 — Construção da Malha Viária: Anel Viário Perimetral & Interligações Urbanas
+
+### 1. Contexto & Solicitação do Usuário
+- "construa essas novas vias com o objetivo de interligar. conforme print"
+- Baseado em imagem com traçado magenta/rosa ilustrando o fechamento perimetral da malha viária, circundando os 4 quadrantes da cidade (atrás do Super Mercado / edifícios norte, parque/edifícios ao sul, leste e oeste) e interligando os 4 eixos existentes da Avenida Central e Rua Transversal.
+
+### 2. Implementações Realizadas
+
+#### A. Geometria Viária & Sinalização (CTB / CONTRAN) em `CityScene.ts`
+1. **Anel Viário Perimetral (4 Vias Circundantes de 14m):**
+   - **Avenida Perimetral Sul:** $z = +68.0\text{m}$, extensão $X \in [-75, 75]\text{m}$.
+   - **Avenida Perimetral Norte:** $z = -68.0\text{m}$ (passando atrás do Super Market com recuo generoso), extensão $X \in [-75, 75]\text{m}$.
+   - **Avenida Perimetral Oeste:** $x = -68.0\text{m}$, extensão $Z \in [-75, 75]\text{m}$.
+   - **Avenida Perimetral Leste:** $x = +68.0\text{m}$, extensão $Z \in [-75, 75]\text{m}$.
+   - Padrão viário brasileiro com 2 faixas de rolamento de 7.0m de largura útil cada (total 14.0m de asfalto).
+2. **Conectores Radiais:**
+   - Eixo Sul da Avenida Central conectado ao anel em $z = +61\text{m}$ até $z = +68\text{m}$.
+   - Eixo Norte com via de serviço/logística atrás do Super Market conectando ao anel em $z = -61\text{m}$ até $z = -68\text{m}$.
+   - Eixos Leste e Oeste da Rua Transversal conectados ao anel em $x = \pm 61\text{m}$ até $x = \pm 68\text{m}$.
+3. **Passeios Públicos e Meio-Fio:**
+   - Calçadas de concreto elevado ($y = 0.18\text{m}$) com largura generosa de 5.0m contornando todo o perímetro externo e as esquinas internas dos 4 quadrantes.
+   - Meio-fio de granito escurecido em $y = 0.20\text{m}$.
+4. **Sinalização Horizontal & Vertical:**
+   - Linhas duplas amarelas seccionadas (faixas de divisão de sentidos opostos).
+   - Linhas de bordo brancas contínuas demarcando o acostamento e calçada.
+   - 22 setas direcionais CONTRAN pintadas no asfalto reforçando a mão de direção à direita.
+   - 4 placas de nomenclatura urbana: `AV. PERIMETRAL SUL`, `AV. PERIMETRAL NORTE`, `AV. PERIMETRAL OESTE`, `AV. PERIMETRAL LESTE`.
+5. **Mobiliário Urbano e Iluminação Pública:**
+   - 8 novos postes de iluminação pública ao longo das calçadas do Anel Perimetral com luz dinâmica dia/noite.
+   - 8 novas árvores urbanas ao longo das calçadas e esquinas do Anel.
+   - Expansão do plano de solo para $220\text{m} \times 220\text{m}$ e do frustum de sombras para cobrir o anel.
+
+#### B. Física, Colisores e Limites da Cidade
+1. **Colisores de Solo e Limites da Cidade:**
+   - `packages/config/city-colliders.ts`: `CITY_BOUNDS` expandido de $[-65, 65]\text{m}$ para $[-85, 85]\text{m}$ em $X$ e $Z$.
+   - `packages/world-engine/geometry-builder.ts`: `DEFAULT_CITY_BOUNDS` para Recast NavMesh expandido de $[-50, 50]\text{m}$ para $[-85, 85]\text{m}$.
+   - `apps/web-client/src/components/City.tsx`: Rapier CuboidCollider do solo expandido de $75\text{m} \times 75\text{m}$ para $95\text{m} \times 95\text{m}$.
+   - `apps/web-client/src/vehicles/vehicle-agent.ts`: `ROAD_END` expandido para 60m para permitir que veículos acessem as extremidades arteriais e novos entroncamentos.
+
+#### C. Integração com Autonomia dos Agentes (`world-affordances.ts`)
+1. **Novas Entidades Físicas para a Mente dos Cidadãos:**
+   - `bench-perimetral-south`: Banco de repouso e socialização na calçada sul.
+   - `bench-perimetral-west`: Banco na calçada oeste para contemplação urbana.
+   - `tree-perimetral-south` e `tree-perimetral-north`: Alamedas arborizadas para descanso e caminhadas.
+   - `lookout-perimetral-se`: Mirante urbano do anel viário sudeste para exploração e contemplação.
+
+### 3. Validação de Aceite
+- **Testes Unitários da Cena Urbana:** `apps/web-client/src/scenes/city-scene.spec.ts` — **3 de 3 testes aprovados (100%)**.
+- **Suíte Completa do Monorepo:** `npm test` — **25 de 25 projetos aprovados (100%)**.
+- **Checagem Estática de Tipos:** `npm run typecheck` — **0 erros em todo o monorepo**.
+
+
 

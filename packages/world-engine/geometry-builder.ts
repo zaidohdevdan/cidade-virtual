@@ -11,10 +11,10 @@ export interface CityGeometryBounds {
 }
 
 export const DEFAULT_CITY_BOUNDS: CityGeometryBounds = {
-  minX: -50,
-  maxX: 50,
-  minZ: -50,
-  maxZ: 50,
+  minX: -85,
+  maxX: 85,
+  minZ: -85,
+  maxZ: 85,
 };
 
 /**

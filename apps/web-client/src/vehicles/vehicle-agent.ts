@@ -48,8 +48,8 @@ const CAR_HALF_LENGTH = 2.3;
 // Limites de cada via (o Super Market ocupa z < -38.5 no extremo norte da Avenida Central)
 const ROAD_END = {
   NS_NORTH: -30,
-  NS_SOUTH: 44,
-  EW: 44,
+  NS_SOUTH: 60,
+  EW: 60,
 };
 
 // Dinâmica longitudinal

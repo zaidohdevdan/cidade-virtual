@@ -95,10 +95,10 @@ export class CityScene {
     this.sunLight.shadow.mapSize.height = 2048;
     this.sunLight.shadow.camera.near = 0.5;
     this.sunLight.shadow.camera.far = 200;
-    this.sunLight.shadow.camera.left = -70;
-    this.sunLight.shadow.camera.right = 70;
-    this.sunLight.shadow.camera.top = 70;
-    this.sunLight.shadow.camera.bottom = -70;
+    this.sunLight.shadow.camera.left = -90;
+    this.sunLight.shadow.camera.right = 90;
+    this.sunLight.shadow.camera.top = 90;
+    this.sunLight.shadow.camera.bottom = -90;
     this.sunLight.shadow.bias = -0.0005;
     this.scene.add(this.sunLight);
 
@@ -109,7 +109,7 @@ export class CityScene {
 
   // ──────────────────── GROUND ────────────────────
   private buildGround(): void {
-    const grassGeom = new THREE.PlaneGeometry(200, 200);
+    const grassGeom = new THREE.PlaneGeometry(220, 220);
     const grassMat = new THREE.MeshStandardMaterial({ color: 0x5a7c4a, roughness: 0.95 });
     const grass = new THREE.Mesh(grassGeom, grassMat);
     grass.rotation.x = -Math.PI / 2;
@@ -194,6 +194,267 @@ export class CityScene {
     for (const a of arrowPositions) {
       this.buildRoadDirectionalArrow(a.x, a.z, a.rotY, arrowMat);
     }
+
+    // 6. Anel Viário Perimetral e Conexões com as Vias Centrais
+    this.buildPerimeterRingRoad(asphaltMat, sidewalkMat, curbMat, lineMat, yellowLineMat, arrowMat);
+  }
+
+  /**
+   * Constrói o Anel Viário Perimetral e suas vias de interligação às artérias centrais.
+   * Cria uma malha rodoviária completa circundando os 4 quadrantes da cidade,
+   * com entroncamentos em T e cruzamentos de canto no padrão regulamentar brasileiro (mão direita, CTB / CONTRAN).
+   */
+  private buildPerimeterRingRoad(
+    asphaltMat: THREE.Material,
+    sidewalkMat: THREE.Material,
+    curbMat: THREE.Material,
+    lineMat: THREE.Material,
+    yellowLineMat: THREE.Material,
+    arrowMat: THREE.Material,
+  ): void {
+    const roadW = 14; // Largura regulamentar de 14m (2 faixas de 7m)
+    const ringCoord = 68; // Eixo das avenidas perimetrais a ±68m do centro
+    const halfW = roadW / 2; // 7m
+    const innerEdge = ringCoord - halfW; // 61m
+    const swWidth = 5.0; // Calçadas largas com 5m de passeio
+
+    // ─────────────────────────────────────────────────────────────
+    // 1. ASFALTO: OS 4 RAMOS PERIMETRAIS (Norte, Sul, Leste, Oeste)
+    // ─────────────────────────────────────────────────────────────
+    const fullRingLen = ringCoord * 2 + roadW; // 68 * 2 + 14 = 150m
+
+    // Ramo Sul (Avenida Perimetral Sul, z = +68)
+    const southRoadGeom = new THREE.PlaneGeometry(fullRingLen, roadW);
+    const southRoad = new THREE.Mesh(southRoadGeom, asphaltMat);
+    southRoad.rotation.x = -Math.PI / 2;
+    southRoad.position.set(0, 0.02, ringCoord);
+    southRoad.receiveShadow = true;
+    this.scene.add(southRoad);
+
+    // Ramo Norte (Avenida Perimetral Norte, z = -68)
+    const northRoadGeom = new THREE.PlaneGeometry(fullRingLen, roadW);
+    const northRoad = new THREE.Mesh(northRoadGeom, asphaltMat);
+    northRoad.rotation.x = -Math.PI / 2;
+    northRoad.position.set(0, 0.02, -ringCoord);
+    northRoad.receiveShadow = true;
+    this.scene.add(northRoad);
+
+    // Ramo Oeste (Avenida Perimetral Oeste, x = -68)
+    const westRoadGeom = new THREE.PlaneGeometry(roadW, fullRingLen);
+    const westRoad = new THREE.Mesh(westRoadGeom, asphaltMat);
+    westRoad.rotation.x = -Math.PI / 2;
+    westRoad.position.set(-ringCoord, 0.02, 0);
+    westRoad.receiveShadow = true;
+    this.scene.add(westRoad);
+
+    // Ramo Leste (Avenida Perimetral Leste, x = +68)
+    const eastRoadGeom = new THREE.PlaneGeometry(roadW, fullRingLen);
+    const eastRoad = new THREE.Mesh(eastRoadGeom, asphaltMat);
+    eastRoad.rotation.x = -Math.PI / 2;
+    eastRoad.position.set(ringCoord, 0.02, 0);
+    eastRoad.receiveShadow = true;
+    this.scene.add(eastRoad);
+
+    // ─────────────────────────────────────────────────────────────
+    // 2. ASFALTO: VIAS DE INTERLIGAÇÃO (EXTENSÕES DAS ARTÉRIAS CENTRAIS)
+    // ─────────────────────────────────────────────────────────────
+    // Conector Sul: Liga o fim da Avenida Central (z = 50) à Perimetral Sul (z = 61)
+    const southConnLen = innerEdge - 50; // 11m
+    const southConnGeom = new THREE.PlaneGeometry(roadW, southConnLen);
+    const southConn = new THREE.Mesh(southConnGeom, asphaltMat);
+    southConn.rotation.x = -Math.PI / 2;
+    southConn.position.set(0, 0.02, 50 + southConnLen / 2);
+    southConn.receiveShadow = true;
+    this.scene.add(southConn);
+
+    // Conector Leste: Liga o fim da Rua Transversal (x = 50) à Perimetral Leste (x = 61)
+    const eastConnLen = innerEdge - 50; // 11m
+    const eastConnGeom = new THREE.PlaneGeometry(eastConnLen, roadW);
+    const eastConn = new THREE.Mesh(eastConnGeom, asphaltMat);
+    eastConn.rotation.x = -Math.PI / 2;
+    eastConn.position.set(50 + eastConnLen / 2, 0.02, 0);
+    eastConn.receiveShadow = true;
+    this.scene.add(eastConn);
+
+    // Conector Oeste: Liga o fim da Rua Transversal (x = -50) à Perimetral Oeste (x = -61)
+    const westConnLen = innerEdge - 50; // 11m
+    const westConnGeom = new THREE.PlaneGeometry(westConnLen, roadW);
+    const westConn = new THREE.Mesh(westConnGeom, asphaltMat);
+    westConn.rotation.x = -Math.PI / 2;
+    westConn.position.set(-(50 + westConnLen / 2), 0.02, 0);
+    westConn.receiveShadow = true;
+    this.scene.add(westConn);
+
+    // Conector Norte: Alameda de conexão e serviço nos fundos do Super Market
+    const northConnLen = innerEdge - 57; // 4m
+    const northConnGeom = new THREE.PlaneGeometry(roadW, northConnLen);
+    const northConn = new THREE.Mesh(northConnGeom, asphaltMat);
+    northConn.rotation.x = -Math.PI / 2;
+    northConn.position.set(0, 0.02, -(57 + northConnLen / 2));
+    northConn.receiveShadow = true;
+    this.scene.add(northConn);
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. SINALIZAÇÃO HORIZONTAL: LINHAS AMARELAS CENTRAIS DUPLAS
+    // ─────────────────────────────────────────────────────────────
+    const addDashedYellowSegment = (
+      x1: number, z1: number,
+      x2: number, z2: number,
+      isHorizontal: boolean
+    ) => {
+      const step = 4.0;
+      const dashLen = 2.4;
+      const dashWid = 0.24;
+      if (isHorizontal) {
+        const startX = Math.min(x1, x2);
+        const endX = Math.max(x1, x2);
+        for (let x = startX + 2; x <= endX - 2; x += step) {
+          const sg = new THREE.BoxGeometry(dashLen, 0.02, dashWid);
+          const sm = new THREE.Mesh(sg, yellowLineMat);
+          sm.position.set(x, 0.03, z1);
+          this.scene.add(sm);
+        }
+      } else {
+        const startZ = Math.min(z1, z2);
+        const endZ = Math.max(z1, z2);
+        for (let z = startZ + 2; z <= endZ - 2; z += step) {
+          const sg = new THREE.BoxGeometry(dashWid, 0.02, dashLen);
+          const sm = new THREE.Mesh(sg, yellowLineMat);
+          sm.position.set(x1, 0.03, z);
+          this.scene.add(sm);
+        }
+      }
+    };
+
+    // Ramos Sul e Norte (entre cantos e entroncamento central)
+    addDashedYellowSegment(-61, ringCoord, -8, ringCoord, true);
+    addDashedYellowSegment(8, ringCoord, 61, ringCoord, true);
+    addDashedYellowSegment(-61, -ringCoord, -8, -ringCoord, true);
+    addDashedYellowSegment(8, -ringCoord, 61, -ringCoord, true);
+
+    // Ramos Oeste e Leste (entre cantos e entroncamento central)
+    addDashedYellowSegment(-ringCoord, -61, -ringCoord, -8, false);
+    addDashedYellowSegment(-ringCoord, 8, -ringCoord, 61, false);
+    addDashedYellowSegment(ringCoord, -61, ringCoord, -8, false);
+    addDashedYellowSegment(ringCoord, 8, ringCoord, 61, false);
+
+    // Conectores das artérias centrais
+    addDashedYellowSegment(0, 50, 0, 61, false);  // Sul
+    addDashedYellowSegment(50, 0, 61, 0, true);   // Leste
+    addDashedYellowSegment(-61, 0, -50, 0, true); // Oeste
+
+    // ─────────────────────────────────────────────────────────────
+    // 4. LINHAS BRANCAS CONTÍNUAS LATERAIS DE BORDO
+    // ─────────────────────────────────────────────────────────────
+    const addWhiteEdgeLine = (
+      cx: number, cz: number,
+      len: number,
+      isHorizontal: boolean
+    ) => {
+      const lg = new THREE.PlaneGeometry(isHorizontal ? len : 0.18, isHorizontal ? 0.18 : len);
+      const lm = new THREE.Mesh(lg, lineMat);
+      lm.rotation.x = -Math.PI / 2;
+      lm.position.set(cx, 0.03, cz);
+      this.scene.add(lm);
+    };
+
+    const edgeOff = halfW - 0.4; // 6.6m
+    addWhiteEdgeLine(0, ringCoord + edgeOff, fullRingLen, true);
+    addWhiteEdgeLine(0, -ringCoord - edgeOff, fullRingLen, true);
+    addWhiteEdgeLine(-ringCoord - edgeOff, 0, fullRingLen, false);
+    addWhiteEdgeLine(ringCoord + edgeOff, 0, fullRingLen, false);
+
+    // ─────────────────────────────────────────────────────────────
+    // 5. CALÇADAS EXTERNAS E MEIO-FIO (PASSEIO PÚBLICO)
+    // ─────────────────────────────────────────────────────────────
+    const addSidewalkWithCurb = (
+      cx: number, cz: number,
+      lenX: number, lenZ: number,
+      curbX: number, curbZ: number,
+      curbLenX: number, curbLenZ: number
+    ) => {
+      const swGeom = new THREE.BoxGeometry(lenX, 0.22, lenZ);
+      const sw = new THREE.Mesh(swGeom, sidewalkMat);
+      sw.position.set(cx, 0.11, cz);
+      sw.receiveShadow = true;
+      this.scene.add(sw);
+
+      const curbGeom = new THREE.BoxGeometry(curbLenX, 0.26, curbLenZ);
+      const curb = new THREE.Mesh(curbGeom, curbMat);
+      curb.position.set(curbX, 0.13, curbZ);
+      this.scene.add(curb);
+    };
+
+    const outerSwDist = ringCoord + halfW + swWidth / 2; // 77.5m
+    const outerCurbDist = ringCoord + halfW + 0.14; // 75.14m
+
+    // Calçadas Externas Perimetrais
+    addSidewalkWithCurb(0, outerSwDist, fullRingLen + swWidth * 2, swWidth, 0, outerCurbDist, fullRingLen + swWidth * 2, 0.28);
+    addSidewalkWithCurb(0, -outerSwDist, fullRingLen + swWidth * 2, swWidth, 0, -outerCurbDist, fullRingLen + swWidth * 2, 0.28);
+    addSidewalkWithCurb(-outerSwDist, 0, swWidth, fullRingLen + swWidth * 2, -outerCurbDist, 0, 0.28, fullRingLen + swWidth * 2);
+    addSidewalkWithCurb(outerSwDist, 0, swWidth, fullRingLen + swWidth * 2, outerCurbDist, 0, 0.28, fullRingLen + swWidth * 2);
+
+    // Calçadas internas nos 4 quarteirões
+    addSidewalkWithCurb(-35.5, innerEdge - swWidth / 2, 51, swWidth, -35.5, innerEdge - 0.14, 51, 0.28);
+    addSidewalkWithCurb(-innerEdge + swWidth / 2, 35.5, swWidth, 51, -innerEdge + 0.14, 35.5, 0.28, 51);
+
+    addSidewalkWithCurb(35.5, innerEdge - swWidth / 2, 51, swWidth, 35.5, innerEdge - 0.14, 51, 0.28);
+    addSidewalkWithCurb(innerEdge - swWidth / 2, 35.5, swWidth, 51, innerEdge - 0.14, 35.5, 0.28, 51);
+
+    addSidewalkWithCurb(-35.5, -innerEdge + swWidth / 2, 51, swWidth, -35.5, -innerEdge + 0.14, 51, 0.28);
+    addSidewalkWithCurb(-innerEdge + swWidth / 2, -35.5, swWidth, 51, -innerEdge + 0.14, -35.5, 0.28, 51);
+
+    addSidewalkWithCurb(35.5, -innerEdge + swWidth / 2, 51, swWidth, 35.5, -innerEdge + 0.14, 51, 0.28);
+    addSidewalkWithCurb(innerEdge - swWidth / 2, -35.5, swWidth, 51, innerEdge - 0.14, -35.5, 0.28, 51);
+
+    // ─────────────────────────────────────────────────────────────
+    // 6. SETAS DE CIRCULAÇÃO NOVO ANEL VIÁRIO (MÃO DIREITA — CTB)
+    // ─────────────────────────────────────────────────────────────
+    const ringArrows = [
+      // Perimetral Sul (z = +68):
+      { x: -35, z: ringCoord + 3.5, rotY: -Math.PI / 2 },
+      { x: 35, z: ringCoord + 3.5, rotY: -Math.PI / 2 },
+      { x: -35, z: ringCoord - 3.5, rotY: Math.PI / 2 },
+      { x: 35, z: ringCoord - 3.5, rotY: Math.PI / 2 },
+
+      // Perimetral Norte (z = -68):
+      { x: -35, z: -ringCoord - 3.5, rotY: Math.PI / 2 },
+      { x: 35, z: -ringCoord - 3.5, rotY: Math.PI / 2 },
+      { x: -35, z: -ringCoord + 3.5, rotY: -Math.PI / 2 },
+      { x: 35, z: -ringCoord + 3.5, rotY: -Math.PI / 2 },
+
+      // Perimetral Oeste (x = -68):
+      { x: -ringCoord - 3.5, z: -35, rotY: 0 },
+      { x: -ringCoord - 3.5, z: 35, rotY: 0 },
+      { x: -ringCoord + 3.5, z: -35, rotY: Math.PI },
+      { x: -ringCoord + 3.5, z: 35, rotY: Math.PI },
+
+      // Perimetral Leste (x = +68):
+      { x: ringCoord + 3.5, z: -35, rotY: Math.PI },
+      { x: ringCoord + 3.5, z: 35, rotY: Math.PI },
+      { x: ringCoord - 3.5, z: -35, rotY: 0 },
+      { x: ringCoord - 3.5, z: 35, rotY: 0 },
+
+      // Conectores:
+      { x: 3.5, z: 55, rotY: Math.PI },
+      { x: -3.5, z: 55, rotY: 0 },
+      { x: 55, z: 3.5, rotY: Math.PI / 2 },
+      { x: 55, z: -3.5, rotY: -Math.PI / 2 },
+      { x: -55, z: 3.5, rotY: Math.PI / 2 },
+      { x: -55, z: -3.5, rotY: -Math.PI / 2 },
+    ];
+
+    for (const a of ringArrows) {
+      this.buildRoadDirectionalArrow(a.x, a.z, a.rotY, arrowMat);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 7. PLACAS DE IDENTIFICAÇÃO DAS NOVAS AVENIDAS PERIMETRAIS
+    // ─────────────────────────────────────────────────────────────
+    this.buildStreetSign(12, ringCoord - 8.5, 'AV. PERIMETRAL SUL', 'Anel Viário • Setor Sul', 0);
+    this.buildStreetSign(-12, -ringCoord + 8.5, 'AV. PERIMETRAL NORTE', 'Anel Viário • Setor Norte', 0);
+    this.buildStreetSign(-ringCoord + 8.5, 12, 'AV. PERIMETRAL OESTE', 'Anel Viário • Setor Oeste', Math.PI / 2);
+    this.buildStreetSign(ringCoord - 8.5, -12, 'AV. PERIMETRAL LESTE', 'Anel Viário • Setor Leste', Math.PI / 2);
   }
 
   /**
@@ -1202,6 +1463,11 @@ export class CityScene {
       [-35, 9.5], [-25, 9.5], [25, 9.5], [35, 9.5],
       // Ao redor da praça
       [-32, 12], [-32, 32], [-12, 32],
+      // Ao longo das calçadas do Anel Viário Perimetral
+      [-48, 77.5], [48, 77.5],
+      [-48, -77.5], [48, -77.5],
+      [-77.5, -48], [-77.5, 48],
+      [77.5, -48], [77.5, 48],
     ] as [number, number][];
 
     const trunkGeo = new THREE.CylinderGeometry(0.24, 0.32, 4.5, 8);
@@ -1256,6 +1522,11 @@ export class CityScene {
       // Próximos às calçadas
       [-9.5, -18], [-9.5, 18], [9.5, -18], [9.5, 18],
       [-18, -9.5], [18, -9.5], [-18, 9.5], [18, 9.5],
+      // Ao longo das calçadas do Anel Viário Perimetral
+      [-40, 75.5], [40, 75.5],
+      [-40, -75.5], [40, -75.5],
+      [-75.5, -40], [-75.5, 40],
+      [75.5, -40], [75.5, 40],
     ] as [number, number][];
 
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x2b2e31, metalness: 0.8, roughness: 0.3 });

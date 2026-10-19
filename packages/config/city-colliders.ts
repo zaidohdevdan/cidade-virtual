@@ -23,10 +23,10 @@ export interface CityBounds {
 }
 
 export const CITY_BOUNDS: CityBounds = {
-  minX: -65,
-  maxX: 65,
-  minZ: -65,
-  maxZ: 65,
+  minX: -85,
+  maxX: 85,
+  minZ: -85,
+  maxZ: 85,
   minY: -1,
   maxY: 25,
 };

@@ -57,7 +57,7 @@ export const City: React.FC<CityProps> = ({ city, trafficLightState, timeOfDay }
 
       {/* Chão físico Rapier */}
       <RigidBody type="fixed" position={[0, -0.5, 0]}>
-        <CuboidCollider args={[75, 0.5, 75]} />
+        <CuboidCollider args={[95, 0.5, 95]} />
       </RigidBody>
 
       {/* Obstáculos físicos urbanos mapeados no Rapier */}
