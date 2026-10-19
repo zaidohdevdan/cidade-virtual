@@ -1,5 +1,33 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Manobras Ativas de Desvio e Contorno de Obstáculos (OBSTACLE_BYPASS)
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Física de Veículos e Inteligência Coletiva de Trânsito
+
+### 1. Resumo Executivo
+Implementação do comportamento de ultrapassagem/contorno autônomo de obstáculos (`OBSTACLE_BYPASS`) para os veículos do tráfego urbano:
+1. **Detecção Dinâmica de Bloqueio**:
+   - Quando um carro fica retido por um obstáculo (outro veículo quebrado/parado ou um agente/pedestre na pista) por mais de 2.0s, o veículo transiciona automaticamente para o estado `OBSTACLE_BYPASS`.
+2. **Avaliação Espacial Lateral (`chooseBypassSide` e `canBypassObstacle`)**:
+   - O veículo analisa a geometria da via e os limites das guias (meio-fio $X \in [-6.2, 6.2]$).
+   - Verifica a presença de outros veículos, agentes e pedestres à esquerda e à direita para escolher o lado de ultrapassagem mais desimpedido e seguro.
+3. **Manobra Preparatória de Ré com Pisca-Alerta**:
+   - Caso o veículo esteja muito próximo do obstáculo ($< 1.8\text{m}$), realiza uma ré curta de abertura de raio de giro ($\approx 2.2\text{m}$) com pisca-alerta ativado.
+4. **Trajetória em Curva Bézier Cúbica (`buildBypassArc`)**:
+   - Gera um arco suave de 4 pontos de controle com desvio lateral de até $2.4\text{m}$ e retorno à pista $12\text{m}$ adiante.
+   - Aciona a seta do lado do desvio (esquerda ou direita) durante a primeira metade da manobra.
+   - Ao ultrapassar o obstáculo (progresso $> 55\%$), troca a seta para o lado de retorno à pista e reassume a linha central da faixa original suavemente.
+5. **Prevenção de Falso Travamento Sensorial**:
+   - Durante a manobra `OBSTACLE_BYPASS`, o veículo ignora o obstáculo contornado em seu cone frontal para não engasgar a aceleração na curva, garantindo velocidade contínua até o reingresso seguro.
+6. **Validação de Testes**:
+   - Suíte `vehicle-collision.spec.ts`: 12/12 testes aprovados (100%).
+   - Suíte completa do monorepo: 25/25 projetos aprovados (100%).
+   - `npm run typecheck`: 0 erros.
+
+---
+
 ## Task: Voz dos Atores — Síntese TTS no Navegador com Web Speech API (Passo 2)
 - **Data:** 2026-10-19
 - **Status:** Concluído
