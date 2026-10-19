@@ -343,4 +343,122 @@ describe('Autonomia Real dos Agentes — Sem Roteiros Pré-fixados', () => {
     // O local que proporcionou bem-estar passa a ter preferência hedônica positiva na memória
     expect(mind.memory.placePreferences?.['market-central']).toBeGreaterThan(0);
   });
+
+  describe('Task-039 — Loop de Aprendizado Fechado e Transmissão Cultural', () => {
+    it('deve transmitir preferências sociais com fator 0.85 por salto geracional (A -> B -> C)', () => {
+      const mindA = new AgentMind({
+        id: 'agent-a',
+        name: 'Vega',
+        role: 'Exploradora',
+        biography: 'Teve experiência ruim no mercado',
+        personality: basePersonality,
+      });
+
+      const mindB = new AgentMind({
+        id: 'agent-b',
+        name: 'Sulafat',
+        role: 'Cientista',
+        biography: 'Pesquisador curioso',
+        personality: basePersonality,
+      });
+
+      const mindC = new AgentMind({
+        id: 'agent-c',
+        name: 'Sheliak',
+        role: 'Engenheiro',
+        biography: 'Arquiteto urbano',
+        personality: basePersonality,
+      });
+
+      // A possui forte viés hedônico pessoal
+      mindA.memory.placePreferences = {
+        'market-central': -0.8,
+        'cafe-bistro': 0.6,
+      };
+
+      // Salto 1: Interação A -> B (fator 0.85)
+      const res1 = mindA.interactWithAgentPeer(mindB);
+      expect(res1.transmittedPreferences.transmittedFromSelf['market-central']).toBeCloseTo(-0.68, 3);
+      expect(mindB.memory.placePreferences?.['market-central']).toBeCloseTo(-0.68, 3);
+      expect(mindB.memory.placePreferences?.['cafe-bistro']).toBeCloseTo(0.51, 3);
+
+      // Salto 2: Interação B -> C (fator 0.85^2 = 0.7225)
+      const res2 = mindB.interactWithAgentPeer(mindC);
+      expect(res2.transmittedPreferences.transmittedFromSelf['market-central']).toBeCloseTo(-0.578, 3);
+      expect(mindC.memory.placePreferences?.['market-central']).toBeCloseTo(-0.578, 3);
+      expect(mindC.memory.placePreferences?.['cafe-bistro']).toBeCloseTo(0.4335, 3);
+    });
+
+    it('deve arrefecer preferências hedônicas ao longo do tempo (temporal cooling)', () => {
+      const mind = new AgentMind({
+        id: 'agent-decay-test',
+        name: 'Alkaid',
+        role: 'Morador',
+        biography: 'Testador de decaimento',
+        personality: basePersonality,
+      });
+
+      mind.memory.placePreferences = {
+        'market-central': -0.68,
+        'cafe-bistro': 0.51,
+      };
+
+      // 1 passo de arrefecimento com fator 0.90
+      mind.coolDownPreferences(0.9);
+      expect(mind.memory.placePreferences['market-central']).toBeCloseTo(-0.612, 3);
+      expect(mind.memory.placePreferences['cafe-bistro']).toBeCloseTo(0.459, 3);
+
+      // Múltiplos ciclos de arrefecimento (simulando dias/horas na cidade)
+      for (let i = 0; i < 40; i++) {
+        mind.coolDownPreferences(0.9);
+      }
+
+      // Ao arrefecer abaixo do limiar (0.02), o viés é podado da memória
+      expect(mind.memory.placePreferences['market-central']).toBeUndefined();
+      expect(mind.memory.placePreferences['cafe-bistro']).toBeUndefined();
+    });
+
+    it('deve consolidar experiências (Postgres/Qdrant) em placePreferences e modular o utility-decider', async () => {
+      const mind = new AgentMind({
+        id: 'agent-exp-test',
+        name: 'Vega',
+        role: 'Exploradora',
+        biography: 'Aprende com experiências passadas',
+        personality: basePersonality,
+      });
+
+      // Integra experiência ruim registrada
+      mind.integrateExperiences([
+        {
+          eventType: 'hazard_observed',
+          description: 'Presenciou comida estragada e confusão desagradável no Super Mercado Central',
+          locationId: 'market-central',
+          importance: '0.90',
+          confidence: '1.00',
+        },
+      ]);
+
+      expect(mind.memory.placePreferences?.['market-central']).toBeLessThan(-0.6);
+
+      // Simula tomada de decisão com fome moderada
+      const agentPos = { x: 5, y: 0.19, z: -20 };
+      const percept: Percept = {
+        position: agentPos,
+        entities: SYNAPSE_WORLD_ENTITIES.map((e) => ({
+          entity: e,
+          distance: distance2D(agentPos, e.approach ?? e.position),
+        })),
+        actors: [],
+        trafficLight: 'green',
+      };
+
+      mind.needs = { ...fullNeeds, hunger: 0.25 }; // Fome relevante
+
+      const intention = await mind.decideNextIntention(agentPos, percept);
+
+      // O agente deve evitar o mercado e escolher outra opção para saciar sua fome (ex: café bistro)
+      expect(intention.candidate.targetId).not.toBe('market-central');
+      expect(['cafe-bistro', 'cafe-table-outdoor']).toContain(intention.candidate.targetId);
+    });
+  });
 });

@@ -169,9 +169,12 @@ export function scoreCandidate(
     const affinity = memory.actorAffinity?.[cand.targetId] ?? 0.5;
     preference += (affinity - 0.5) * 0.5;
   } else {
-    // Preferência aprendida por experiência prévia em entidades físicas (A10)
-    const learnedPref = memory.placePreferences?.[cand.targetId] ?? 0;
-    preference += learnedPref * 0.35;
+    // Preferência aprendida por experiência prévia em entidades físicas (A10 / Task-039)
+    let learnedPref = memory.placePreferences?.[cand.targetId] ?? 0;
+    if (learnedPref === 0 && cand.targetId === 'crosswalk-north' && memory.placePreferences?.['crosswalk-central-01']) {
+      learnedPref = memory.placePreferences['crosswalk-central-01'];
+    }
+    preference += learnedPref * 0.50;
   }
 
   // Estímulo / sugestão direta recente do jogador Daniel (A8)

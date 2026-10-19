@@ -29,6 +29,24 @@ import {
 } from './utility-decider.js';
 import { deliberateWithLLM } from './llm-deliberator.js';
 
+export const SOCIAL_TRANSMISSION_FACTOR = 0.85;
+
+export interface ExperienceInput {
+  id?: string;
+  eventType?: string;
+  description?: string;
+  content?: string;
+  locationId?: string | null;
+  relatedEntityIds?: string[];
+  importance?: string | number;
+  emotionalWeight?: number;
+  confidence?: string | number;
+  occurredAt?: Date | string | number;
+  timestamp?: Date | string | number;
+  metadata?: Record<string, unknown>;
+  sourceType?: string;
+}
+
 export interface AgentMindConfig {
   id: string;
   name: string;
@@ -149,6 +167,12 @@ export class AgentMind {
           this.memory.suggestedTargets[k] = Math.max(0, val - (dtSeconds / 60) * 0.15);
         }
       }
+    }
+
+    // Arrefecimento temporal contínuo das preferências hedônicas (Task-039)
+    if (this.memory.placePreferences && Object.keys(this.memory.placePreferences).length > 0) {
+      const decay = Math.pow(0.98, Math.max(1, dtSeconds / 60));
+      this.coolDownPreferences(decay);
     }
 
     if (this.currentActivity) {
@@ -334,17 +358,179 @@ export class AgentMind {
     return { suggestedEntityId };
   }
 
+  public static readonly SOCIAL_TRANSMISSION_FACTOR = SOCIAL_TRANSMISSION_FACTOR;
+
+  /**
+   * Recebe uma preferência/viés transmitido socialmente por outro habitante (Task-039).
+   */
+  public receiveSocialPreference(placeId: string, transmittedValue: number): void {
+    this.memory.placePreferences = this.memory.placePreferences || {};
+    const curr = this.memory.placePreferences[placeId];
+    if (curr === undefined || Math.abs(curr) < 0.01) {
+      this.memory.placePreferences[placeId] = Math.max(-1, Math.min(1, transmittedValue));
+    } else {
+      // Integra o viés cultural ao histórico pessoal existente
+      this.memory.placePreferences[placeId] = Math.max(-1, Math.min(1, curr * 0.6 + transmittedValue * 0.4));
+    }
+  }
+
+  /**
+   * Transmite preferências hedônicas entre habitantes durante interação social (Task-039).
+   * Aplica o fator de decaimento geracional de 0.85 por salto (Dossiê Técnico P6).
+   */
+  public transmitSocialPreferences(
+    peer: AgentMind,
+    factor: number = SOCIAL_TRANSMISSION_FACTOR,
+  ): {
+    transmittedFromSelf: Record<string, number>;
+    transmittedFromPeer: Record<string, number>;
+  } {
+    const transmittedFromSelf: Record<string, number> = {};
+    const transmittedFromPeer: Record<string, number> = {};
+
+    // Transmissão Self -> Peer
+    if (this.memory.placePreferences) {
+      for (const [placeId, val] of Object.entries(this.memory.placePreferences)) {
+        if (Math.abs(val) >= 0.05) {
+          const discounted = Math.max(-1, Math.min(1, val * factor));
+          peer.receiveSocialPreference(placeId, discounted);
+          transmittedFromSelf[placeId] = discounted;
+        }
+      }
+    }
+
+    // Transmissão Peer -> Self
+    if (peer.memory.placePreferences) {
+      for (const [placeId, val] of Object.entries(peer.memory.placePreferences)) {
+        if (Math.abs(val) >= 0.05) {
+          const discounted = Math.max(-1, Math.min(1, val * factor));
+          this.receiveSocialPreference(placeId, discounted);
+          transmittedFromPeer[placeId] = discounted;
+        }
+      }
+    }
+
+    return { transmittedFromSelf, transmittedFromPeer };
+  }
+
+  /**
+   * Arrefece preferências hedônicas ao longo do tempo (Task-039).
+   * Evita aversão ou fixação perpétua em locais da cidade.
+   */
+  public coolDownPreferences(decayFactor: number = 0.98): void {
+    if (!this.memory.placePreferences) return;
+    for (const placeId of Object.keys(this.memory.placePreferences)) {
+      const curr = this.memory.placePreferences[placeId];
+      if (curr !== undefined) {
+        const cooled = curr * decayFactor;
+        if (Math.abs(cooled) < 0.02) {
+          delete this.memory.placePreferences[placeId];
+        } else {
+          this.memory.placePreferences[placeId] = cooled;
+        }
+      }
+    }
+  }
+
+  /**
+   * Consolida experiências prévias (PostgreSQL/Qdrant) em preferências hedônicas de locais (Task-039).
+   * Aplica decaimento temporal para experiências passadas e modula a utilidade de visitação.
+   */
+  public integrateExperiences(experiences: ExperienceInput[], now: number = Date.now()): void {
+    if (!experiences || experiences.length === 0) return;
+
+    this.memory.placePreferences = this.memory.placePreferences || {};
+
+    for (const exp of experiences) {
+      let targetId: string | undefined = exp.locationId || undefined;
+
+      if (!targetId && exp.relatedEntityIds && exp.relatedEntityIds.length > 0) {
+        targetId = exp.relatedEntityIds[0];
+      }
+
+      const text = `${exp.eventType ?? ''} ${exp.description ?? ''} ${exp.content ?? ''}`.toLowerCase();
+
+      if (!targetId) {
+        if (text.includes('market-central') || text.includes('mercado') || text.includes('supermercado')) {
+          targetId = 'market-central';
+        } else if (text.includes('cafe-bistro') || text.includes('café') || text.includes('bistro')) {
+          targetId = 'cafe-bistro';
+        } else if (text.includes('fountain') || text.includes('fonte')) {
+          targetId = 'fountain-monumental';
+        } else if (text.includes('crosswalk-central') || text.includes('faixa') || text.includes('cruzamento') || text.includes('crosswalk')) {
+          targetId = 'crosswalk-north';
+        } else if (text.includes('bus-stop') || text.includes('ônibus') || text.includes('parada')) {
+          targetId = 'bus-stop-west';
+        } else if (text.includes('bench') || text.includes('banco')) {
+          targetId = 'bench-praca-west';
+        }
+      }
+
+      if (!targetId) continue;
+
+      // Determina a valência da experiência
+      let baseValence: number;
+      if (exp.metadata && typeof exp.metadata['valence'] === 'number') {
+        baseValence = exp.metadata['valence'] as number;
+      } else if (
+        exp.metadata?.['hazard'] === true ||
+        exp.metadata?.['success'] === false ||
+        /ruim|péssim|perigo|desconfort|lotad|suj|barulh|atropel|acident|intoxica|estragad|caro|hazard|danger|bad|negative|threat|warning|hostil/i.test(text)
+      ) {
+        baseValence = -0.85;
+      } else if (
+        exp.metadata?.['success'] === true ||
+        /bom|ótimo|excelent|segur|saboros|refeição|tranquil|agradável|confort|success|safe|delicious|tasty|positive/i.test(text)
+      ) {
+        baseValence = 0.70;
+      } else {
+        baseValence = 0.15;
+      }
+
+      const importance = typeof exp.emotionalWeight === 'number'
+        ? exp.emotionalWeight
+        : (Number(exp.importance) || 0.6);
+      const confidence = Number(exp.confidence) || 1.0;
+
+      // Decaimento temporal da experiência passada (0.97 por hora transcorrida)
+      const rawTime = exp.occurredAt ?? exp.timestamp;
+      const expTime = rawTime ? new Date(rawTime).getTime() : now;
+      const elapsedHours = Math.max(0, (now - expTime) / 3_600_000);
+      const timeDecay = Math.pow(0.97, elapsedHours);
+
+      const impact = baseValence * importance * confidence * timeDecay;
+
+      const curr = this.memory.placePreferences[targetId] ?? 0;
+      const newVal = curr === 0 ? impact : (curr * 0.8 + impact * 0.4);
+      this.memory.placePreferences[targetId] = Math.max(-1, Math.min(1, newVal));
+
+      if (targetId === 'crosswalk-central-01') {
+        this.memory.placePreferences['crosswalk-north'] = Math.max(-1, Math.min(1, newVal));
+      }
+    }
+  }
+
   /**
    * Executa interação social direta e espontânea entre dois agentes autônomos (A9):
-   * Ambos atualizam afinidade mútua, restauram convívio e trocam saudação.
+   * Ambos atualizam afinidade mútua, restauram convívio, trocam saudação e
+   * transmitem preferências hedônicas culturais com fator 0.85 (Task-039).
    */
-  public interactWithAgentPeer(peer: AgentMind): { greetingFromSelf: string; replyFromPeer: string } {
+  public interactWithAgentPeer(peer: AgentMind): {
+    greetingFromSelf: string;
+    replyFromPeer: string;
+    transmittedPreferences: {
+      transmittedFromSelf: Record<string, number>;
+      transmittedFromPeer: Record<string, number>;
+    };
+  } {
     this.recordSocialInteraction(peer.id, true);
     peer.recordSocialInteraction(this.id, true);
+
+    const transmittedPreferences = this.transmitSocialPreferences(peer);
 
     const greetingFromSelf = `Olá ${peer.name}! Tudo bem contigo?`;
     const replyFromPeer = `Oi ${this.name}! Tudo tranquilo por aqui na praça.`;
 
-    return { greetingFromSelf, replyFromPeer };
+    return { greetingFromSelf, replyFromPeer, transmittedPreferences };
   }
 }

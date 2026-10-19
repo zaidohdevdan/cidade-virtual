@@ -535,22 +535,22 @@
   - [x] Suíte completa verde após a migração (25/25 pacotes Nx e 69/69 testes de integração e e2e).
 
 ### Task-039 — Loop de aprendizado fechado: memória semântica → utilidade + transmissão social
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-19)
 - **Prioridade:** 🟠 Alta
 - **Esforço:** M
 - **Tipo:** `feat`
 - **Risco:** Estrutural
 - **Dependências:** Task-036 (mente persistida), Task-038 (cérebro único)
-- **Descrição:** Hoje o decisor usa contadores in-memory (`MemoryContext`) e a memória semântica do Qdrant só informa o ciclo legado. Fechar o circuito: experiências consolidadas viram viés de utilidade e aprendizados se espalham entre habitantes (cultura emergente).
+- **Descrição:** Circuito cognitivo fechado: experiências consolidadas na persistência (PostgreSQL `agent_experiences` e Qdrant) alimentam diretamente as preferências hedônicas (`placePreferences`) com decaimento temporal e modulam o `utility-decider`. Aprendizados e aversões se transmitem organicamente entre habitantes (NPC $\to$ NPC) ao se encontrarem na cidade com decaimento geracional de 0,85 por salto (Dossiê Técnico P6).
 - **Escopo:**
   - Alimentar `placePreferences`/scores do `utility-decider` a partir de experiências consolidadas (Postgres/Qdrant), com decaimento temporal.
   - Transmissão social NPC→NPC: ao `socialize`, agentes trocam preferências/informações com fator 0,85 por salto (decaimento por geração — Dossiê Técnico, proposta P6).
   - Manter o fluxo de ensino do avatar (7 passos, Task-020) funcionando sobre o mesmo mecanismo.
 - **Critérios de aceite:**
-  - [ ] Teste de integração: NPC A com experiência ruim em X transmite viés negativo ao NPC B numa conversa (B evita X por N ticks).
-  - [ ] Teste unitário: preferência transmitida decai 0,85 por salto e arrefece com o tempo.
-  - [ ] `utility-decider` consome preferências vindas da persistência, não só contadores voláteis.
-  - [ ] `tests/e2e/learning-flow.test.ts` continua verde.
+  - [x] Teste de integração: NPC A com experiência ruim em X transmite viés negativo ao NPC B numa conversa (B evita X por N ticks).
+  - [x] Teste unitário: preferência transmitida decai 0,85 por salto e arrefece com o tempo.
+  - [x] `utility-decider` consome preferências vindas da persistência, não só contadores voláteis.
+  - [x] `tests/e2e/learning-flow.test.ts` continua verde.
 
 ### Task-040 — Mundo que afeta a mente: clima, hora e tráfego no decisor
 - **Status:** ⬜ Pendente

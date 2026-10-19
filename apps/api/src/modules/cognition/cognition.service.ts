@@ -39,6 +39,7 @@ export class CognitionService {
   private readonly goalPlanner: GoalPlanner;
   private llmAdapter?: LLMProviderAdapter;
   private readonly minds = new Map<string, AgentMind>();
+  private readonly syncedAgentsWithDb = new Set<string>();
 
   constructor(
     @Inject(MemoryService) private readonly memoryService: MemoryService,
@@ -121,6 +122,23 @@ export class CognitionService {
   }
 
   /**
+   * Sincroniza ativamente experiências consolidadas do PostgreSQL para a mente do habitante (Task-039).
+   */
+  async syncExperiences(citizenId: string): Promise<void> {
+    if (!this.expRepo) return;
+    const mind = this.getOrCreateMind(citizenId);
+    try {
+      const persistedExps = await this.expRepo.getByAgentId(citizenId, 50);
+      if (persistedExps.length > 0) {
+        mind.integrateExperiences(persistedExps as any);
+      }
+      this.syncedAgentsWithDb.add(citizenId);
+    } catch (err) {
+      this.logger.warn(`Falha ao sincronizar experiências para ${citizenId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
    * Executa o ciclo cognitivo deliberativo unificado (Task-038: Cérebro Único):
    * 1. Recupera memórias semânticas pertinentes no Qdrant
    * 2. Planeja hierarquicamente via GoalPlanner (se houver objetivo ativo)
@@ -160,6 +178,24 @@ export class CognitionService {
 
     // 3. Orquestração exclusiva via AgentMind (Task-038: Cérebro Único)
     const mind = context.mind ?? this.getOrCreateMind(context.citizenId);
+
+    // 3.1 Integração de memórias semânticas e experiências consolidadas na mente (Task-039)
+    if (relevantMemories.length > 0) {
+      mind.integrateExperiences(relevantMemories as any);
+    }
+    if (this.expRepo && !this.syncedAgentsWithDb.has(context.citizenId)) {
+      try {
+        const persistedExps = await this.expRepo.getByAgentId(context.citizenId, 30);
+        if (persistedExps.length > 0) {
+          mind.integrateExperiences(persistedExps as any);
+        }
+        this.syncedAgentsWithDb.add(context.citizenId);
+      } catch (err) {
+        this.logger.warn(
+          `Falha ao sincronizar experiências do PostgreSQL para ${context.citizenId}: ${(err as Error).message}`,
+        );
+      }
+    }
 
     const currentPos: Vec3 = context.currentPosition ?? { x: 0, y: 0.19, z: 0 };
     const perceivedEntities = SYNAPSE_WORLD_ENTITIES.map((e) => ({

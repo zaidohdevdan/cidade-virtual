@@ -110,6 +110,18 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         this.logger.log(`[AgentMind] Mente de ${citizen.name} (${citizen.id}) restaurada do PostgreSQL (${prefCount} preferências hedônicas).`);
       }
 
+      if (this.expRepo) {
+        try {
+          const pastExps = await this.expRepo.getByAgentId(citizen.id, 50);
+          if (pastExps.length > 0) {
+            mind.integrateExperiences(pastExps as any);
+            this.logger.log(`[Task-039] ${pastExps.length} experiências consolidadas integradas à mente de ${citizen.name}.`);
+          }
+        } catch (err) {
+          this.logger.warn(`Falha ao integrar experiências consolidadas de ${citizen.id}: ${(err as Error).message}`);
+        }
+      }
+
       this.agentStates.set(citizen.id, {
         config: citizen,
         mind,

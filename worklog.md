@@ -862,5 +862,55 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
   - `npm run typecheck` — **0 erros de TypeScript**.
   - `scripts/check-schema-drift.ts` — **100% sincronizado**.
 
+---
+
+## [2026-10-19] — Task-039: Loop de Aprendizado Fechado — Memória Semântica → Utilidade + Transmissão Social NPC-NPC
+
+### 1. Contexto & Motivação
+- Antes desta entrega, o `utility-decider` baseava-se primordialmente em contadores in-memory voláteis (`visitCounts`, `lastVisitedAt`). As experiências consolidadas registradas no PostgreSQL (`agent_experiences`) e as memórias vetoriais do Qdrant informavam apenas logs ou o fluxo de aprendizagem sem retroalimentar de forma contínua as preferências hedônicas dos agentes (`placePreferences`).
+- Adicionalmente, quando dois habitantes se encontravam na cidade, não havia propagação cultural de conhecimentos ou aversões: o aprendizado de um cidadão permanecia estritamente individual.
+- A Task-039 fechou esse circuito:
+  1. Experiências consolidadas (PostgreSQL e Qdrant) viram viés quantitativo em `placePreferences` com decaimento temporal.
+  2. Ao conversarem (`interactWithAgentPeer`), os habitantes transmitem preferências entre si com fator de decaimento geracional de $0{,}85$ por salto (proposta P6 do Dossiê Técnico).
+  3. Essas preferências modulam a utilidade esperada no `utility-decider`, permitindo que um cidadão evite locais perigosos por $N$ ticks mesmo sem tê-los visitado pessoalmente.
+
+### 2. Implementações Realizadas
+1. **Mecanismo de Transmissão Social Cultural (`packages/agent-planning`):**
+   - Constante `SOCIAL_TRANSMISSION_FACTOR = 0.85` exportada canonicamente.
+   - `AgentMind.receiveSocialPreference(placeId, transmittedValue)`: absorve o viés cultural transmitido e integra suavemente ao histórico subjetivo prévio.
+   - `AgentMind.transmitSocialPreferences(peer, factor = 0.85)`: realiza a troca bidirecional de preferências hedônicas entre agentes, aplicando o decaimento $V \times 0{,}85$ por geração/salto.
+   - `AgentMind.interactWithAgentPeer(peer)`: estendido para executar automaticamente `this.transmitSocialPreferences(peer)` a cada conversa espontânea.
+2. **Arrefecimento Temporal Contínuo (`packages/agent-planning`):**
+   - `AgentMind.coolDownPreferences(decayFactor = 0.98)`: decai gradualmente as preferências hedônicas ao longo do tempo, podando vieses residuais inferiores a $|0{,}02|$ para prevenir aversões ou fixações perpétuas.
+   - Chamada contínua integrada a `AgentMind.update(dtSeconds)`.
+3. **Consolidação de Experiências (`packages/agent-planning`):**
+   - `AgentMind.integrateExperiences(experiences, now)`: analisa experiências históricas (PostgreSQL `agent_experiences` e Qdrant `MemorySnippet`), avalia a valência (risco/desconforto vs benefício/segurança), pondera por importância e confiança, aplica decaimento temporal ($0{,}97^{\Delta t}$) e atualiza `placePreferences[targetId]`.
+4. **Modulação do `utility-decider` (`packages/agent-planning`):**
+   - `scoreCandidate` agora pondera as preferências aprendidas com fator $0{,}50$ e suporte a aliases espaciais, aplicando penalidade ou bônus robusto na pontuação de candidatos de ação.
+5. **Integração no Ciclo de Vida da API (`apps/api`):**
+   - **`CognitionService.processCycle(...)`:** Memórias semânticas recuperadas via Qdrant e experiências do PostgreSQL alimentam diretamente `mind.integrateExperiences(...)` antes da geração da intenção.
+   - **`CognitionService.syncExperiences(citizenId)`:** Método para sincronização ativa do histórico relacional.
+   - **`SimulationService.onModuleInit()`:** Ao inicializar a simulação da cidade, integra até 50 experiências consolidadas do banco para cada habitante autônomo.
+   - **`SimulationService.executeSimulationStep()`:** Ao detectarem proximidade ($\le 2{,}8\text{m}$), os agentes dialogam e trocam preferências culturais com fator $0{,}85$.
+
+### 3. Validação e Critérios de Aceite
+- **Teste de Integração Real:** `tests/integration/social-transmission.test.ts` — **1 de 1 teste aprovado (100%)**:
+  - NPC A vivencia perigo e comida estragada no `market-central` e registra no PostgreSQL.
+  - A mente de A integra a experiência e assume forte viés negativo ($\le -0{,}70$).
+  - NPC B inicializa com mente limpa (`placePreferences` vazio).
+  - A e B dialogam espontaneamente (`interactWithAgentPeer`) $\to$ viés negativo transmitido a B ($V_A \times 0{,}85 \approx -0{,}65$).
+  - B com fome relevante toma decisões ao longo de $N = 5$ ticks sob arrefecimento contínuo e **evita o mercado central em 100% das vezes**, optando pelo café bistro.
+- **Testes Unitários:** `packages/agent-planning/autonomy.spec.ts` — **13 de 13 testes aprovados (100%)**:
+  - Transmissão geracional A $\to$ B $\to$ C comprovando decaimento exato: salto 1 ($0{,}85$), salto 2 ($0{,}85^2 = 0{,}7225$).
+  - Arrefecimento temporal comprovado e poda de preferências antigas.
+  - Integração de experiências Postgres/Qdrant modulando diretamente o ranking do `utility-decider`.
+- **E2E Learning Flow Preservado:** `tests/e2e/learning-flow.test.ts` — **1 de 1 teste aprovado (100%)**.
+- **Suíte de Integração Completa:** `npx vitest run tests/integration/` — **12 arquivos e 63 testes aprovados (100%)**.
+- **Suíte Geral de Testes:** `npx vitest run tests/` — **16 arquivos e 70 testes aprovados (100%)**.
+- **Monorepo Nx:** `npm test` — **25 de 25 projetos aprovados (100%)**.
+- **Checagem de Tipos:** `npm run typecheck` — **0 erros de TypeScript**.
+- **Schema Drift:** `npx tsx scripts/check-schema-drift.ts` — **100% sincronizado**.
+
+
 
 
