@@ -1,3 +1,4 @@
+/// <reference path="./recast.d.ts" />
 // packages/world-engine/navigation.service.ts
 // SYNAPSE CITY ENGINE — Serviço autoritativo de navegação espacial com Recast Navigation
 // Alinhado ao SKILL.md Seção 3.1, Seção 4 e Task-015
