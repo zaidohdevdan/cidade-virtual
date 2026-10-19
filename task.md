@@ -240,21 +240,22 @@
   - [x] `CognitionService` integra geração de plano estruturado com o ciclo deliberativo do habitante.
 
 ### Task-015 — Implementar `NavigationService` com recast-navigation
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟡 Média (P1 da auditoria)
 - **Esforço:** M
 - **Tipo:** `feat`
 - **Risco:** Estrutural
 - **Dependências:** Task-013
-- **Descrição:** `packages/world-engine` declara `recast-navigation ^0.35.2` mas `NavigationService` é stub. Gerar NavMesh da `CityScene` para pathfinding real dos NPCs.
+- **Descrição:** Substituído o stub de `NavigationService` em `@cidade-virtual/world-engine` por um motor canônico de navegação 3D baseado no Recast Navigation WASM (`recast-navigation` e `@recast-navigation/generators`). Constrói a NavMesh poligonal a partir do relevo e dos obstáculos sólidos da cidade (`Mercado_Municipal`, `Edificio_Norte`, `Cafe_Avenida`, `Praca_Monumento_Fonte`). Executa pathfinding real via `NavMeshQuery.computePath` contornando paredes e obstáculos, valida posições com `isNavigable`, suporta obstáculos dinâmicos (`addDynamicObstacle`) e recalcula rotas de segurança na faixa de pedestres quando o semáforo veicular está verde.
 - **Escopo:**
-  - `initialize(worldGeometry)` — gerar NavMesh a partir dos colliders da cena.
-  - `findPath(from, to)` — retornar waypoints.
-  - `isNavigable(point)` — validação de posição.
-  - Agentes usam pathfinding em vez de patrulha cega (que atravessa paredes).
+  - `initialize(worldGeometry, colliders)` — gerar NavMesh com Recast WASM a partir dos colliders da cena.
+  - `findPath(from, to, options)` — retornar waypoints navegáveis contornando edifícios.
+  - `isNavigable(point)` — validação de navegabilidade excluindo interiores de obstáculos.
+  - Reatividade semafórica com buffer de espera segura na calçada antes da faixa.
+  - Suíte de testes unitários em `packages/world-engine/navigation.service.spec.ts` e `tests/unit/navigation.test.ts`.
 - **Critérios de aceite:**
-  - [ ] NPC não atravessa mais paredes/veículos.
-  - [ ] Rota recalculada quando semáforo fecha a faixa.
+  - [x] NPC não atravessa mais paredes/veículos (isNavigable falso dentro de prédios e rotas contornam edifícios).
+  - [x] Rota recalculada quando semáforo fecha a faixa (`recalculatedDueToSignal: true` e parada na calçada de espera).
 
 ### Task-025 — Contrato `Principal` + `AgentAction API` (identidade e ação unificadas)
 - **Status:** ✅ Concluída (2026-10-18)

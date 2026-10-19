@@ -1,6 +1,34 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
-## Task: Task-014 — GoalPlanner Real e Memória Procedural no agent-planning
+## Task: Task-015 — NavigationService com Recast Navigation e NavMesh
+- **Data:** 2026-10-18
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Estrutural / Espacial e Simulação 3D (NavMesh, Pathfinding, Reatividade Semafórica)
+
+### 1. Resumo Executivo
+Substituição integral do stub de `NavigationService` em `@cidade-virtual/world-engine` por um motor canônico de navegação 3D baseado em Recast Navigation WASM (`recast-navigation` e `@recast-navigation/generators`):
+1. **Geração Procedural de NavMesh (`geometry-builder.ts`)**: Conversão do relevo urbano e dos obstáculos sólidos da cidade (`Mercado_Municipal`, `Edificio_Norte`, `Cafe_Avenida`, `Praca_Monumento_Fonte`) em malha triangular indexada compatível com o Recast (`generateSoloNavMesh`).
+2. **Anti-Transposição de Paredes e Edifícios**: Os NPCs utilizam pathfinding real (`NavMeshQuery.computePath`). Rotas entre lados opostos de um quarteirão contornam as quinas externas dos edifícios pelo passeio público, eliminando a transposição cega através de paredes.
+3. **Validação de Posições (`isNavigable`)**: Rejeita posições interiores de obstáculos sólidos estáticos e suporta obstáculos dinâmicos (`addDynamicObstacle`), como veículos ou barreiras temporárias.
+4. **Reatividade Semafórica e Segurança Viária**: Quando o semáforo veicular está verde (`trafficLightState === 'green'`), a travessia na faixa de pedestres central é bloqueada; o pathfinding recalcula a rota (`recalculatedDueToSignal: true`), conduzindo o pedestre para a calçada de espera segura antes do meio-fio (`x = ±8.0m`). Quando o sinal veicular fica vermelho (`trafficLightState === 'red'`), a faixa é liberada e a travessia prossegue normalmente (`crosswalkIncluded: true`).
+
+### 2. Implementações Realizadas
+- `packages/world-engine/types.ts`: Tipos `Vector3Like`, `NavMeshGeometryInput`, `ObstacleBox`, `ObstacleCylinder`, `SceneObstacle`, `DynamicObstacle`, `PathfindingOptions`, `PathfindingResult`.
+- `packages/world-engine/geometry-builder.ts`: Construtor procedural de geometria de solo e obstáculos sólidos (`SYNAPSE_CITY_STATIC_OBSTACLES`, `buildMeshFromObstacles`).
+- `packages/world-engine/navigation.service.ts`: `NavigationService` completo com Recast Navigation WASM, `findPath`, `isNavigable`, `getClosestPoint`, `addDynamicObstacle` e reatividade ao semáforo.
+- `packages/world-engine/recast.d.ts`: Declarações de tipo TypeScript de alta fidelidade para `recast-navigation` e `@recast-navigation/generators` sob `NodeNext`.
+- `packages/world-engine/package.json`: Adicionadas dependências `@recast-navigation/core` e `@recast-navigation/generators`.
+- `packages/world-engine/tsconfig.json`: Estendido de `tsconfig.base.json`.
+- `packages/world-engine/navigation.service.spec.ts`: 5 testes unitários cobrindo navegação, contorno de edifícios, obstáculos dinâmicos e semáforo.
+- `tests/unit/navigation.test.ts`: 2 testes de conformidade com os critérios de aceite do marco.
+
+### 3. Validação de Aceite
+- `npx vitest run --fileParallelism=false`: **24 arquivos de teste, 120 testes executados e 100% aprovados** (0 falhas).
+- `npm run typecheck`: **0 erros de tipagem** em todos os projetos.
+- `npm run check:schema-drift`: 100% alinhado.
+
+---
 - **Data:** 2026-10-18
 - **Status:** Concluído
 - **Responsável:** Agente Antigravity (Parceiro de Implementação)

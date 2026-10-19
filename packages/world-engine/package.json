@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@cidade-virtual/types": "*",
+    "@recast-navigation/core": "^0.35.2",
+    "@recast-navigation/generators": "^0.35.2",
     "recast-navigation": "^0.35.2"
   },
   "devDependencies": {
