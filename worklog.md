@@ -1,5 +1,43 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Motor de Autonomia Urbana — AutonomousSimulationService e Sincronização em Tempo Real
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Operacional / Simulação e Vida Autônoma em Tempo Real
+
+### 1. Diagnóstico e Causa-Raiz
+Uma auditoria técnica rigorosa identificou por que a cidade continuava aparentando ter apenas NPCs sem autonomia após as etapas anteriores:
+1. **Ausência de Heartbeat/Ticker no Servidor**: Os módulos cognitivos (`CognitionService`, `GoalPlanner`, `NavigationService`, LangGraph e memórias Qdrant) foram implementados e aprovados nos testes unitários/integrados, mas **não havia nenhum serviço contínuo de simulação em execução no processo da API (`apps/api`)**. O servidor subia, semeava os habitantes no PostgreSQL e ficava passivo, alternando apenas o semáforo.
+2. **Frontend em Modo Fallback Local**: Como o backend nunca emitia os eventos `agent.moved` ou `agent.speech`, os avatares 3D no cliente Three.js caíam no fallback local de uma patrulha triangular estática de 3 pontos hardcoded (`patrolPoints`), parecendo NPCs mecânicos.
+3. **Desconexão do Loop de Deliberação**: Ninguém invocava `CognitionService.processCycle()` ou `NavigationService.findPath()` durante o runtime normal de `npm run dev`.
+
+### 2. Implementações Realizadas
+1. **`AutonomousSimulationService` (`apps/api/src/modules/simulation/`)**:
+   - Serviço injetado no ciclo de vida do NestJS (`OnModuleInit`/`OnModuleDestroy`).
+   - Inicializa a NavMesh Recast WASM no bootstrap do servidor.
+   - Mantém estado em runtime dos habitantes canônicos (posição, destino, waypoints, pensamentos).
+   - Executa um loop contínuo de simulação (heartbeat a cada 3.5 segundos).
+   - A cada tick:
+     - Incrementa o tick do mundo via `WorldService.incrementTick()`.
+     - Sincroniza o estado semafórico na NavMesh do servidor.
+     - Seleciona ciclicamente um habitante para deliberação ativa.
+     - Invoca `CognitionService.processCycle()` com recuperação de memórias semânticas no Qdrant e decomposição hierárquica via `GoalPlanner`.
+     - Calcula rota urbana inteligente e contorno de obstáculos via `NavigationService.findPath()`.
+     - Transmite em tempo real via WebSocket (`WorldGateway.broadcastDomainEvent`):
+       - `agent.moved`: Com a coordenada calculada do waypoint, fazendo o avatar 3D navegar intencionalmente.
+       - `agent.speech`: Com o pensamento ou fala contextual do arquétipo, acionando o balão flutuante estilizado de vidro (`agent-speech-bubble`) no 3D.
+     - Persiste a posição e as experiências deliberadas no PostgreSQL.
+2. **`SimulationModule`**: Registrado em `app.module.ts`, integrando `PersistenceModule`, `GatewayModule`, `CognitionModule`, `CitizensModule` e `WorldModule`.
+3. **Isolamento de Testes**: Configurado para operar em modo desacoplado sob testes Vitest, evitando conflito de filas ou concorrência com os testes de integração.
+4. **Suporte de Tipagem**: Adicionado triple-slash directive em `navigation.service.ts` para resolver os tipos Recast em compilações do TypeScript.
+
+### 3. Validação de Aceite
+- `npm run typecheck`: **0 erros de tipagem** em todos os projetos (apps/api e apps/web-client).
+- `npx vitest run --fileParallelism=false`: **25 arquivos de teste, 123 testes executados e 100% aprovados** (0 falhas).
+
+---
+
 ## Task: Task-015 — NavigationService com Recast Navigation e NavMesh
 - **Data:** 2026-10-18
 - **Status:** Concluído
