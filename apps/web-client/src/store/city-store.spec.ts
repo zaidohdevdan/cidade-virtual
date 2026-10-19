@@ -67,4 +67,22 @@ describe('CityStore — Store Externo Reativo (Task-023)', () => {
     cityStore.setTimeOfDay('night');
     expect(cityStore.getState().timeOfDay).toBe('night');
   });
+
+  it('deve alternar o estado de áudio mudo e notificar listeners', () => {
+    const listener = vi.fn();
+    const unsub = cityStore.subscribe(listener);
+
+    expect(cityStore.getState().isAudioMuted).toBe(false);
+
+    const isMutedNow = cityStore.toggleAudioMute();
+    expect(isMutedNow).toBe(true);
+    expect(cityStore.getState().isAudioMuted).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    cityStore.setAudioMuted(false);
+    expect(cityStore.getState().isAudioMuted).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    unsub();
+  });
 });

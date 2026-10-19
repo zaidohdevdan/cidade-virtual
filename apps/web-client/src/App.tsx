@@ -331,12 +331,14 @@ export const App: React.FC = () => {
     });
   }, [nearbyAgent, agents]);
 
-  // Escuta tecla 'E' para iniciar diálogo com o habitante no raio de proximidade
+  // Escuta teclas de atalho: 'E' para iniciar diálogo e 'M' para alternar voz/mudo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.code === 'KeyE' || e.key === 'e' || e.key === 'E') && !isDialogueOpen && nearbyAgent) {
         e.preventDefault();
         handleOpenDialogueForNearbyAgent();
+      } else if ((e.code === 'KeyM' || e.key === 'm' || e.key === 'M') && !isDialogueOpen) {
+        cityStore.toggleAudioMute();
       }
     };
     window.addEventListener('keydown', handleKeyDown);

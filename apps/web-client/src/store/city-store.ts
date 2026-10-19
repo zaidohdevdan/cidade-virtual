@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { TrafficLightState, InteractiveObject } from '../scenes/city-scene';
+import { speechSynth } from '../audio/speech-synth';
 
 export interface TelemetryData {
   x: number;
@@ -15,6 +16,7 @@ export interface CityStoreState {
   isFirstPerson: boolean;
   cameraAngleY: number;
   isConnected: boolean;
+  isAudioMuted: boolean;
 }
 
 type Listener = () => void;
@@ -28,6 +30,7 @@ class CityStore {
     isFirstPerson: false,
     cameraAngleY: 0,
     isConnected: false,
+    isAudioMuted: false,
   };
 
   private listeners: Set<Listener> = new Set();
@@ -110,6 +113,20 @@ class CityStore {
       this.state = { ...this.state, isConnected };
       this.notify();
     }
+  }
+
+  setAudioMuted(isAudioMuted: boolean) {
+    if (this.state.isAudioMuted !== isAudioMuted) {
+      this.state = { ...this.state, isAudioMuted };
+      speechSynth.setMuted(isAudioMuted);
+      this.notify();
+    }
+  }
+
+  toggleAudioMute(): boolean {
+    const next = !this.state.isAudioMuted;
+    this.setAudioMuted(next);
+    return next;
   }
 }
 

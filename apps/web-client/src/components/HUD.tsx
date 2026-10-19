@@ -35,6 +35,7 @@ export const HUD: React.FC<HUDProps> = ({
   const timeOfDay = useCityStore((s) => s.timeOfDay);
   const observation = useCityStore((s) => s.observation);
   const isFirstPerson = useCityStore((s) => s.isFirstPerson);
+  const isAudioMuted = useCityStore((s) => s.isAudioMuted);
 
   // Refs para atualização direta de telemetria no DOM a 60 FPS (zero re-render React)
   const coordsRef = useRef<HTMLSpanElement>(null);
@@ -131,6 +132,18 @@ export const HUD: React.FC<HUDProps> = ({
           >
             📸 Snapshot
           </button>
+          <button
+            className="action-btn"
+            id="btn-audio-mute"
+            onClick={() => cityStore.toggleAudioMute()}
+            title={isAudioMuted ? 'Ativar voz dos cidadãos (TTS)' : 'Silenciar voz dos cidadãos (TTS)'}
+            style={{
+              borderColor: isAudioMuted ? 'rgba(239, 68, 68, 0.45)' : 'rgba(16, 185, 129, 0.45)',
+              color: isAudioMuted ? '#f87171' : '#34d399',
+            }}
+          >
+            {isAudioMuted ? '🔇 Voz: Mudo' : '🔊 Voz: Ativa'}
+          </button>
         </div>
 
         {/* ▌OBSERVATION PANEL ▌ */}
@@ -181,6 +194,9 @@ export const HUD: React.FC<HUDProps> = ({
             </div>
             <div>
               <span className="key-badge">E</span> Conversar
+            </div>
+            <div>
+              <span className="key-badge">M</span> Voz
             </div>
             <div>
               <span className="key-badge">Drag</span> Câmera

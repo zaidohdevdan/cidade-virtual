@@ -1,6 +1,7 @@
 // apps/web/src/avatars/agent-avatar.ts
 import * as THREE from 'three';
 import { ObstacleCollider } from '../scenes/city-scene';
+import { speechSynth } from '../audio/speech-synth';
 
 export interface AgentConfig {
   id: string;
@@ -490,6 +491,13 @@ export class AgentAvatar {
     `;
     this.speechBubble.style.opacity = '1';
     this.speechBubble.style.display = 'block';
+
+    // Dispara síntese de voz (TTS) audível com calibração acústica do habitante
+    try {
+      speechSynth.speak(this.config.id, message).catch(() => {});
+    } catch {
+      // Ignora silenciosamente se o navegador bloquear autoplay
+    }
   }
 
   /**
