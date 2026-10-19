@@ -1,3 +1,4 @@
+// packages/llm-adapters/index.ts
 export interface LLMRequest {
   prompt: string;
   systemPrompt?: string;
@@ -12,4 +13,11 @@ export interface LLMResponse {
 
 export interface LLMProviderAdapter {
   complete(req: LLMRequest): Promise<LLMResponse>;
+  isConfigured?(): boolean;
+  getModel?(): string;
 }
+
+export * from './gemini-adapter.js';
+export * from './openai-adapter.js';
+export * from './ollama-adapter.js';
+export * from './factory.js';

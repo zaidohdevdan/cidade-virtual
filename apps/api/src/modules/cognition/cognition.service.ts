@@ -23,12 +23,14 @@ export class CognitionService {
   private readonly logger = new Logger(CognitionService.name);
   private cognitiveManager: CognitiveCycleManager;
   private readonly goalPlanner: GoalPlanner;
+  private llmAdapter?: LLMProviderAdapter;
 
   constructor(
     @Inject(MemoryService) private readonly memoryService: MemoryService,
     @Optional() @Inject(ExperienceRepository) private readonly expRepo?: ExperienceRepository,
-    @Optional() llmAdapter?: LLMProviderAdapter,
+    @Optional() @Inject('LLM_ADAPTER') llmAdapter?: LLMProviderAdapter,
   ) {
+    this.llmAdapter = llmAdapter;
     this.cognitiveManager = new CognitiveCycleManager(llmAdapter);
     this.goalPlanner = new GoalPlanner({ llmAdapter });
   }
@@ -37,8 +39,16 @@ export class CognitionService {
    * Permite reconfigurar ou injetar dinamicamente um LLMProviderAdapter.
    */
   setLLMAdapter(adapter?: LLMProviderAdapter): void {
+    this.llmAdapter = adapter;
     this.cognitiveManager = new CognitiveCycleManager(adapter);
     this.goalPlanner.setLLMAdapter(adapter);
+  }
+
+  /**
+   * Retorna o adaptador de LLM ativo (se configurado).
+   */
+  getLLMAdapter(): LLMProviderAdapter | undefined {
+    return this.llmAdapter;
   }
 
   /**
@@ -164,4 +174,75 @@ export class CognitionService {
 
     return action;
   }
+
+  /**
+   * Gera resposta deliberativa conversacional via LLM com base na identidade do habitante,
+   * contexto físico (semáforo, horário, etc) e memórias semânticas anteriores.
+   * Retorna null se não houver LLM configurado ou se ocorrer erro na inferência,
+   * permitindo que o caller use o fallback local gracioso.
+   */
+  async generateConversationalDialogue(params: {
+    citizenId: CitizenId;
+    citizenName: string;
+    citizenRole: string;
+    starDesignation: string;
+    backstorySeed: string;
+    activeGoals: string[];
+    playerMessage: string;
+    trafficLight: 'green' | 'yellow' | 'red';
+    relevantMemories?: MemorySnippet[];
+  }): Promise<string | null> {
+    if (!this.llmAdapter) {
+      return null;
+    }
+
+    try {
+      let memories = params.relevantMemories;
+      if (!memories) {
+        try {
+          memories = await this.memoryService.semanticQuery({
+            citizenId: params.citizenId,
+            queryText: params.playerMessage,
+            topK: 3,
+          });
+        } catch {
+          memories = [];
+        }
+      }
+
+      const memoryLines = memories.map(
+        (m, idx) => `- [Memória ${idx + 1}]: ${m.content}`,
+      );
+
+      const systemPrompt = `Você é ${params.citizenName} (${params.starDesignation}), habitante com o papel de "${params.citizenRole}" em Synapse City (uma cidade virtual com normas urbanas e convivência cívica).
+Biografia e Essência: ${params.backstorySeed}
+Objetivos Ativos: ${params.activeGoals.join('; ')}
+Estado Viário Atual: O semáforo da Avenida Central está ${params.trafficLight.toUpperCase()}.
+Suas Memórias Relevantes:
+${memoryLines.length ? memoryLines.join('\n') : '- Nenhuma memória pregressa invocada no momento.'}
+
+Diretrizes Estritas:
+1. Responda em Português do Brasil (pt-BR), em primeira pessoa, com a voz e perspectiva do seu papel.
+2. Daniel é o avatar do protagonista humano caminhando pela cidade que está conversando com você.
+3. Seja conciso (máximo 2 a 3 frases envolventes), mantendo tom expressivo e caloroso.
+4. Jamais quebre a imersão de habitante vivo da cidade virtual.`;
+
+      const userPrompt = `Daniel aproximou-se e perguntou: "${params.playerMessage}". Como você responde a ele?`;
+
+      const response = await this.llmAdapter.complete({
+        systemPrompt,
+        prompt: userPrompt,
+        temperature: 0.7,
+      });
+
+      const text = response.content?.trim();
+      return text || null;
+    } catch (err) {
+      this.logger.warn(
+        `Falha na geração conversacional via LLM para ${params.citizenId}: ${(err as Error).message}`,
+      );
+      return null;
+    }
+  }
 }
+

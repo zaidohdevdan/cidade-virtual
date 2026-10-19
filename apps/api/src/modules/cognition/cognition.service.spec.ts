@@ -100,4 +100,53 @@ describe('CognitionService — Ciclo Cognitivo Real (Task-004)', () => {
       }),
     );
   });
+
+  it('deve gerar diálogo conversacional via LLM enriquecido com memórias e arquétipo', async () => {
+    (mockLLMAdapter.complete as any).mockResolvedValueOnce({
+      content: 'Olá Daniel! A patrulha da via principal está operando com total atenção.',
+    });
+
+    const dialogue = await cognitionService.generateConversationalDialogue({
+      citizenId: 'agent-vega' as CitizenId,
+      citizenName: 'Vega',
+      citizenRole: 'Pioneira & Navegadora de Segurança',
+      starDesignation: 'Alpha Lyrae',
+      backstorySeed: 'Responsável pela segurança viária.',
+      activeGoals: ['monitorar trânsito'],
+      playerMessage: 'Como estão as ruas hoje?',
+      trafficLight: 'green',
+    });
+
+    expect(dialogue).toBe('Olá Daniel! A patrulha da via principal está operando com total atenção.');
+    expect(mockMemoryService.semanticQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        citizenId: 'agent-vega',
+        queryText: 'Como estão as ruas hoje?',
+      }),
+    );
+    expect(mockLLMAdapter.complete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('Como estão as ruas hoje?'),
+        systemPrompt: expect.stringContaining('Vega'),
+      }),
+    );
+  });
+
+  it('deve retornar null no diálogo conversacional se não houver adaptador de LLM', async () => {
+    const serviceWithoutLLM = new CognitionService(mockMemoryService, mockExpRepo, undefined);
+
+    const dialogue = await serviceWithoutLLM.generateConversationalDialogue({
+      citizenId: 'agent-vega' as CitizenId,
+      citizenName: 'Vega',
+      citizenRole: 'Pioneira & Navegadora de Segurança',
+      starDesignation: 'Alpha Lyrae',
+      backstorySeed: 'Responsável pela segurança viária.',
+      activeGoals: ['monitorar trânsito'],
+      playerMessage: 'Como estão as ruas hoje?',
+      trafficLight: 'green',
+    });
+
+    expect(dialogue).toBeNull();
+  });
 });
+

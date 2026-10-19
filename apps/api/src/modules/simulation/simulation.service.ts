@@ -305,8 +305,22 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         activeGoal: `conversar com o habitante Daniel conforme o papel de ${config.role}`,
       });
 
-      // 2. Constrói resposta conversacional rica alinhada ao arquétipo
-      const response = this.generateConversationalResponse(config, playerMessage, trafficLight);
+      // 2. Delibera resposta conversacional via LLM conectada (se ativa).
+      // Se a LLM não estiver configurada ou falhar, utiliza síntese local como fallback resiliente.
+      let response = await this.cognitionService.generateConversationalDialogue?.({
+        citizenId: config.id as any,
+        citizenName: config.name,
+        citizenRole: config.role,
+        starDesignation: config.starDesignation,
+        backstorySeed: config.backstorySeed,
+        activeGoals: config.activeGoals,
+        playerMessage,
+        trafficLight,
+      });
+
+      if (!response) {
+        response = this.generateConversationalResponse(config, playerMessage, trafficLight);
+      }
 
       if (agent) {
         agent.lastSpeech = response;

@@ -16,6 +16,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
   };
   let mockCognitionService: {
     processCycle: ReturnType<typeof vi.fn>;
+    generateConversationalDialogue?: ReturnType<typeof vi.fn>;
   };
   let mockWorldService: {
     incrementTick: ReturnType<typeof vi.fn>;
@@ -43,6 +44,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
         expectedOutcome: 'Avançando em direção ao objetivo',
         reasonCode: 'GOAL_EXECUTION',
       }),
+      generateConversationalDialogue: vi.fn().mockResolvedValue(null),
     };
 
     mockWorldService = {
