@@ -141,20 +141,89 @@ export class CityScene {
     cross.receiveShadow = true;
     this.scene.add(cross);
 
-    // 4. Linhas de Retenção (LRE - DENATRAN/CONTRAN) para veículos a 1,5m antes das faixas de pedestres
-    const stopLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    // 4. Linhas de Retenção (LRE - Padrão DENATRAN / CONTRAN) para veículos a 1,5m antes das faixas de pedestres
+    // No Brasil (mão direita dominante / CTB):
+    // - Pista Norte descendo para o Sul (+Z): faixa da direita em x = -3.5, linha de retenção em z = -12.5
+    // - Pista Sul subindo para o Norte (-Z): faixa da direita em x = +3.5, linha de retenção em z = +12.5
+    // - Pista Oeste indo para o Leste (+X): faixa da direita em z = +3.5, linha de retenção em x = -12.5
+    // - Pista Leste indo para o Oeste (-X): faixa da direita em z = -3.5, linha de retenção em x = +12.5
+    const stopLineMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.35,
+      metalness: 0.05,
+    });
     const stopPositions = [
-      { x: 3.5, z: -12.5, w: 6.6, d: 0.4 }, // Pista Norte descendo (mão direita: x > 0)
-      { x: -3.5, z: 12.5, w: 6.6, d: 0.4 }, // Pista Sul subindo (mão direita: x < 0)
-      { x: -12.5, z: -3.5, w: 0.4, d: 6.6 }, // Pista Oeste entrando (mão direita: z < 0)
-      { x: 12.5, z: 3.5, w: 0.4, d: 6.6 },  // Pista Leste entrando (mão direita: z > 0)
+      { x: -3.5, z: -12.5, w: 6.6, d: 0.45 }, // Pista Norte descendo para o Sul (mão direita brasileira: x < 0)
+      { x: 3.5, z: 12.5, w: 6.6, d: 0.45 },  // Pista Sul subindo para o Norte (mão direita brasileira: x > 0)
+      { x: -12.5, z: 3.5, w: 0.45, d: 6.6 },  // Pista Oeste indo para o Leste (mão direita brasileira: z > 0)
+      { x: 12.5, z: -3.5, w: 0.45, d: 6.6 }, // Pista Leste indo para o Oeste (mão direita brasileira: z < 0)
     ];
     for (const sl of stopPositions) {
-      const g = new THREE.BoxGeometry(sl.w, 0.02, sl.d);
+      const g = new THREE.BoxGeometry(sl.w, 0.025, sl.d);
       const m = new THREE.Mesh(g, stopLineMat);
       m.position.set(sl.x, 0.035, sl.z);
+      m.receiveShadow = true;
       this.scene.add(m);
     }
+
+    // 5. Setas Indicativas de Sentido de Circulação (SIC - Padrão CONTRAN / Manual de Sinalização Horizontal)
+    // Pintadas no asfalto com setas brancas em relevo indicando visualmente a mão de direção corrente no Brasil:
+    const arrowPositions = [
+      // Av. Central (Norte-Sul):
+      { x: -3.5, z: -20, rotY: 0 },
+      { x: -3.5, z: -34, rotY: 0 },
+      { x: -3.5, z: 20, rotY: 0 },
+      { x: -3.5, z: 34, rotY: 0 },
+      { x: 3.5, z: 20, rotY: Math.PI },
+      { x: 3.5, z: 34, rotY: Math.PI },
+      { x: 3.5, z: -20, rotY: Math.PI },
+      { x: 3.5, z: -34, rotY: Math.PI },
+      // Rua Transversal (Leste-Oeste):
+      { x: -20, z: 3.5, rotY: Math.PI / 2 },
+      { x: -34, z: 3.5, rotY: Math.PI / 2 },
+      { x: 20, z: 3.5, rotY: Math.PI / 2 },
+      { x: 34, z: 3.5, rotY: Math.PI / 2 },
+      { x: 20, z: -3.5, rotY: -Math.PI / 2 },
+      { x: 34, z: -3.5, rotY: -Math.PI / 2 },
+      { x: -20, z: -3.5, rotY: -Math.PI / 2 },
+      { x: -34, z: -3.5, rotY: -Math.PI / 2 },
+    ];
+    for (const a of arrowPositions) {
+      this.buildRoadDirectionalArrow(a.x, a.z, a.rotY, stopLineMat);
+    }
+  }
+
+  /**
+   * Constrói seta indicativa de sentido de circulação (SIC - padrão CONTRAN) no asfalto
+   */
+  private buildRoadDirectionalArrow(x: number, z: number, rotY: number, mat: THREE.Material): void {
+    const group = new THREE.Group();
+    group.position.set(x, 0.035, z);
+    group.rotation.y = rotY;
+
+    // Haste longitudinal da seta (2.4m de comprimento, 0.34m de largura)
+    const shaftGeom = new THREE.BoxGeometry(0.34, 0.02, 2.2);
+    const shaft = new THREE.Mesh(shaftGeom, mat);
+    shaft.position.set(0, 0, -0.2);
+    shaft.receiveShadow = true;
+    group.add(shaft);
+
+    // Ponta da seta em "V" voltada para a frente (+Z local)
+    const tipGeom = new THREE.BoxGeometry(0.28, 0.02, 1.15);
+
+    const tipLeft = new THREE.Mesh(tipGeom, mat);
+    tipLeft.position.set(-0.35, 0, 0.7);
+    tipLeft.rotation.y = -Math.PI / 4;
+    tipLeft.receiveShadow = true;
+    group.add(tipLeft);
+
+    const tipRight = new THREE.Mesh(tipGeom, mat);
+    tipRight.position.set(0.35, 0, 0.7);
+    tipRight.rotation.y = Math.PI / 4;
+    tipRight.receiveShadow = true;
+    group.add(tipRight);
+
+    this.scene.add(group);
   }
 
   private addRoadSegment(

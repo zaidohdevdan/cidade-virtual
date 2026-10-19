@@ -75,7 +75,7 @@ export class CitizensService implements OnModuleInit {
         seededCount++;
 
         // 2. Persistência de Experiências Episódicas Iniciais (Idempotente)
-        const existingExperiences = await this.expRepo.getByAgentId(citizenConfig.id, 100);
+        const existingExperiences = await this.expRepo.getByAgentId(citizenConfig.id, 1000);
         const existingDescriptions = new Set(existingExperiences.map((e) => e.description));
 
         for (const exp of citizenConfig.initialExperiences) {
