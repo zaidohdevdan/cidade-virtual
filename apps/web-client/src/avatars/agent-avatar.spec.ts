@@ -259,7 +259,7 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     expect(agent.isRoadAsphalt(agent.evasionTarget!.x, agent.evasionTarget!.z)).toBe(false);
     // Agente emite balão de alerta
     expect(agent.speechBubble).toBeDefined();
-    expect(agent.speechBubble?.innerHTML).toMatch(/saindo|veículo|calçada|pista|buzina/i);
+    expect(agent.speechBubble?.innerHTML).toMatch(/saindo|veículo|calçada|pista|buzina|livre/i);
 
     // Simula corrida de evasão até o local seguro
     for (let i = 0; i < 40 && agent.isEvadingVehicle; i++) {
@@ -269,4 +269,131 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     // Após completar a evasão ou aproximar-se do local livre, o agente desobstruiu a pista
     expect(agent.isRoadAsphalt(agent.position.x, agent.position.z)).toBe(false);
   });
+
+  it('deve diagnosticar aprisionamento (deadlock) quando o movimento é obstruído por obstáculos e ativar fuga autônoma', () => {
+    // Posiciona o NPC em um beco estreito bloqueado em frente e nas laterais
+    agent.position.set(20.0, 0.19, 20.0);
+    agent.setTargetPosition({ x: 20.0, y: 0.19, z: 25.0 }); // Quer ir para o norte (+Z)
+
+    // Bloqueia com obstáculos: parede frontal em z=[20.5, 23.0] e laterais em x=[19.0, 19.5] e [20.5, 21.0]
+    const colliders: ObstacleCollider[] = [
+      { type: 'box', minX: 18.0, maxX: 22.0, minZ: 20.5, maxZ: 22.5, name: 'front-wall' },
+      { type: 'box', minX: 19.0, maxX: 19.5, minZ: 19.0, maxZ: 20.5, name: 'left-wall' },
+      { type: 'box', minX: 20.5, maxX: 21.0, minZ: 19.0, maxZ: 20.5, name: 'right-wall' },
+    ];
+
+    // Simula múltiplos updates com o agente tentando andar mas sem conseguir se deslocar
+    let wasEscaping = false;
+    for (let i = 0; i < 25; i++) {
+      agent.update(0.1, colliders, 'green');
+      if (agent.isEscapingDeadlock) {
+        wasEscaping = true;
+      }
+    }
+
+    // O agente deve ter acumulado detecção de travamento e ativado o protocolo de fuga autônoma
+    expect(wasEscaping).toBe(true);
+    // Deve ter registrado na memória espacial do NPC
+    expect(agent.stuckMemories.length).toBeGreaterThan(0);
+    // O destino de fuga memorizado não deve colidir com nenhuma parede
+    const learnedEscape = agent.stuckMemories[0].escapeWaypoint;
+    expect(agent.checkCollision(learnedEscape.x, learnedEscape.z, colliders)).toBe(false);
+    // Deve ter emitido balão de fala expressando a descoberta da saída e memorização
+    expect(agent.speechBubble).toBeDefined();
+    expect(agent.speechBubble?.innerHTML).toMatch(/saída|bloqueio|memória|obstruído|livre/i);
+  });
+
+  it('findEscapeRoute deve calcular com inteligência geométrica uma rota de saída desimpedida para área livre fora de becos', () => {
+    // Agente em um beco em U fechado no Norte, Leste e Oeste, com saída apenas para o Sul (-Z)
+    agent.position.set(30.0, 0.19, 30.0);
+    const colliders: ObstacleCollider[] = [
+      // Parede Norte (frente)
+      { type: 'box', minX: 28.0, maxX: 32.0, minZ: 30.6, maxZ: 35.0, name: 'north-wall' },
+      // Parede Oeste (esquerda)
+      { type: 'box', minX: 27.0, maxX: 29.5, minZ: 27.0, maxZ: 33.0, name: 'west-wall' },
+      // Parede Leste (direita)
+      { type: 'box', minX: 30.5, maxX: 33.0, minZ: 27.0, maxZ: 33.0, name: 'east-wall' },
+    ];
+
+    const escapeSpot = agent.findEscapeRoute(colliders);
+    expect(escapeSpot).not.toBeNull();
+
+    // A rota deve sair pelo lado Sul (z < 30.0)
+    expect(escapeSpot!.z).toBeLessThan(30.0);
+    // Não deve colidir com nenhum obstáculo
+    expect(agent.checkCollision(escapeSpot!.x, escapeSpot!.z, colliders)).toBe(false);
+    // Não deve recair sobre asfalto veicular
+    expect(agent.isRoadAsphalt(escapeSpot!.x, escapeSpot!.z)).toBe(false);
+  });
+
+  it('deve registrar e aprender memórias espaciais com raio de influência, ocorrências e ponto de fuga ao se deparar com armadilhas', () => {
+    agent.position.set(40.0, 0.19, 40.0);
+    const escapeTarget = new THREE.Vector3(40.0, 0.19, 34.0);
+
+    // 1. Registra memória pela primeira vez
+    const mem1 = agent.learnStuckMemory(agent.position, escapeTarget, 'Beco em obra');
+    const initialRadius = mem1.radius;
+    expect(mem1.occurrences).toBe(1);
+    expect(mem1.position.x).toBe(40.0);
+    expect(mem1.position.z).toBe(40.0);
+    expect(mem1.escapeWaypoint.x).toBe(40.0);
+    expect(mem1.escapeWaypoint.z).toBe(34.0);
+    expect(agent.stuckMemories).toHaveLength(1);
+    expect(agent.hasMemoryNear(40.0, 40.0)).toBe(true);
+
+    // 2. Se o agente re-encontrar travamento na mesma zona (< 3.2m), incrementa ocorrência e expande raio
+    const newEscape = new THREE.Vector3(42.0, 0.19, 33.0);
+    const mem2 = agent.learnStuckMemory(new THREE.Vector3(40.5, 0.19, 40.2), newEscape);
+    expect(mem2.id).toBe(mem1.id);
+    expect(mem2.occurrences).toBe(2);
+    expect(mem2.radius).toBeGreaterThan(initialRadius);
+    expect(agent.stuckMemories).toHaveLength(1);
+  });
+
+  it('em navegações futuras, a memória espacial aprendida deve repelir ativamente o NPC para longe da armadilha e guiá-lo para a rota segura', () => {
+    // Registra uma armadilha em (15.0, 15.0) com saída segura em (15.0, 8.0)
+    agent.stuckMemories = [
+      {
+        id: 'mem-trap-1',
+        position: { x: 15.0, z: 15.0 },
+        radius: 3.5,
+        escapeWaypoint: { x: 15.0, z: 8.0 },
+        timestamp: Date.now(),
+        description: 'Obstáculo intransponível',
+        occurrences: 2,
+      },
+    ];
+
+    // Posiciona o NPC se aproximando da armadilha (em 15.0, 12.5), querendo andar em direção a ela (+Z)
+    agent.position.set(15.0, 0.19, 12.5);
+    const dirTowardsTrap = new THREE.Vector3(0, 0, 1);
+
+    const steer = agent.computeAvoidanceSteering(dirTowardsTrap, []);
+
+    // A direção resultante NÃO deve prosseguir direto para dentro da armadilha (+Z puro)
+    // O campo repulsivo da memória deve empurrá-lo para longe do centro (z < 1) e orientá-lo em direção à saída segura
+    expect(steer.z).toBeLessThan(0.7);
+  });
+
+  it('ao chegar no destino de fuga, o NPC deve permanecer no local livre seguro e expressar alívio no balão de fala', () => {
+    agent.position.set(10.0, 0.19, 10.0);
+    const freeSpot = new THREE.Vector3(10.0, 0.19, 13.0);
+
+    agent.isEscapingDeadlock = true;
+    agent.escapeTarget = freeSpot;
+    agent.escapeTimer = 10.0;
+    agent.speed = 3.0;
+
+    // Simula deslocamento até o ponto livre
+    agent.position.set(10.0, 0.19, 12.8); // dist < 0.9m do freeSpot
+    agent.update(0.1, [], 'green');
+
+    // Ao alcançar o local livre, a fuga termina e o NPC descansa em segurança no local livre
+    expect(agent.isEscapingDeadlock).toBe(false);
+    expect(agent.escapeTarget).toBeNull();
+    expect(agent.speed).toBe(0);
+    // Expressa alívio e confirmação de local livre
+    expect(agent.speechBubble?.innerHTML).toMatch(/local livre|saída/i);
+  });
 });
+

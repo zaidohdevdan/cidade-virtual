@@ -22,6 +22,16 @@ export interface AgentConfig {
   patrolPoints: THREE.Vector3[];
 }
 
+export interface SpatialStuckMemory {
+  id: string;
+  position: { x: number; z: number };
+  radius: number; // Raio de influência da armadilha/bloqueio
+  escapeWaypoint: { x: number; z: number }; // Rota de fuga desobstruída descoberta e memorizada
+  timestamp: number;
+  description: string;
+  occurrences: number; // Quantas vezes se deparou com este obstáculo
+}
+
 export class AgentAvatar {
   public mesh: THREE.Group;
   public position: THREE.Vector3;
@@ -40,9 +50,16 @@ export class AgentAvatar {
   public isEvadingVehicle: boolean = false;
   public evasionTarget: THREE.Vector3 | null = null;
   public evasionTimer: number = 0;
+  public isEscapingDeadlock: boolean = false;
+  public escapeTarget: THREE.Vector3 | null = null;
+  public escapeTimer: number = 0;
+  public stuckMemories: SpatialStuckMemory[] = [];
+  public stuckAccumulator: number = 0;
   public lastColliders: ObstacleCollider[] = [];
   private unsubscribeHorn?: () => void;
   private proximityGreetingCooldown: number = 0;
+  private lastDisplacementPos: THREE.Vector3 = new THREE.Vector3();
+  private stuckCheckTimer: number = 0;
 
   private leftLeg!: THREE.Mesh;
   private rightLeg!: THREE.Mesh;
@@ -61,6 +78,7 @@ export class AgentAvatar {
     this.mesh = new THREE.Group();
     this.position = this.mesh.position;
     this.position.copy(config.startPosition);
+    this.lastDisplacementPos.copy(this.position);
     this.buildModel();
     if (typeof document !== 'undefined') {
       this.buildLabel();
@@ -495,6 +513,9 @@ export class AgentAvatar {
     this.targetPosition = new THREE.Vector3(pos.x, pos.y ?? this.position.y, pos.z);
     this.hasReceivedServerTarget = true;
     this.waitTimer = 0; // Acorda de pausas locais para navegar ao destino
+    this.lastDisplacementPos.copy(this.position);
+    this.stuckAccumulator = 0;
+    this.stuckCheckTimer = 0;
   }
 
   /**
@@ -625,6 +646,9 @@ export class AgentAvatar {
       // 4. Não deve colidir com obstáculos físicos (prédios, postes, bancos, etc.)
       if (this.checkCollision(candX, candZ, colliders)) continue;
 
+      // 5. Não deve recair sobre nenhuma zona de bloqueio registrada na memória espacial do NPC
+      if (this.isPositionInStuckMemory(candX, candZ, 0.5)) continue;
+
       candidates.push(new THREE.Vector3(candX, 0.19, candZ));
     }
 
@@ -700,99 +724,361 @@ export class AgentAvatar {
    * veículos dinâmicos, outros cidadãos e obstáculos da cidade.
    */
   public computeAvoidanceSteering(dir: THREE.Vector3, colliders: ObstacleCollider[]): THREE.Vector3 {
-    if (colliders.length === 0) return dir.clone();
+    if (colliders.length === 0 && this.stuckMemories.length === 0) return dir.clone();
 
     const currX = this.position.x;
     const currZ = this.position.z;
     const lookahead = Math.max(1.3, Math.min(2.8, this.speed * 1.25));
 
-    // 1. Checa se o vetor direto à frente ou a meio caminho colide com obstáculo
-    const fwdX = currX + dir.x * lookahead;
-    const fwdZ = currZ + dir.z * lookahead;
-    const midX = currX + dir.x * (lookahead * 0.5);
-    const midZ = currZ + dir.z * (lookahead * 0.5);
-
-    const isDirectBlocked = this.checkCollision(fwdX, fwdZ, colliders) || this.checkCollision(midX, midZ, colliders);
-
     let chosenDir = dir.clone();
 
-    if (isDirectBlocked) {
-      // 2. Sensores em leque (whiskers): testa ângulos alternativos laterais à esquerda e direita
-      // Prioriza desvios de menor desvio angular (30°, 50°, 75°, 100°, 125°, 150°)
-      const angles = [
-        Math.PI * 0.17, -Math.PI * 0.17,
-        Math.PI * 0.28, -Math.PI * 0.28,
-        Math.PI * 0.42, -Math.PI * 0.42,
-        Math.PI * 0.56, -Math.PI * 0.56,
-        Math.PI * 0.70, -Math.PI * 0.70,
-      ];
+    if (colliders.length > 0) {
+      // 1. Checa se o vetor direto à frente ou a meio caminho colide com obstáculo
+      const fwdX = currX + dir.x * lookahead;
+      const fwdZ = currZ + dir.z * lookahead;
+      const midX = currX + dir.x * (lookahead * 0.5);
+      const midZ = currZ + dir.z * (lookahead * 0.5);
 
-      let foundClear = false;
-      for (const ang of angles) {
-        const cosA = Math.cos(ang);
-        const sinA = Math.sin(ang);
-        const testX = dir.x * cosA - dir.z * sinA;
-        const testZ = dir.x * sinA + dir.z * cosA;
+      const isDirectBlocked = this.checkCollision(fwdX, fwdZ, colliders) || this.checkCollision(midX, midZ, colliders);
 
-        const pFwdX = currX + testX * lookahead;
-        const pFwdZ = currZ + testZ * lookahead;
-        const pMidX = currX + testX * (lookahead * 0.5);
-        const pMidZ = currZ + testZ * (lookahead * 0.5);
+      if (isDirectBlocked) {
+        // 2. Sensores em leque (whiskers): testa ângulos alternativos laterais à esquerda e direita
+        // Prioriza desvios de menor desvio angular (30°, 50°, 75°, 100°, 125°, 150°)
+        const angles = [
+          Math.PI * 0.17, -Math.PI * 0.17,
+          Math.PI * 0.28, -Math.PI * 0.28,
+          Math.PI * 0.42, -Math.PI * 0.42,
+          Math.PI * 0.56, -Math.PI * 0.56,
+          Math.PI * 0.70, -Math.PI * 0.70,
+        ];
 
-        if (!this.checkCollision(pFwdX, pFwdZ, colliders) && !this.checkCollision(pMidX, pMidZ, colliders)) {
-          chosenDir = new THREE.Vector3(testX, 0, testZ);
-          foundClear = true;
-          break;
+        let foundClear = false;
+        for (const ang of angles) {
+          const cosA = Math.cos(ang);
+          const sinA = Math.sin(ang);
+          const testX = dir.x * cosA - dir.z * sinA;
+          const testZ = dir.x * sinA + dir.z * cosA;
+
+          const pFwdX = currX + testX * lookahead;
+          const pFwdZ = currZ + testZ * lookahead;
+          const pMidX = currX + testX * (lookahead * 0.5);
+          const pMidZ = currZ + testZ * (lookahead * 0.5);
+
+          if (!this.checkCollision(pFwdX, pFwdZ, colliders) && !this.checkCollision(pMidX, pMidZ, colliders)) {
+            chosenDir = new THREE.Vector3(testX, 0, testZ);
+            foundClear = true;
+            break;
+          }
+        }
+
+        if (!foundClear) {
+          chosenDir = new THREE.Vector3(-dir.z, 0, dir.x); // desvio perpendicular lateral de emergência
         }
       }
 
-      if (!foundClear) {
-        chosenDir = new THREE.Vector3(-dir.z, 0, dir.x); // desvio perpendicular lateral de emergência
+      // 3. Força repulsiva contínua de proximidade contra obstáculos que estejam muito perto (<= r + 0.65m)
+      let repelX = 0;
+      let repelZ = 0;
+      const repelMargin = this.radius + 0.65;
+      const repelMarginSq = repelMargin * repelMargin;
+
+      for (const c of colliders) {
+        if (c.type === 'box') {
+          if (c.minX === undefined || c.maxX === undefined || c.minZ === undefined || c.maxZ === undefined) continue;
+          const closestX = Math.max(c.minX, Math.min(currX, c.maxX));
+          const closestZ = Math.max(c.minZ, Math.min(currZ, c.maxZ));
+          const dx = currX - closestX;
+          const dz = currZ - closestZ;
+          const distSq = dx * dx + dz * dz;
+          if (distSq < repelMarginSq && distSq > 1e-4) {
+            const d = Math.sqrt(distSq);
+            const force = (repelMargin - d) / repelMargin;
+            repelX += (dx / d) * force;
+            repelZ += (dz / d) * force;
+          }
+        } else if (c.type === 'cylinder') {
+          if (c.cx === undefined || c.cz === undefined || c.radius === undefined) continue;
+          const dx = currX - c.cx;
+          const dz = currZ - c.cz;
+          const distSq = dx * dx + dz * dz;
+          const combined = this.radius + c.radius + 0.45;
+          if (distSq < combined * combined && distSq > 1e-4) {
+            const d = Math.sqrt(distSq);
+            const force = (combined - d) / combined;
+            repelX += (dx / d) * force;
+            repelZ += (dz / d) * force;
+          }
+        }
+      }
+
+      if (repelX !== 0 || repelZ !== 0) {
+        chosenDir.x += repelX * 1.8;
+        chosenDir.z += repelZ * 1.8;
+        chosenDir.normalize();
       }
     }
 
-    // 3. Força repulsiva contínua de proximidade contra obstáculos que estejam muito perto (<= r + 0.65m)
-    let repelX = 0;
-    let repelZ = 0;
-    const repelMargin = this.radius + 0.65;
-    const repelMarginSq = repelMargin * repelMargin;
+    // 4. Integração com a Memória Espacial Aprendida:
+    // Campos de repulsão ativos e vetores de guia para desviar preventivamente de zonas onde o agente já ficou preso
+    if (this.stuckMemories.length > 0 && !this.isEscapingDeadlock) {
+      for (const mem of this.stuckMemories) {
+        const dx = currX - mem.position.x;
+        const dz = currZ - mem.position.z;
+        const distSq = dx * dx + dz * dz;
+        const influenceRadius = mem.radius + lookahead;
 
-    for (const c of colliders) {
-      if (c.type === 'box') {
-        if (c.minX === undefined || c.maxX === undefined || c.minZ === undefined || c.maxZ === undefined) continue;
-        const closestX = Math.max(c.minX, Math.min(currX, c.maxX));
-        const closestZ = Math.max(c.minZ, Math.min(currZ, c.maxZ));
-        const dx = currX - closestX;
-        const dz = currZ - closestZ;
-        const distSq = dx * dx + dz * dz;
-        if (distSq < repelMarginSq && distSq > 1e-4) {
-          const d = Math.sqrt(distSq);
-          const force = (repelMargin - d) / repelMargin;
-          repelX += (dx / d) * force;
-          repelZ += (dz / d) * force;
-        }
-      } else if (c.type === 'cylinder') {
-        if (c.cx === undefined || c.cz === undefined || c.radius === undefined) continue;
-        const dx = currX - c.cx;
-        const dz = currZ - c.cz;
-        const distSq = dx * dx + dz * dz;
-        const combined = this.radius + c.radius + 0.45;
-        if (distSq < combined * combined && distSq > 1e-4) {
-          const d = Math.sqrt(distSq);
-          const force = (combined - d) / combined;
-          repelX += (dx / d) * force;
-          repelZ += (dz / d) * force;
+        if (distSq < influenceRadius * influenceRadius && distSq > 1e-4) {
+          const dist = Math.sqrt(distSq);
+          const force = (influenceRadius - dist) / influenceRadius;
+
+          // Força de repulsão contra a armadilha conhecida
+          chosenDir.x += (dx / dist) * force * 2.5;
+          chosenDir.z += (dz / dist) * force * 2.5;
+
+          // Força atrativa em direção à saída segura aprendida
+          const toSafeX = mem.escapeWaypoint.x - currX;
+          const toSafeZ = mem.escapeWaypoint.z - currZ;
+          const safeDist = Math.hypot(toSafeX, toSafeZ);
+          if (safeDist > 0.4) {
+            chosenDir.x += (toSafeX / safeDist) * force * 1.6;
+            chosenDir.z += (toSafeZ / safeDist) * force * 1.6;
+          }
+          chosenDir.normalize();
         }
       }
-    }
-
-    if (repelX !== 0 || repelZ !== 0) {
-      chosenDir.x += repelX * 1.8;
-      chosenDir.z += repelZ * 1.8;
-      chosenDir.normalize();
     }
 
     return chosenDir;
+  }
+
+  /**
+   * Diagnostica o bloqueio e calcula uma rota de saída inteligente em direção a um local livre.
+   * Utiliza amostragem radial em 32 direções e raio de varredura (raymarching)
+   * para identificar corredores desobstruídos com alta pontuação de espaço aberto.
+   */
+  public findEscapeRoute(colliders: ObstacleCollider[] = []): THREE.Vector3 | null {
+    interface CandidateEscape {
+      point: THREE.Vector3;
+      score: number;
+    }
+
+    const candidates: CandidateEscape[] = [];
+    const numRays = 32;
+    const testDistances = [3.0, 5.0, 7.5, 10.5, 14.0];
+
+    for (let r = 0; r < numRays; r++) {
+      const angle = (r / numRays) * Math.PI * 2;
+      const dirX = Math.sin(angle);
+      const dirZ = Math.cos(angle);
+
+      // Raymarching: verifica até onde a linha de visão do agente está desimpedida
+      let maxUnblockedDist = 0;
+      for (let d = 0.4; d <= 14.0; d += 0.35) {
+        const stepX = this.position.x + dirX * d;
+        const stepZ = this.position.z + dirZ * d;
+        if (this.checkCollision(stepX, stepZ, colliders)) {
+          break;
+        }
+        maxUnblockedDist = d;
+      }
+
+      // Se a direção estiver bloqueada imediatamente (< 2.0m), descarta
+      if (maxUnblockedDist < 2.0) continue;
+
+      for (const dist of testDistances) {
+        if (dist > maxUnblockedDist - 0.3) continue;
+
+        const candX = this.position.x + dirX * dist;
+        const candZ = this.position.z + dirZ * dist;
+
+        // Limites da cidade
+        if (Math.abs(candX) > 78 || Math.abs(candZ) > 78) continue;
+
+        // Ponto de destino deve ser desimpedido
+        if (this.checkCollision(candX, candZ, colliders)) continue;
+
+        // Não deve recair sobre outra zona de bloqueio já memorizada
+        if (this.isPositionInStuckMemory(candX, candZ, 0.4)) continue;
+
+        const isAsphalt = this.isRoadAsphalt(candX, candZ);
+
+        // Avaliação de amplitude e desobstrução (Clearance) ao redor do ponto candidato
+        let freeProbes = 0;
+        const probeOffsets = [
+          { x: 1.2, z: 0 },
+          { x: -1.2, z: 0 },
+          { x: 0, z: 1.2 },
+          { x: 0, z: -1.2 },
+          { x: 0.85, z: 0.85 },
+          { x: -0.85, z: 0.85 },
+          { x: 0.85, z: -0.85 },
+          { x: -0.85, z: -0.85 },
+        ];
+
+        for (const p of probeOffsets) {
+          if (!this.checkCollision(candX + p.x, candZ + p.z, colliders)) {
+            freeProbes++;
+          }
+        }
+
+        // Calcula score do candidato a "local livre"
+        let score = freeProbes * 12;
+        if (!isAsphalt) score += 35; // Forte prioridade para calçadas, praças e passeios
+        score += Math.min(dist, 9.0) * 2.5; // Distância confortável
+
+        candidates.push({
+          point: new THREE.Vector3(candX, 0.19, candZ),
+          score,
+        });
+      }
+    }
+
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => b.score - a.score);
+      return candidates[0].point;
+    }
+
+    // Fallback: se nenhum ponto ideal for encontrado, tenta um recuo seguro de 3.5m na direção oposta à rotação
+    const backX = this.position.x - Math.sin(this.rotationY) * 3.5;
+    const backZ = this.position.z - Math.cos(this.rotationY) * 3.5;
+    if (!this.checkCollision(backX, backZ, colliders)) {
+      return new THREE.Vector3(backX, 0.19, backZ);
+    }
+
+    return new THREE.Vector3(this.position.x + (Math.random() - 0.5) * 4, 0.19, this.position.z + (Math.random() - 0.5) * 4);
+  }
+
+  /**
+   * Aciona o protocolo de inteligência anti-bloqueio:
+   * Calcula rota de fuga para local livre, grava a memória espacial e inicia o deslocamento.
+   */
+  public triggerAntiStuckEscape(colliders: ObstacleCollider[] = []): boolean {
+    const escapePoint = this.findEscapeRoute(colliders);
+    if (!escapePoint) return false;
+
+    // Registra o aprendizado na memória espacial do habitante
+    this.learnStuckMemory(this.position, escapePoint);
+
+    // Ativa a manobra autônoma de fuga do bloqueio
+    this.isEscapingDeadlock = true;
+    this.escapeTarget = escapePoint;
+    this.escapeTimer = 10.0;
+    this.speed = this.walkSpeed * 1.5;
+    this.stuckAccumulator = 0;
+    this.blockedObstacleTimer = 0;
+    this.waitTimer = 0;
+    this.isWaitingAtCrosswalk = false;
+
+    // Se estava perseguindo um ponto de patrulha bloqueado, avança para o próximo ponto
+    if (!this.targetPosition && !this.isEvadingVehicle) {
+      this.patrolIndex = (this.patrolIndex + 1) % this.config.patrolPoints.length;
+    } else if (this.targetPosition) {
+      // Se o destino server-side estava dentro da zona bloqueada, cancela para não re-entrar
+      const distToTarget = Math.hypot(
+        this.targetPosition.x - this.position.x,
+        this.targetPosition.z - this.position.z
+      );
+      if (distToTarget < 3.5) {
+        this.targetPosition = null;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Registra uma nova memória espacial de aprisionamento/bloqueio com rota de fuga testada.
+   */
+  public learnStuckMemory(
+    stuckPos: THREE.Vector3,
+    escapeTarget: THREE.Vector3,
+    description: string = 'Bloqueio físico contornado com sucesso'
+  ): SpatialStuckMemory {
+    const existing = this.stuckMemories.find(
+      (m) => Math.hypot(m.position.x - stuckPos.x, m.position.z - stuckPos.z) < 3.2
+    );
+
+    if (existing) {
+      existing.occurrences += 1;
+      existing.timestamp = Date.now();
+      existing.escapeWaypoint = { x: escapeTarget.x, z: escapeTarget.z };
+      existing.radius = Math.min(5.5, existing.radius + 0.4);
+      return existing;
+    }
+
+    const memory: SpatialStuckMemory = {
+      id: `mem-${this.config.id}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      position: { x: stuckPos.x, z: stuckPos.z },
+      radius: 3.2,
+      escapeWaypoint: { x: escapeTarget.x, z: escapeTarget.z },
+      timestamp: Date.now(),
+      description,
+      occurrences: 1,
+    };
+
+    this.stuckMemories.push(memory);
+
+    // Expressão vocal inteligente do NPC anunciando o aprendizado e rota de fuga
+    const phrases = [
+      'Caminho sem saída! Memorizei este bloqueio e encontrei a saída para a área livre.',
+      'Espaço obstruído! Identifiquei a rota de fuga livre e registrei na memória espacial.',
+      'Bloqueio detectado! Aprendi este ponto crítico e estou saindo para um local livre.',
+      'Passagem travada! Memorizei o obstáculo e rumei para área desobstruída.',
+    ];
+    const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+    this.say(phrase, 4.0, true);
+
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(
+        new CustomEvent('cidade:agent-memory', {
+          detail: {
+            agentId: this.config.id,
+            agentName: this.config.name,
+            type: 'spatial_stuck',
+            memory,
+          },
+        })
+      );
+    }
+
+    return memory;
+  }
+
+  public isPositionInStuckMemory(x: number, z: number, margin: number = 0): boolean {
+    for (const mem of this.stuckMemories) {
+      const dist = Math.hypot(x - mem.position.x, z - mem.position.z);
+      if (dist < mem.radius + margin) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public getNearestStuckMemory(x: number, z: number): SpatialStuckMemory | null {
+    let nearest: SpatialStuckMemory | null = null;
+    let minDist = Infinity;
+    for (const mem of this.stuckMemories) {
+      const dist = Math.hypot(x - mem.position.x, z - mem.position.z);
+      if (dist < mem.radius && dist < minDist) {
+        minDist = dist;
+        nearest = mem;
+      }
+    }
+    return nearest;
+  }
+
+  public getMemories(): SpatialStuckMemory[] {
+    return this.stuckMemories.slice();
+  }
+
+  public clearMemories(): void {
+    this.stuckMemories = [];
+  }
+
+  public hasMemoryNear(x: number, z: number, tolerance: number = 3.2): boolean {
+    return this.stuckMemories.some(
+      (m) => Math.hypot(m.position.x - x, m.position.z - z) <= tolerance
+    );
   }
 
   public update(
@@ -809,6 +1095,15 @@ export class AgentAvatar {
       if (this.evasionTimer <= 0) {
         this.isEvadingVehicle = false;
         this.evasionTarget = null;
+      }
+    }
+
+    // Se estiver em rota autônoma de fuga de bloqueio/armadilha
+    if (this.isEscapingDeadlock) {
+      this.escapeTimer -= delta;
+      if (this.escapeTimer <= 0) {
+        this.isEscapingDeadlock = false;
+        this.escapeTarget = null;
       }
     }
 
@@ -830,8 +1125,8 @@ export class AgentAvatar {
     }
 
     // Interação e atenção com o avatar do jogador Daniel em proximidade (≤ 3.5m)
-    // Se o habitante estiver em evasão de buzina, prioriza salvar-se e desobstruir a via
-    if (playerPos && !this.isEvadingVehicle) {
+    // Se o habitante estiver em evasão de buzina ou fuga de deadlock, prioriza sua segurança
+    if (playerPos && !this.isEvadingVehicle && !this.isEscapingDeadlock) {
       const distToPlayer = this.position.distanceTo(playerPos);
       if (distToPlayer <= 3.5) {
         this.isNearPlayer = true;
@@ -873,7 +1168,7 @@ export class AgentAvatar {
       }
     } else {
       this.isNearPlayer = false;
-      if (this.speechBubble && (this.speechTimer > 0 || this.speechBubble.style.display !== 'none') && !this.isEvadingVehicle) {
+      if (this.speechBubble && (this.speechTimer > 0 || this.speechBubble.style.display !== 'none') && !this.isEvadingVehicle && !this.isEscapingDeadlock) {
         this.speechTimer = 0;
         this.speechBubble.style.opacity = '0';
         this.speechBubble.style.display = 'none';
@@ -893,9 +1188,9 @@ export class AgentAvatar {
     }
 
     // Respeito ao semáforo nas imediações da faixa de pedestres central (|x| < 4.5 e |z| < 6)
-    // A evasão de buzina possui prioridade vital sobre a espera na faixa
+    // A evasão de buzina e fuga de aprisionamento possuem prioridade vital sobre a espera na faixa
     const isNearCrosswalk = Math.abs(this.position.x) < 4.5 && Math.abs(this.position.z) < 6;
-    if (!this.isEvadingVehicle && isNearCrosswalk && trafficLightState === 'green') {
+    if (!this.isEvadingVehicle && !this.isEscapingDeadlock && isNearCrosswalk && trafficLightState === 'green') {
       this.isWaitingAtCrosswalk = true;
       this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
       this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
@@ -906,7 +1201,7 @@ export class AgentAvatar {
 
     // Se o agente estiver sob controle autoritativo do servidor e não possuir novo destino ativo,
     // ele permanece no local atual realizando sua atividade em repouso ao invés de ciclar rotas locais.
-    if (!this.isEvadingVehicle && !this.targetPosition && this.hasReceivedServerTarget) {
+    if (!this.isEvadingVehicle && !this.isEscapingDeadlock && !this.targetPosition && this.hasReceivedServerTarget) {
       this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
       this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
       this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, delta * 8);
@@ -918,31 +1213,59 @@ export class AgentAvatar {
 
     // Prioridade de destino:
     // 1. Evasão de buzina (sair da frente e buscar local livre)
-    // 2. Destino recebido do servidor
-    // 3. Rota de patrulha local
+    // 2. Fuga autônoma de bloqueio/armadilha (achar a saída e ir para local livre)
+    // 3. Destino recebido do servidor (com validação anti-bloqueio memorizado)
+    // 4. Rota de patrulha local (com validação anti-bloqueio memorizado)
     let target: THREE.Vector3;
     let isServerTarget = false;
     let isEvasion = false;
+    let isEscape = false;
 
     if (this.isEvadingVehicle && this.evasionTarget) {
       target = this.evasionTarget;
       isEvasion = true;
+    } else if (this.isEscapingDeadlock && this.escapeTarget) {
+      target = this.escapeTarget;
+      isEscape = true;
     } else if (this.targetPosition) {
-      target = this.targetPosition;
-      isServerTarget = true;
+      if (this.isPositionInStuckMemory(this.targetPosition.x, this.targetPosition.z)) {
+        const mem = this.getNearestStuckMemory(this.targetPosition.x, this.targetPosition.z);
+        if (mem) {
+          target = new THREE.Vector3(mem.escapeWaypoint.x, 0.19, mem.escapeWaypoint.z);
+        } else {
+          target = this.targetPosition;
+          isServerTarget = true;
+        }
+      } else {
+        target = this.targetPosition;
+        isServerTarget = true;
+      }
     } else {
-      target = this.config.patrolPoints[this.patrolIndex];
+      let patrolTarget = this.config.patrolPoints[this.patrolIndex];
+      if (this.isPositionInStuckMemory(patrolTarget.x, patrolTarget.z)) {
+        this.patrolIndex = (this.patrolIndex + 1) % this.config.patrolPoints.length;
+        patrolTarget = this.config.patrolPoints[this.patrolIndex];
+      }
+      target = patrolTarget;
     }
 
     const flat = new THREE.Vector3(target.x, this.position.y, target.z);
     const toTarget = flat.clone().sub(this.position);
     const distToTarget = toTarget.length();
 
-    if (distToTarget < (isEvasion ? 0.9 : 0.5)) {
+    if (distToTarget < (isEvasion || isEscape ? 0.9 : 0.5)) {
       if (isEvasion) {
         this.isEvadingVehicle = false;
         this.evasionTarget = null;
         this.waitTimer = 2.0; // Pausa no local livre seguro para respirar e observar
+        return;
+      }
+      if (isEscape) {
+        this.isEscapingDeadlock = false;
+        this.escapeTarget = null;
+        this.waitTimer = 2.5; // Permanece no local livre alcançado
+        this.speed = 0;
+        this.say('Ufa! Encontrei a saída e cheguei a um local livre.', 3.5, true);
         return;
       }
       if (isServerTarget) {
@@ -966,8 +1289,8 @@ export class AgentAvatar {
     this.rotationY += angleDiff * Math.min(1, delta * 7);
     this.mesh.rotation.y = this.rotationY;
 
-    // Deslocamento dinâmico: velocidade elevada durante evasão
-    const targetSpeed = isEvasion ? this.walkSpeed * 1.65 : this.walkSpeed;
+    // Deslocamento dinâmico: velocidade elevada durante evasão ou fuga de bloqueio
+    const targetSpeed = (isEvasion || isEscape) ? this.walkSpeed * 1.55 : this.walkSpeed;
     const step = this.speed * delta;
     const desiredDx = steerDir.x * step;
     const desiredDz = steerDir.z * step;
@@ -1028,11 +1351,36 @@ export class AgentAvatar {
       this.position.z = nextZ;
     }
 
+    // Monitoramento contínuo inteligente de travamento/aprisionamento (Anti-Stuck & Entrapment Detection)
+    this.stuckCheckTimer += delta;
+    if (this.stuckCheckTimer >= 0.7) {
+      const distDisplaced = this.position.distanceTo(this.lastDisplacementPos);
+      if (distDisplaced < 0.22 && !this.isWaitingAtCrosswalk && !this.isNearPlayer && this.waitTimer <= 0) {
+        this.stuckAccumulator += this.stuckCheckTimer;
+      } else {
+        this.stuckAccumulator = Math.max(0, this.stuckAccumulator - 0.5);
+      }
+      this.lastDisplacementPos.copy(this.position);
+      this.stuckCheckTimer = 0;
+    }
+
+    if (isBlocked) {
+      this.stuckAccumulator += delta * 1.6;
+    }
+
+    // Se detectar travamento contínuo (>= 1.2s), aciona a inteligência de escape autônomo
+    if (this.stuckAccumulator >= 1.2 && !this.isEscapingDeadlock) {
+      this.triggerAntiStuckEscape(colliders);
+    } else if (this.stuckAccumulator >= 2.2 && this.isEscapingDeadlock) {
+      // Re-amostra rota de saída caso a rota de escape anterior tenha sido re-obstruída
+      this.triggerAntiStuckEscape(colliders);
+    }
+
     // Animação dinâmica de caminhada/corrida proporcional à velocidade real
     if (this.speed > 0.2) {
-      const freq = isEvasion ? 2.8 : 2.0;
+      const freq = (isEvasion || isEscape) ? 2.8 : 2.0;
       this.walkCycleTime += delta * this.speed * freq;
-      const legAngle = Math.sin(this.walkCycleTime) * (isEvasion ? 0.75 : 0.55);
+      const legAngle = Math.sin(this.walkCycleTime) * ((isEvasion || isEscape) ? 0.75 : 0.55);
       this.leftLeg.rotation.x = legAngle;
       this.rightLeg.rotation.x = -legAngle;
       this.leftArm.rotation.x = -legAngle * 0.65;
@@ -1054,6 +1402,7 @@ export class AgentAvatar {
     }
     if (this.label?.parentNode) this.label.parentNode.removeChild(this.label);
     if (this.speechBubble?.parentNode) this.speechBubble.parentNode.removeChild(this.speechBubble);
+    this.stuckMemories = [];
   }
 }
 

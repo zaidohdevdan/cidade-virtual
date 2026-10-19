@@ -158,6 +158,7 @@ Substituição definitiva de rotas, waypoints e tarefas pré-fixadas por um ecos
    - Percepção espacial real computada a cada tick (entidades próximas, avatar Daniel, outros agentes, semáforo).
    - Inclusão dos 7 cidadãos canônicos (`ALL_CITIZENS`) no runtime autoritativo.
    - Falas espontâneas contextuais geradas pela intenção ativa, sem tabelas estáticas de switch por ID.
+
 7. **Validação de Testes e Tipos**:
    - Novos testes unitários (`autonomy.spec.ts`): 7/7 aprovados.
    - Suíte de simulação (`simulation.service.spec.ts`): 4/4 aprovados.
@@ -1166,6 +1167,43 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 ### 3. Validação
 - `npx vitest run apps/web-client`: **8 arquivos e 44 testes aprovados (100%)**.
 - `npx vitest run tests/`: **22 arquivos e 112 testes aprovados (100%)**.
+
+---
+
+## 2026-10-19 — Inteligência Anti-Aprisionamento (Anti-Stuck), Fuga para Local Livre e Aprendizado de Memória Espacial dos NPCs
+
+### 1. Resumo da Demanda
+- **Solicitação do Usuário:** "os npc nao podem ficar presos em nenhum local. eles devem ter inteligencia para achar a saída e ficar em um local livre. e devem aprender essa memoria."
+- **Objetivos Chave:**
+  1. **Detecção Contínua de Bloqueio/Aprisionamento (`stuckAccumulator`):** Identificar quando um NPC tem intenção de se mover (`speed > 0.1` ou `distToTarget > 0.5`), mas seu deslocamento real é frustrado por colisores ou cantos de obstáculos por mais de 1.2s.
+  2. **Inteligência de Diagnóstico e Varredura Radial de Saída (`findEscapeRoute`):** Amostrar radialmente em 360° (32 direções de varredura raymarching até 14m) avaliando linha de visão desobstruída, ausência de colisores, afastamento do leito carroçável asfáltico e pontuação de espaço amplo/aberto (Clearance).
+  3. **Aprendizado e Fixação de Memória Espacial (`SpatialStuckMemory` & `learnStuckMemory`):** O NPC memoriza o ponto crítico do bloqueio, o raio de influência da armadilha e a rota de fuga desobstruída descoberta. Em caso de reincidência, incrementa ocorrências e expande a zona de segurança.
+  4. **Aplicação Preditiva da Memória Aprendida em Navegações Futuras (`computeAvoidanceSteering`):** Zonas de armadilha memorizadas geram campos de repulsão ativos combinados com vetores de atração em direção à saída segura aprendida, impedindo que o NPC volte a entrar no beco sem saída. Destinos de patrulha ou de servidor dentro de zonas memorizadas são automaticamente contornados.
+  5. **Feedback Visual e Vocal dos Cidadãos:** O habitante emite balão de fala expressando a identificação da obstrução, a rota de fuga e a memorização ("Caminho sem saída! Memorizei este bloqueio e encontrei a saída para a área livre.") e, ao alcançar o local livre, expressa alívio e descansa com segurança no local aberto.
+
+### 2. Implementações Realizadas
+- **Interface e Estrutura de Memória (`apps/web-client/src/avatars/agent-avatar.ts`):**
+  - Adicionada interface `SpatialStuckMemory` (`id`, `position`, `radius`, `escapeWaypoint`, `timestamp`, `description`, `occurrences`).
+  - Adicionados campos no `AgentAvatar`: `isEscapingDeadlock`, `escapeTarget`, `escapeTimer`, `stuckMemories`, `stuckAccumulator`, `lastDisplacementPos`, `stuckCheckTimer`.
+- **Diagnóstico e Fuga Autônoma (`findEscapeRoute` e `triggerAntiStuckEscape`):**
+  - Implementado raymarching radial em 32 direções com testes de 3.0m a 14.0m.
+  - Avaliação de desobstrução lateral (Clearance) em 8 probes circulares ao redor de cada ponto candidato.
+  - Priorização de calçadas e praças com exclusão do leito asfáltico e rejeição de zonas já cadastradas na memória.
+- **Integração de Memória Espacial no Steering (`computeAvoidanceSteering`):**
+  - Incorporada força repulsiva contínua ($\times 2.5$) contra o centro de armadilhas memorizadas e vetor atrativo de guia ($\times 1.6$) em direção à saída segura aprendida.
+  - Suporte à evasão de memórias mesmo sem colisores estáticos imediatos.
+- **Adaptação Preventiva de Rotas:**
+  - `setTargetPosition` sincroniza posição e reseta timers.
+  - Pontos de patrulha e destinos de servidor são checados contra `isPositionInStuckMemory`: se bloqueados na memória, avançam ou re-roteiam para o waypoint de fuga seguro.
+  - `findFreeRandomLocation` (evasão de veículos) descarta candidatos dentro de zonas memorizadas.
+- **Suíte de Testes Unitários (`apps/web-client/src/avatars/agent-avatar.spec.ts`):**
+  - 5 novos testes cobrindo diagnóstico de deadlock, inteligência geométrica de `findEscapeRoute`, mutação/aprendizado de memória espacial (`learnStuckMemory`), desvio repulsivo proativo via memória em `computeAvoidanceSteering` e permanência segura no local livre ao término da fuga.
+
+### 3. Validação
+- `npx vitest run apps/web-client`: **8 arquivos e 51 testes aprovados (100%)**.
+- `npx vitest run tests/`: **22 arquivos e 112 testes aprovados (100%)**.
+- Vite Dev Server ativo e funcionando na porta 3000.
+
 
 
 
