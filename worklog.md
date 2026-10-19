@@ -1059,6 +1059,40 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **Lint Estático Monorepo:** `npm run lint` — **25 de 25 projetos aprovados (100%)**.
 - **Paridade de Schema:** `npm run check:schema-drift` — **100% sincronizado**.
 
+---
+
+## 2026-10-19 — Habilitação Plena do Trânsito no Anel Viário Perimetral
+
+### 1. Resumo Executivo
+- **Problema Relatado:** As novas vias foram construídas, mas não era possível transitar por elas.
+- **Diagnóstico Preciso das Causas-Raiz:**
+  1. **Avatar do Jogador (Daniel):** Restrição artificial em `daniel-avatar.ts` (`clamp(nextX, -58, 58)` e `clamp(nextZ, -58, 58)`). Como as novas vias perimetrais possuem eixos em $\pm 68\text{m}$ (asfalto de $61\text{m}$ a $75\text{m}$ e calçadas até $80\text{m}$), o jogador colidia com uma barreira invisível fixa aos $58\text{m}$ e não conseguia dar um passo nas novas avenidas.
+  2. **Tráfego Automotivo:** Os veículos existentes realizavam manobra de retorno prematuro em $z = 60\text{m}$, $z = -30\text{m}$ e $x = \pm 60\text{m}$ (`ROAD_END`), antes de alcançar os entroncamentos, e não havia veículos circulando no Anel Viário.
+  3. **Conectividade Viária Norte:** A Avenida Central Norte terminava na fachada do Super Market sem alamedas laterais de contorno que ligassem o centro diretamente à Avenida Perimetral Norte.
+  4. **Rotas dos Habitantes (NPCs):** Todos os waypoints de patrulha dos habitantes estavam confinados ao centro histórico ($< 35\text{m}$).
+
+### 2. Implementações Realizadas
+1. **Desbloqueio Físico da Locomoção do Avatar Daniel ([daniel-avatar.ts](file:///home/zaidoh/dsw/cidade-virtual/apps/web-client/src/avatars/daniel-avatar.ts)):**
+   - Limites do mapa ampliados de $[-58, 58]$ para $[-82, 82]$, permitindo trânsito desimpedido por todo o asfalto perimetral, cruzamentos, calçadas, bancos perimetrais e o Mirante Panorâmico Sudeste em $(72, 72)$.
+2. **Infraestrutura e Conectividade Viária ([city-scene.ts](file:///home/zaidoh/dsw/cidade-virtual/apps/web-client/src/scenes/city-scene.ts)):**
+   - Construídas Alamedas Laterais de Contorno do Super Market (Alameda Noroeste em $x = -18.5$ e Alameda Nordeste em $x = +18.5$) com asfalto e calçadas contínuas de $z = -38$ a $z = -61$, além de pátio de manobra e ligação transversal nos fundos.
+   - Adicionadas calçadas largas nos Conectores Sul, Leste e Oeste, além de sinalização zebrada visual nas 4 entradas do Anel Viário.
+3. **Circulação Veicular Autônoma no Anel Viário ([vehicle-agent.ts](file:///home/zaidoh/dsw/cidade-virtual/apps/web-client/src/vehicles/vehicle-agent.ts)):**
+   - Adicionado suporte a `routeCircuit: 'PERIMETER_CCW' | 'PERIMETER_CW'` com navegação contínua ao longo dos 4 ramos perimetrais, cálculo de alinhamento lateral na faixa regulamentar (externa $71.5\text{m}$, interna $64.5\text{m}$, padrão CTB), controle de aproximação de esquinas com setas antecipadas e curvas suaves de Bézier de 90° nos quatro cantos (SE, NE, NW, SW).
+   - Expandidos os limites das artérias centrais (`ROAD_END.NS_SOUTH = 62`, `ROAD_END.EW = 62`, `ROAD_END.NS_NORTH = -34`) para que os carros centrais avancem até as bocas dos conectores.
+   - Expandida a frota `CITY_VEHICLES` de 4 para 8 veículos, integrando 4 veículos dedicados às pistas do Anel Viário: Ônibus Circular Perimetral (`veh-bus-perimetral`), Viatura de Trânsito Perimetral (`veh-patrol-perimetral`), Coupe Aerodinâmico (`veh-coupe-perimetral`) e Compacto Neo Elétrico (`veh-hatch-perimetral`).
+4. **Patrulha e Habitabilidade Urbana nas Vias Novas ([agent-avatar.ts](file:///home/zaidoh/dsw/cidade-virtual/apps/web-client/src/avatars/agent-avatar.ts)):**
+   - Integrados destinos e alamedas perimetrais nas rotas de Sulafat (Alameda Oeste & Banco Oeste), Sheliak (Conector Sul, Banco Sul e Mirante Panorâmico SE), Epsilon (Conector Leste e Banco Leste), Xihe (Alamedas do Super Market e Banco Norte) e Chasoň (Conector e Alameda Sul).
+5. **Cobertura Automatizada de Testes Unitários:**
+   - Criado `apps/web-client/src/vehicles/perimeter-traffic.spec.ts` (4 testes validando frota de 8 veículos, navegação nas pistas externa e interna e transição para estado `TURNING`).
+   - Criado `apps/web-client/src/avatars/daniel-avatar.spec.ts` (2 testes comprovando que o Daniel anda livremente além de $58\text{m}$ até as pistas perimetrais a $75\text{m}$).
+
+### 3. Validação de Aceite
+- **Suíte de Testes Frontend:** `npx vitest run apps/web-client` — **7 arquivos e 42 testes aprovados (100%)**.
+- **Suíte de Integração e E2E:** `npx vitest run tests/` — **22 arquivos e 112 testes aprovados (100%)**.
+- **Monorepo Nx:** `npm test` — **26 de 26 projetos aprovados (100%)**.
+- **Checagem de Schema Drift:** `npm run check:schema-drift` — **100% sincronizado**.
+
 
 
 

@@ -29,6 +29,7 @@ export interface VehicleConfig {
   routeAxis: 'NS' | 'EW'; // Eixo principal de circulação
   routeDirection: 1 | -1; // 1 = sentido positivo (+Z ou +X), -1 = sentido negativo (-Z ou -X)
   canPark?: boolean; // Pode estacionar junto ao meio-fio
+  routeCircuit?: 'PERIMETER_CCW' | 'PERIMETER_CW'; // Tráfego ativo no Anel Viário Perimetral
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,11 +46,11 @@ const TURN_START_DIST = 9.5;
 const TURN_EXIT_DIST = 9.0;
 const CAR_HALF_LENGTH = 2.3;
 
-// Limites de cada via (o Super Market ocupa z < -38.5 no extremo norte da Avenida Central)
+// Limites das artérias centrais estendidos até a interligação com o Anel Viário
 const ROAD_END = {
-  NS_NORTH: -30,
-  NS_SOUTH: 60,
-  EW: 60,
+  NS_NORTH: -34,
+  NS_SOUTH: 62,
+  EW: 62,
 };
 
 // Dinâmica longitudinal
@@ -506,7 +507,11 @@ export class VehicleAgent {
       case 'APPROACHING_INTERSECTION':
       case 'WAITING_SIGNAL':
       case 'OBSTACLE_BRAKING':
-        this.updateLaneFollowing(delta, perception, trafficLights, otherVehicles, pedestrianPositions, playerPos);
+        if (this.config.routeCircuit) {
+          this.updatePerimeterLaneFollowing(delta, perception, otherVehicles, pedestrianPositions, playerPos);
+        } else {
+          this.updateLaneFollowing(delta, perception, trafficLights, otherVehicles, pedestrianPositions, playerPos);
+        }
         break;
       case 'TURNING':
       case 'PARKING_MANEUVER':
@@ -888,6 +893,191 @@ export class VehicleAgent {
       } else {
         this.targetSpeed = 0;
       }
+    }
+  }
+
+  // ──────────────────── CIRCULAÇÃO NO ANEL VIÁRIO PERIMETRAL ────────────────────
+  /**
+   * Condução autônoma contínua ao longo do Anel Viário Perimetral (±68m).
+   * Suporta faixas externas (PERIMETER_CCW) e internas (PERIMETER_CW) conforme CTB,
+   * executando curvas de concordância suaves de 90° nos quatro cantos (SE, NE, NW, SW).
+   */
+  private updatePerimeterLaneFollowing(
+    delta: number,
+    perception: Perception,
+    others: VehicleAgent[],
+    pedestrians: THREE.Vector3[] = [],
+    playerPos?: THREE.Vector3
+  ): void {
+    const circuit = this.config.routeCircuit!;
+    const isCCW = circuit === 'PERIMETER_CCW';
+    const cruise = this.config.cruiseSpeed;
+    const cornerEntryDist = 61.5;
+    const laneDist = isCCW ? 71.5 : 64.5;
+
+    // 1. Limite de velocidade de obstáculo (pedestres, carros ou avatar Daniel)
+    const obstacleLimit = this.obstacleSpeedLimit(perception);
+    const stopped = this.speed < 0.3;
+
+    // 2. Manejo de bloqueio por obstáculo
+    const isObstacleBlocking =
+      (this.state === 'OBSTACLE_BRAKING' || this.state === 'CRUISING') &&
+      stopped &&
+      perception.kind !== 'none' &&
+      perception.gap < 5.0;
+
+    if (isObstacleBlocking) {
+      this.blockedTimer += delta;
+    } else {
+      this.blockedTimer = Math.max(0, this.blockedTimer - delta * 2);
+      if (this.blockedTimer === 0) this.honked = false;
+    }
+
+    if (this.blockedTimer > 1.4 && !this.honked) {
+      VehicleAudioEngine.playHorn(0.12);
+      this.honked = true;
+    }
+
+    if (this.blockedTimer > 2.0) {
+      const needsReverse = perception.gap < 1.8;
+      this.startObstacleBypass(others, pedestrians, playerPos, needsReverse);
+      return;
+    }
+
+    // 3. Determina o ramo atual e a geometria do próximo canto
+    let distToCorner = Infinity;
+    let reachedCorner = false;
+    let nextAxis: Axis = 'NS';
+    let nextDir: Dir = 1;
+    const py = this.position.y;
+    const cornerP0 = new THREE.Vector3();
+    const cornerP3 = new THREE.Vector3();
+    const inDir = new THREE.Vector3();
+    const outDir = new THREE.Vector3();
+
+    if (isCCW) {
+      // Sentido Anti-Horário (pista externa, CTB - virando à esquerda nos 4 cantos)
+      if (this.currentAxis === 'EW' && this.currentDirection === 1) {
+        // Ramo Sul (z = +71.5, indo para +X / Leste) -> Canto SE -> Ramo Leste (x = +71.5, dir = -1 / Norte)
+        distToCorner = cornerEntryDist - this.position.x;
+        reachedCorner = this.position.x >= cornerEntryDist;
+        nextAxis = 'NS';
+        nextDir = -1;
+        cornerP0.set(cornerEntryDist, py, laneDist);
+        cornerP3.set(laneDist, py, cornerEntryDist);
+        inDir.set(1, 0, 0);
+        outDir.set(0, 0, -1);
+      } else if (this.currentAxis === 'NS' && this.currentDirection === -1) {
+        // Ramo Leste (x = +71.5, indo para -Z / Norte) -> Canto NE -> Ramo Norte (z = -71.5, dir = -1 / Oeste)
+        distToCorner = this.position.z - (-cornerEntryDist);
+        reachedCorner = this.position.z <= -cornerEntryDist;
+        nextAxis = 'EW';
+        nextDir = -1;
+        cornerP0.set(laneDist, py, -cornerEntryDist);
+        cornerP3.set(cornerEntryDist, py, -laneDist);
+        inDir.set(0, 0, -1);
+        outDir.set(-1, 0, 0);
+      } else if (this.currentAxis === 'EW' && this.currentDirection === -1) {
+        // Ramo Norte (z = -71.5, indo para -X / Oeste) -> Canto NW -> Ramo Oeste (x = -71.5, dir = 1 / Sul)
+        distToCorner = this.position.x - (-cornerEntryDist);
+        reachedCorner = this.position.x <= -cornerEntryDist;
+        nextAxis = 'NS';
+        nextDir = 1;
+        cornerP0.set(-cornerEntryDist, py, -laneDist);
+        cornerP3.set(-laneDist, py, -cornerEntryDist);
+        inDir.set(-1, 0, 0);
+        outDir.set(0, 0, 1);
+      } else if (this.currentAxis === 'NS' && this.currentDirection === 1) {
+        // Ramo Oeste (x = -71.5, indo para +Z / Sul) -> Canto SW -> Ramo Sul (z = +71.5, dir = 1 / Leste)
+        distToCorner = cornerEntryDist - this.position.z;
+        reachedCorner = this.position.z >= cornerEntryDist;
+        nextAxis = 'EW';
+        nextDir = 1;
+        cornerP0.set(-laneDist, py, cornerEntryDist);
+        cornerP3.set(-cornerEntryDist, py, laneDist);
+        inDir.set(0, 0, 1);
+        outDir.set(1, 0, 0);
+      }
+    } else {
+      // Sentido Horário (pista interna, CTB - virando à direita nos 4 cantos)
+      if (this.currentAxis === 'EW' && this.currentDirection === -1) {
+        // Ramo Sul (z = +64.5, indo para -X / Oeste) -> Canto SW -> Ramo Oeste (x = -64.5, dir = -1 / Norte)
+        distToCorner = this.position.x - (-cornerEntryDist);
+        reachedCorner = this.position.x <= -cornerEntryDist;
+        nextAxis = 'NS';
+        nextDir = -1;
+        cornerP0.set(-cornerEntryDist, py, laneDist);
+        cornerP3.set(-laneDist, py, cornerEntryDist);
+        inDir.set(-1, 0, 0);
+        outDir.set(0, 0, -1);
+      } else if (this.currentAxis === 'NS' && this.currentDirection === -1) {
+        // Ramo Oeste (x = -64.5, indo para -Z / Norte) -> Canto NW -> Ramo Norte (z = -64.5, dir = 1 / Leste)
+        distToCorner = this.position.z - (-cornerEntryDist);
+        reachedCorner = this.position.z <= -cornerEntryDist;
+        nextAxis = 'EW';
+        nextDir = 1;
+        cornerP0.set(-laneDist, py, -cornerEntryDist);
+        cornerP3.set(-cornerEntryDist, py, -laneDist);
+        inDir.set(0, 0, -1);
+        outDir.set(1, 0, 0);
+      } else if (this.currentAxis === 'EW' && this.currentDirection === 1) {
+        // Ramo Norte (z = -64.5, indo para +X / Leste) -> Canto NE -> Ramo Leste (x = +64.5, dir = 1 / Sul)
+        distToCorner = cornerEntryDist - this.position.x;
+        reachedCorner = this.position.x >= cornerEntryDist;
+        nextAxis = 'NS';
+        nextDir = 1;
+        cornerP0.set(cornerEntryDist, py, -laneDist);
+        cornerP3.set(laneDist, py, -cornerEntryDist);
+        inDir.set(1, 0, 0);
+        outDir.set(0, 0, 1);
+      } else if (this.currentAxis === 'NS' && this.currentDirection === 1) {
+        // Ramo Leste (x = +64.5, indo para +Z / Sul) -> Canto SE -> Ramo Sul (z = +64.5, dir = -1 / Oeste)
+        distToCorner = cornerEntryDist - this.position.z;
+        reachedCorner = this.position.z >= cornerEntryDist;
+        nextAxis = 'EW';
+        nextDir = -1;
+        cornerP0.set(laneDist, py, cornerEntryDist);
+        cornerP3.set(cornerEntryDist, py, laneDist);
+        inDir.set(0, 0, 1);
+        outDir.set(-1, 0, 0);
+      }
+    }
+
+    // 4. Se alcançou a curva de concordância do canto, executa a conversão suave de 90°
+    if (reachedCorner) {
+      const handle = 0.39 * cornerP0.distanceTo(cornerP3);
+      const p1 = cornerP0.clone().addScaledVector(inDir, handle);
+      const p2 = cornerP3.clone().addScaledVector(outDir, -handle);
+      const path = this.buildPath(cornerP0, p1, p2, cornerP3, false);
+      this.turnSignalState = isCCW ? 'LEFT' : 'RIGHT';
+      this.beginPath(path, 4.4, 'TURNING', nextAxis, nextDir);
+      return;
+    }
+
+    // 5. Sinalização e controle de cruzeiro na reta perimetral
+    const approachingCorner = distToCorner < 22;
+    if (approachingCorner) {
+      this.turnSignalState = isCCW ? 'LEFT' : 'RIGHT';
+      this.targetSpeed = Math.min(cruise, 4.4, obstacleLimit);
+    } else {
+      this.turnSignalState = 'OFF';
+      this.targetSpeed = Math.min(cruise, obstacleLimit);
+    }
+
+    if (obstacleLimit < cruise && perception.kind !== 'none') {
+      this.state = 'OBSTACLE_BRAKING';
+    } else {
+      this.state = 'CRUISING';
+    }
+  }
+
+  private getPerimeterTargetLateral(): number {
+    const isCCW = this.config.routeCircuit === 'PERIMETER_CCW';
+    const dist = isCCW ? 71.5 : 64.5;
+    if (this.currentAxis === 'NS') {
+      return this.position.x > 0 ? dist : -dist;
+    } else {
+      return this.position.z > 0 ? dist : -dist;
     }
   }
 
@@ -1542,7 +1732,9 @@ export class VehicleAgent {
     this.position.x += Math.sin(heading) * ds;
     this.position.z += Math.cos(heading) * ds;
 
-    const lat = laneLateral(this.currentAxis, this.currentDirection);
+    const lat = this.config.routeCircuit
+      ? this.getPerimeterTargetLateral()
+      : laneLateral(this.currentAxis, this.currentDirection);
     const k = Math.min(1, delta * 2.5);
     let lateralError: number;
     if (this.currentAxis === 'NS') {
@@ -1689,5 +1881,59 @@ export const CITY_VEHICLES: VehicleConfig[] = [
     routeAxis: 'EW',
     routeDirection: -1,
     canPark: true,
+  },
+
+  // ── Anel Viário Perimetral (Novas Vias — Tráfego Contínuo) ──
+  {
+    id: 'veh-bus-perimetral',
+    name: 'Ônibus Circular Perimetral',
+    modelName: 'Citadino Urbano L1',
+    type: 'suv',
+    color: 0xfbc02d, // Amarelo Canário Regulamentar
+    cruiseSpeed: 6.8, // ~24 km/h
+    startPosition: new THREE.Vector3(0, 0.19, 71.5),
+    startRotationY: Math.PI / 2, // Sentido Leste no Ramo Sul (pista externa)
+    routeAxis: 'EW',
+    routeDirection: 1,
+    routeCircuit: 'PERIMETER_CCW',
+  },
+  {
+    id: 'veh-patrol-perimetral',
+    name: 'Viatura Trânsito Perimetral',
+    modelName: 'Synapse Interceptor V2',
+    type: 'sedan',
+    color: 0xffffff, // Branco Polar
+    cruiseSpeed: 8.2, // ~30 km/h
+    startPosition: new THREE.Vector3(0, 0.19, 64.5),
+    startRotationY: -Math.PI / 2, // Sentido Oeste no Ramo Sul (pista interna)
+    routeAxis: 'EW',
+    routeDirection: -1,
+    routeCircuit: 'PERIMETER_CW',
+  },
+  {
+    id: 'veh-coupe-perimetral',
+    name: 'Coupe Aerodinâmico Perimetral',
+    modelName: 'Veloce Spyder R',
+    type: 'coupe',
+    color: 0x00897b, // Verde Esmeralda Metálico
+    cruiseSpeed: 8.8, // ~32 km/h
+    startPosition: new THREE.Vector3(-71.5, 0.19, 0),
+    startRotationY: 0, // Sentido Sul no Ramo Oeste (pista externa)
+    routeAxis: 'NS',
+    routeDirection: 1,
+    routeCircuit: 'PERIMETER_CCW',
+  },
+  {
+    id: 'veh-hatch-perimetral',
+    name: 'Compacto Neo Elétrico',
+    modelName: 'Pulse Neo EV',
+    type: 'hatch',
+    color: 0x7b1fa2, // Violeta Elétrico
+    cruiseSpeed: 7.0, // ~25 km/h
+    startPosition: new THREE.Vector3(64.5, 0.19, 0),
+    startRotationY: 0, // Sentido Sul no Ramo Leste (pista interna)
+    routeAxis: 'NS',
+    routeDirection: 1,
+    routeCircuit: 'PERIMETER_CW',
   },
 ];

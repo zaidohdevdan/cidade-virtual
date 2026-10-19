@@ -294,6 +294,75 @@ export class CityScene {
     northConn.receiveShadow = true;
     this.scene.add(northConn);
 
+    // Alamedas de Contorno e Acesso do Super Market (ligação direta da Av. Central à Perimetral Norte)
+    // Alameda Noroeste (x = -18.5, z de -38 a -61)
+    const bypassLen = 23; // 61 - 38 = 23m
+    const bypassWest = new THREE.Mesh(new THREE.PlaneGeometry(6, bypassLen), asphaltMat);
+    bypassWest.rotation.x = -Math.PI / 2;
+    bypassWest.position.set(-18.5, 0.02, -(38 + bypassLen / 2));
+    bypassWest.receiveShadow = true;
+    this.scene.add(bypassWest);
+
+    // Alameda Nordeste (x = +18.5, z de -38 a -61)
+    const bypassEast = new THREE.Mesh(new THREE.PlaneGeometry(6, bypassLen), asphaltMat);
+    bypassEast.rotation.x = -Math.PI / 2;
+    bypassEast.position.set(18.5, 0.02, -(38 + bypassLen / 2));
+    bypassEast.receiveShadow = true;
+    this.scene.add(bypassEast);
+
+    // Pátio de manobra e ligação transversal nos fundos do mercado (z = -59, x de -21.5 a +21.5)
+    const rearPlaza = new THREE.Mesh(new THREE.PlaneGeometry(43, 4), asphaltMat);
+    rearPlaza.rotation.x = -Math.PI / 2;
+    rearPlaza.position.set(0, 0.02, -59);
+    rearPlaza.receiveShadow = true;
+    this.scene.add(rearPlaza);
+
+    // Calçadas de interligação dos Conectores (Sul, Leste, Oeste e Alamedas Norte)
+    const addConnectorSidewalk = (cx: number, cz: number, w: number, d: number) => {
+      const sw = new THREE.Mesh(new THREE.BoxGeometry(w, 0.22, d), sidewalkMat);
+      sw.position.set(cx, 0.11, cz);
+      sw.receiveShadow = true;
+      this.scene.add(sw);
+    };
+
+    // Calçadas do Conector Sul (z = 50 a 61)
+    addConnectorSidewalk(-9.5, 55.5, 5.0, southConnLen);
+    addConnectorSidewalk(9.5, 55.5, 5.0, southConnLen);
+
+    // Calçadas do Conector Leste (x = 50 a 61)
+    addConnectorSidewalk(55.5, -9.5, eastConnLen, 5.0);
+    addConnectorSidewalk(55.5, 9.5, eastConnLen, 5.0);
+
+    // Calçadas do Conector Oeste (x = -61 a -50)
+    addConnectorSidewalk(-55.5, -9.5, westConnLen, 5.0);
+    addConnectorSidewalk(-55.5, 9.5, westConnLen, 5.0);
+
+    // Calçadas das Alamedas do Super Market
+    addConnectorSidewalk(-22.5, -(38 + bypassLen / 2), 2.5, bypassLen);
+    addConnectorSidewalk(22.5, -(38 + bypassLen / 2), 2.5, bypassLen);
+
+    // Faixas de travessia zebradas visuais nos 4 entroncamentos com o Anel Viário
+    const addVisualCrosswalk = (cx: number, cz: number, isHoriz: boolean) => {
+      const stripeW = 0.40;
+      const stripeL = 3.60;
+      const spacing = 0.80;
+      const count = 15;
+      const start = -((count - 1) * spacing) / 2;
+      for (let i = 0; i < count; i++) {
+        const off = start + i * spacing;
+        const g = new THREE.BoxGeometry(isHoriz ? stripeL : stripeW, 0.025, isHoriz ? stripeW : stripeL);
+        const m = new THREE.Mesh(g, lineMat);
+        m.position.set(isHoriz ? cx : cx + off, 0.035, isHoriz ? cz + off : cz);
+        m.receiveShadow = true;
+        this.scene.add(m);
+      }
+    };
+
+    addVisualCrosswalk(0, 60.5, false);  // Entroncamento Sul
+    addVisualCrosswalk(60.5, 0, true);   // Entroncamento Leste
+    addVisualCrosswalk(-60.5, 0, true);  // Entroncamento Oeste
+    addVisualCrosswalk(0, -60.5, false); // Entroncamento Norte
+
     // ─────────────────────────────────────────────────────────────
     // 3. SINALIZAÇÃO HORIZONTAL: LINHAS AMARELAS CENTRAIS DUPLAS
     // ─────────────────────────────────────────────────────────────

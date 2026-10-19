@@ -868,9 +868,10 @@ export const CITY_AGENTS: AgentConfig[] = [
     labelColor: 'linear-gradient(135deg, rgba(46, 125, 50, 0.9), rgba(67, 160, 71, 0.9))',
     startPosition: new THREE.Vector3(-25, 0.19, -5),
     patrolPoints: [
-      new THREE.Vector3(-35, 0.19, -5),
-      new THREE.Vector3(-16, 0.19, -5),
-      new THREE.Vector3(-25, 0.19, 5),
+      new THREE.Vector3(-25, 0.19, -5),
+      new THREE.Vector3(-55.5, 0.19, 9.5),
+      new THREE.Vector3(-75.5, 0.19, 0), // Banco Perimetral Oeste & Alameda Ecológica
+      new THREE.Vector3(-55.5, 0.19, -9.5),
     ],
   },
   {
@@ -889,9 +890,11 @@ export const CITY_AGENTS: AgentConfig[] = [
     labelColor: 'linear-gradient(135deg, rgba(230, 81, 0, 0.9), rgba(255, 152, 0, 0.9))',
     startPosition: new THREE.Vector3(20, 0.19, -14),
     patrolPoints: [
-      new THREE.Vector3(26, 0.19, -22),
-      new THREE.Vector3(20, 0.19, -8),
-      new THREE.Vector3(14, 0.19, -14),
+      new THREE.Vector3(14, 0.19, 14),
+      new THREE.Vector3(9.5, 0.19, 55.5),  // Conector Sul
+      new THREE.Vector3(0, 0.19, 75.5),    // Banco Perimetral Sul
+      new THREE.Vector3(72, 0.19, 72),     // Mirante Panorâmico Sudeste
+      new THREE.Vector3(55.5, 0.19, 9.5),  // Conector Leste
     ],
   },
   {
@@ -910,9 +913,10 @@ export const CITY_AGENTS: AgentConfig[] = [
     labelColor: 'linear-gradient(135deg, rgba(81, 45, 168, 0.9), rgba(126, 87, 194, 0.9))',
     startPosition: new THREE.Vector3(20, 0.19, 8),
     patrolPoints: [
-      new THREE.Vector3(28, 0.19, 8),
-      new THREE.Vector3(20, 0.19, 16),
-      new THREE.Vector3(12, 0.19, 8),
+      new THREE.Vector3(20, 0.19, 8),
+      new THREE.Vector3(55.5, 0.19, 9.5),
+      new THREE.Vector3(75.5, 0.19, 0),    // Banco Perimetral Leste
+      new THREE.Vector3(55.5, 0.19, -9.5),
     ],
   },
   {
@@ -953,9 +957,10 @@ export const CITY_AGENTS: AgentConfig[] = [
     labelColor: 'linear-gradient(135deg, rgba(0, 131, 143, 0.9), rgba(0, 172, 193, 0.9))',
     startPosition: new THREE.Vector3(-10, 0.19, -20),
     patrolPoints: [
-      new THREE.Vector3(-10, 0.19, -32),
-      new THREE.Vector3(-10, 0.19, -12),
       new THREE.Vector3(-10, 0.19, -20),
+      new THREE.Vector3(-18.5, 0.19, -45), // Alameda Noroeste do Super Market
+      new THREE.Vector3(0, 0.19, -75.5),   // Banco Perimetral Norte
+      new THREE.Vector3(18.5, 0.19, -45),  // Alameda Nordeste do Super Market
     ],
   },
   {
@@ -975,7 +980,8 @@ export const CITY_AGENTS: AgentConfig[] = [
     startPosition: new THREE.Vector3(10, 0.19, 14),
     patrolPoints: [
       new THREE.Vector3(10, 0.19, 24),
-      new THREE.Vector3(10, 0.19, 6),
+      new THREE.Vector3(-9.5, 0.19, 52),
+      new THREE.Vector3(0, 0.19, 72),
       new THREE.Vector3(10, 0.19, 14),
     ],
   },

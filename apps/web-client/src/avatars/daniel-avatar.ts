@@ -358,9 +358,9 @@ export class DanielAvatar {
         nextZ = currZ;
       }
 
-      // Aplica limites do mapa urbano
-      this.position.x = THREE.MathUtils.clamp(nextX, -58, 58);
-      this.position.z = THREE.MathUtils.clamp(nextZ, -58, 58);
+      // Aplica limites do mapa urbano expandido (anel viário perimetral e calçadas até ±80m)
+      this.position.x = THREE.MathUtils.clamp(nextX, -82, 82);
+      this.position.z = THREE.MathUtils.clamp(nextZ, -82, 82);
 
       // Animação de caminhada
       this.walkCycleTime += delta * this.speed * 2.2;
