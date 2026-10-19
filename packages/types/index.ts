@@ -242,6 +242,7 @@ export interface AgentMemoryContextState {
   actorAffinity?: Record<string, number>;
   placePreferences?: Record<string, number>;
   suggestedTargets?: Record<string, number>;
+  learnedDirectives?: any[];
 }
 
 export interface AgentMindState {

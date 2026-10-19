@@ -409,5 +409,38 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     // Expressa alívio e confirmação de local livre
     expect(agent.speechBubble?.innerHTML).toMatch(/local livre|saída/i);
   });
+
+  describe('Aprendizado e Execução de Instruções do Avatar Daniel (Cliente 3D)', () => {
+    it('o NPC deve ouvir e gravar a instrução "vc deve evitar o café" e repelir o movimento em direção ao café', () => {
+      agent.learnInstruction('vc deve evitar o café');
+      expect(agent.learnedDirectives).toHaveLength(1);
+      expect(agent.learnedDirectives[0].directiveType).toBe('avoid_place');
+      expect(agent.learnedDirectives[0].targetCategory).toBe('cafe');
+
+      // Coordenadas dentro da zona do café (x: 25, z: -20) devem ser reconhecidas como evitadas
+      expect(agent.isTargetInAvoidedZone(25, -20, 'cafe')).toBe(true);
+      expect(agent.isPositionInAvoidedDirective(25, -20)).toBe(true);
+
+      // Posiciona o NPC perto do café querendo andar em direção a ele (+X)
+      agent.position.set(14, 0.19, -20);
+      const dirTowardsCafe = new THREE.Vector3(1, 0, 0);
+      const steer = agent.computeAvoidanceSteering(dirTowardsCafe, []);
+
+      // A direção resultante deve ter componente repulsivo para longe do café (x < 1)
+      expect(steer.x).toBeLessThan(0.7);
+    });
+
+    it('o NPC deve ouvir a instrução "vc deve atravessar a faixa" e imediatamente direcionar targetPosition para a faixa de pedestre', () => {
+      agent.position.set(10, 0.19, 15);
+      agent.learnInstruction('vc deve usar a faixa de pedestre');
+
+      expect(agent.learnedDirectives.some((d) => d.directiveType === 'use_crosswalk')).toBe(true);
+      expect(agent.targetPosition).not.toBeNull();
+      // O destino deve ser a faixa de pedestres central (x: 0, z próximo a 2)
+      expect(agent.targetPosition?.x).toBe(0);
+      expect(agent.targetPosition?.z).toBe(2.0);
+    });
+  });
 });
+
 

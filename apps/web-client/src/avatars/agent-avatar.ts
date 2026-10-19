@@ -32,6 +32,18 @@ export interface SpatialStuckMemory {
   occurrences: number; // Quantas vezes se deparou com este obstáculo
 }
 
+export interface LearnedDirectiveClient {
+  id: string;
+  instruction: string;
+  directiveType: 'avoid_place' | 'use_crosswalk' | 'go_to_place' | 'prefer_action' | 'wait_stop' | 'custom_rule';
+  targetEntityId?: string;
+  targetCategory?: string;
+  strength: number;
+  learnedAt: number;
+  active: boolean;
+  description: string;
+}
+
 export class AgentAvatar {
   public mesh: THREE.Group;
   public position: THREE.Vector3;
@@ -56,6 +68,7 @@ export class AgentAvatar {
   public stuckMemories: SpatialStuckMemory[] = [];
   public stuckAccumulator: number = 0;
   public lastColliders: ObstacleCollider[] = [];
+  public learnedDirectives: LearnedDirectiveClient[] = [];
   private unsubscribeHorn?: () => void;
   private proximityGreetingCooldown: number = 0;
   private lastDisplacementPos: THREE.Vector3 = new THREE.Vector3();
@@ -537,6 +550,107 @@ export class AgentAvatar {
     this.speed = 0;
   }
 
+  /**
+   * Ouve, aprende e executa no cliente uma instrução direta do avatar Daniel.
+   * Não esquece a regra, aplica desvio físico e prioriza ações instruídas.
+   */
+  public learnInstruction(instruction: string, directive?: LearnedDirectiveClient): void {
+    const text = instruction.toLowerCase().trim();
+
+    const isAvoid =
+      /evit(ar|e|em)?|não\s+(deve\s+)?(ir|vá|ande|passe)|proibid[oa]|longe\s+d[eo]|fuja\s+d[eo]|saia\s+d[eo]/i.test(
+        text,
+      );
+    const isCrosswalk =
+      /faixa(\s+de\s+pedestre)?|atravess(ar|e|em)?|cruzar|travessia/i.test(text) && !isAvoid;
+    const isStop = /(pare|parar|aguard(e|ar)|espere|fique\s+(aí|parado))/i.test(text);
+
+    let targetCategory = directive?.targetCategory;
+    if (!targetCategory) {
+      if (text.includes('café') || text.includes('bistro')) targetCategory = 'cafe';
+      else if (text.includes('mercado') || text.includes('compras')) targetCategory = 'market';
+      else if (text.includes('praça') || text.includes('banco') || text.includes('fonte')) targetCategory = 'praca';
+      else if (text.includes('rua') || text.includes('avenida') || text.includes('asfalto')) targetCategory = 'street';
+      else if (text.includes('faixa')) targetCategory = 'crosswalk';
+    }
+
+    const effectiveDirective: LearnedDirectiveClient = directive || {
+      id: `dir-cli-${Date.now()}`,
+      instruction,
+      directiveType: isAvoid ? 'avoid_place' : isCrosswalk ? 'use_crosswalk' : isStop ? 'wait_stop' : 'custom_rule',
+      targetCategory,
+      targetEntityId: directive?.targetEntityId,
+      strength: 1.0,
+      learnedAt: Date.now(),
+      active: true,
+      description: isAvoid ? `Evitar ${targetCategory}` : isCrosswalk ? 'Atravessar pela faixa' : instruction,
+    };
+
+    const existingIdx = this.learnedDirectives.findIndex(
+      (d) =>
+        d.directiveType === effectiveDirective.directiveType &&
+        d.targetCategory === effectiveDirective.targetCategory,
+    );
+    if (existingIdx >= 0) {
+      this.learnedDirectives[existingIdx] = effectiveDirective;
+    } else {
+      this.learnedDirectives.push(effectiveDirective);
+    }
+
+    // Execução Imediata da Instrução:
+    if (effectiveDirective.directiveType === 'use_crosswalk') {
+      // Direciona imediatamente para a faixa de pedestres central segura
+      const crosswalkTarget = { x: 0, y: 0.19, z: this.position.z >= 0 ? 2.0 : -2.0 };
+      this.setTargetPosition(crosswalkTarget);
+      this.isWaitingAtCrosswalk = false;
+    } else if (effectiveDirective.directiveType === 'avoid_place') {
+      // Se estava a caminho de um ponto dentro do local evitado, cancela o target imediatamente
+      if (this.targetPosition && targetCategory) {
+        if (this.isTargetInAvoidedZone(this.targetPosition.x, this.targetPosition.z, targetCategory)) {
+          this.targetPosition = null;
+          this.speed = 0;
+          this.patrolIndex = (this.patrolIndex + 1) % this.config.patrolPoints.length;
+        }
+      }
+    } else if (effectiveDirective.directiveType === 'wait_stop') {
+      this.stopMovement();
+    }
+  }
+
+  /**
+   * Checa se coordenadas pertencem a uma zona evitada por instrução de Daniel.
+   */
+  public isTargetInAvoidedZone(x: number, z: number, category: string): boolean {
+    if (category === 'cafe' && x >= 15 && x <= 40 && z <= -10 && z >= -30) return true;
+    if (category === 'market' && Math.abs(x) <= 20 && z <= -30) return true;
+    if (category === 'praca' && x <= -10 && z >= 10 && z <= 40) return true;
+    if (category === 'street' && Math.abs(x) <= 6.5) return true;
+    return false;
+  }
+
+  /**
+   * Retorna vetor normalizado de repulsão para fora de uma zona restrita.
+   */
+  public getRepulsionFromAvoidedZone(x: number, z: number, category: string): THREE.Vector3 {
+    if (category === 'cafe') return new THREE.Vector3(-1, 0, 0);
+    if (category === 'market') return new THREE.Vector3(0, 0, 1);
+    if (category === 'praca') return new THREE.Vector3(1, 0, 0);
+    if (category === 'street') return new THREE.Vector3(x >= 0 ? 1 : -1, 0, 0);
+    return new THREE.Vector3(0, 0, 0);
+  }
+
+  /**
+   * Checa se um ponto (x, z) viola alguma diretiva ativa de evitar local.
+   */
+  public isPositionInAvoidedDirective(x: number, z: number): boolean {
+    for (const d of this.learnedDirectives) {
+      if (d.active && d.directiveType === 'avoid_place' && d.targetCategory) {
+        if (this.isTargetInAvoidedZone(x, z, d.targetCategory)) return true;
+      }
+    }
+    return false;
+  }
+
   public updateLabel(camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
     if (this.label) {
       this.label.style.display = 'none';
@@ -733,7 +847,8 @@ export class AgentAvatar {
    * veículos dinâmicos, outros cidadãos e obstáculos da cidade.
    */
   public computeAvoidanceSteering(dir: THREE.Vector3, colliders: ObstacleCollider[]): THREE.Vector3 {
-    if (colliders.length === 0 && this.stuckMemories.length === 0) return dir.clone();
+    const hasAvoidDirectives = this.learnedDirectives.some((d) => d.active && d.directiveType === 'avoid_place');
+    if (colliders.length === 0 && this.stuckMemories.length === 0 && !hasAvoidDirectives) return dir.clone();
 
     const currX = this.position.x;
     const currZ = this.position.z;
@@ -852,6 +967,24 @@ export class AgentAvatar {
             chosenDir.x += (toSafeX / safeDist) * force * 1.6;
             chosenDir.z += (toSafeZ / safeDist) * force * 1.6;
           }
+          chosenDir.normalize();
+        }
+      }
+    }
+
+    // 5. Integração com Diretivas Aprendidas do Avatar Daniel (evitar locais permanentemente):
+    if (this.learnedDirectives.length > 0) {
+      for (const directive of this.learnedDirectives) {
+        if (!directive.active || directive.directiveType !== 'avoid_place' || !directive.targetCategory) continue;
+        const probeX = currX + chosenDir.x * lookahead;
+        const probeZ = currZ + chosenDir.z * lookahead;
+        if (
+          this.isTargetInAvoidedZone(probeX, probeZ, directive.targetCategory) ||
+          this.isTargetInAvoidedZone(currX, currZ, directive.targetCategory)
+        ) {
+          const repelDir = this.getRepulsionFromAvoidedZone(currX, currZ, directive.targetCategory);
+          chosenDir.x += repelDir.x * 2.5;
+          chosenDir.z += repelDir.z * 2.5;
           chosenDir.normalize();
         }
       }
@@ -1251,9 +1384,15 @@ export class AgentAvatar {
       }
     } else {
       let patrolTarget = this.config.patrolPoints[this.patrolIndex];
-      if (this.isPositionInStuckMemory(patrolTarget.x, patrolTarget.z)) {
+      let tries = 0;
+      while (
+        (this.isPositionInStuckMemory(patrolTarget.x, patrolTarget.z) ||
+          this.isPositionInAvoidedDirective(patrolTarget.x, patrolTarget.z)) &&
+        tries < this.config.patrolPoints.length
+      ) {
         this.patrolIndex = (this.patrolIndex + 1) % this.config.patrolPoints.length;
         patrolTarget = this.config.patrolPoints[this.patrolIndex];
+        tries++;
       }
       target = patrolTarget;
     }

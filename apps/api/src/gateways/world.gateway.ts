@@ -347,7 +347,7 @@ export class WorldGateway
       targetAgentId: string,
       message: string,
       playerId?: string,
-    ): Promise<{ response: string; agentId: string }>;
+    ): Promise<{ response: string; agentId: string; directive?: any }>;
   };
 
   /**
@@ -358,7 +358,7 @@ export class WorldGateway
       targetAgentId: string,
       message: string,
       playerId?: string,
-    ): Promise<{ response: string; agentId: string }>;
+    ): Promise<{ response: string; agentId: string; directive?: any }>;
   }): void {
     this.simulationService = service;
   }
@@ -395,7 +395,7 @@ export class WorldGateway
   async handlePlayerDialogue(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { targetAgentId: string; message: string },
-  ): Promise<{ success: boolean; response?: string; error?: string }> {
+  ): Promise<{ success: boolean; response?: string; error?: string; directive?: any }> {
     if (!this.checkSocketRateLimit(client)) {
       return { success: false, error: 'Rate limit de mensagens excedido' };
     }
@@ -411,7 +411,7 @@ export class WorldGateway
         data.message,
         playerId,
       );
-      return { success: true, response: res.response };
+      return { success: true, response: res.response, directive: res.directive };
     }
 
     return { success: false, error: 'Serviço de simulação autônoma não conectado' };

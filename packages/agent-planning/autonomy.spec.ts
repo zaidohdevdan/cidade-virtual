@@ -542,4 +542,106 @@ describe('Autonomia Real dos Agentes — Sem Roteiros Pré-fixados', () => {
       expect(modA).toBeGreaterThan(0);
     });
   });
+
+  describe('Aprendizado e Execução Permanente de Instruções Repassadas pelo Avatar Daniel', () => {
+    it('o habitante deve ouvir e gravar a instrução de EVITAR local (ex: "vc deve evitar o café"), rejeitar o local e cancelar intenção ativa', async () => {
+      const mind = new AgentMind({
+        id: 'agent-sulafat',
+        name: 'Sulafat',
+        role: 'Cientista',
+        biography: 'Ecologista',
+        personality: basePersonality,
+      });
+
+      // Daniel instrui Sulafat a evitar o café
+      const result = mind.learnAvatarInstruction('vc deve evitar o café');
+      expect(result.directive).toBeDefined();
+      expect(result.directive.directiveType).toBe('avoid_place');
+      expect(result.directive.targetCategory).toBe('cafe');
+      expect(result.actionRequired).toBe('reroute');
+      expect(result.confirmationSpeech).toContain('evitar');
+
+      // Preferência hedônica pelo café deve ter sido definida para o mínimo (-1.0)
+      expect(mind.memory.placePreferences?.['cafe-bistro']).toBe(-1.0);
+      expect(mind.memory.placePreferences?.['cafe-table-outdoor']).toBe(-1.0);
+
+      // Decisão autônoma do agente NÃO deve escolher nenhuma entidade do café
+      const agentPos = { x: 20, y: 0.19, z: -15 }; // muito próximo do café
+      const percept: Percept = {
+        position: agentPos,
+        entities: SYNAPSE_WORLD_ENTITIES.map((e) => ({
+          entity: e,
+          distance: distance2D(agentPos, e.approach ?? e.position),
+        })),
+        actors: [],
+        trafficLight: 'green',
+      };
+
+      const intention = await mind.decideNextIntention(agentPos, percept);
+      // Jamais deve ter escolhido o café
+      expect(intention.candidate.targetId).not.toBe('cafe-bistro');
+      expect(intention.candidate.targetId).not.toBe('cafe-table-outdoor');
+    });
+
+    it('o habitante deve ouvir a instrução de ATRAVESSAR PELA FAIXA (ex: "vc deve usar a faixa de pedestre") e priorizar a faixa', async () => {
+      const mind = new AgentMind({
+        id: 'agent-sheliak',
+        name: 'Sheliak',
+        role: 'Engenheiro',
+        biography: 'Atleta',
+        personality: basePersonality,
+      });
+
+      const result = mind.learnAvatarInstruction('vc deve usar a faixa de pedestre');
+      expect(result.directive.directiveType).toBe('use_crosswalk');
+      expect(result.directive.targetCategory).toBe('crosswalk');
+      expect(result.actionRequired).toBe('crosswalk');
+      expect(result.confirmationSpeech).toContain('faixa de pedestres');
+
+      const agentPos = { x: 2, y: 0.19, z: 0 };
+      const percept: Percept = {
+        position: agentPos,
+        entities: SYNAPSE_WORLD_ENTITIES.map((e) => ({
+          entity: e,
+          distance: distance2D(agentPos, e.approach ?? e.position),
+        })),
+        actors: [],
+        trafficLight: 'red', // Vermelho para veículos, verde para pedestres
+      };
+
+      const intention = await mind.decideNextIntention(agentPos, percept);
+      expect(intention.candidate.targetId).toMatch(/crosswalk/i);
+    });
+
+    it('as instruções aprendidas devem persistir na serialização/restauração e NUNCA ser esquecidas', () => {
+      const mind = new AgentMind({
+        id: 'agent-vega',
+        name: 'Vega',
+        role: 'Pioneira',
+        biography: 'Navegadora',
+        personality: basePersonality,
+      });
+
+      mind.learnAvatarInstruction('vc deve evitar o mercado');
+      mind.learnAvatarInstruction('vc deve atravessar a faixa');
+
+      // Serializa estado completo (PostgreSQL agent_minds)
+      const snapshot = mind.serializeState();
+      expect(snapshot.memory.learnedDirectives).toHaveLength(2);
+
+      // Nova mente fria (simulando reboot da aplicação)
+      const restoredMind = new AgentMind({
+        id: 'agent-vega',
+        name: 'Vega',
+        role: 'Pioneira',
+        biography: 'Navegadora',
+        personality: basePersonality,
+      });
+
+      restoredMind.restoreState(snapshot);
+      expect(restoredMind.memory.learnedDirectives).toHaveLength(2);
+      expect(restoredMind.memory.learnedDirectives?.[0].directiveType).toBe('avoid_place');
+      expect(restoredMind.memory.learnedDirectives?.[1].directiveType).toBe('use_crosswalk');
+    });
+  });
 });

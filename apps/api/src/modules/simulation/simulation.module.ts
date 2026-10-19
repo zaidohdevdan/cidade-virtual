@@ -6,6 +6,7 @@ import { CognitionModule } from '../cognition/cognition.module';
 import { CitizensModule } from '../citizens/citizens.module';
 import { WorldModule } from '../world/world.module';
 import { PersistenceModule } from '../persistence/persistence.module';
+import { MemoryModule } from '../memory/memory.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { PersistenceModule } from '../persistence/persistence.module';
     CognitionModule,
     CitizensModule,
     WorldModule,
+    MemoryModule,
   ],
   providers: [AutonomousSimulationService],
   exports: [AutonomousSimulationService],

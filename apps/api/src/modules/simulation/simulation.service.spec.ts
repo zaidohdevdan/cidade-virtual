@@ -35,6 +35,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
   let mockAgentMindRepo: {
     listAll: ReturnType<typeof vi.fn>;
     saveAll: ReturnType<typeof vi.fn>;
+    upsert: ReturnType<typeof vi.fn>;
     deleteByAgentId: ReturnType<typeof vi.fn>;
     deleteAll: ReturnType<typeof vi.fn>;
   };
@@ -74,6 +75,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     mockAgentMindRepo = {
       listAll: vi.fn().mockResolvedValue([]),
       saveAll: vi.fn().mockResolvedValue(undefined),
+      upsert: vi.fn().mockResolvedValue({}),
       deleteByAgentId: vi.fn().mockResolvedValue(true),
       deleteAll: vi.fn().mockResolvedValue(undefined),
     };

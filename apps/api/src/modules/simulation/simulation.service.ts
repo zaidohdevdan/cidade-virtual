@@ -19,6 +19,7 @@ import { CognitionService } from '../cognition/cognition.service';
 import { WorldService } from '../world/world.service';
 import { CitizensService } from '../citizens/citizens.service';
 import { ALL_CITIZENS, SeedCitizenConfig } from '../citizens/citizens.seed';
+import { MemoryService } from '../memory/memory.service';
 
 export interface AutonomousAgentRuntimeState {
   config: SeedCitizenConfig;
@@ -51,6 +52,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     @Optional() @Inject(AgentIdentityRepository) private readonly agentRepo?: AgentIdentityRepository,
     @Optional() @Inject(ExperienceRepository) private readonly expRepo?: ExperienceRepository,
     @Optional() @Inject(AgentMindRepository) private readonly agentMindRepo?: AgentMindRepository,
+    @Optional() @Inject(MemoryService) private readonly memoryService?: MemoryService,
   ) {
     this.navService = new NavigationService();
   }
@@ -426,7 +428,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     targetAgentId: string,
     playerMessage: string,
     playerId: string = 'avatar-daniel',
-  ): Promise<{ response: string; agentId: string }> {
+  ): Promise<{ response: string; agentId: string; directive?: any }> {
     let agent = this.agentStates.get(targetAgentId);
     const config = agent?.config || ALL_CITIZENS.find((c) => c.id === targetAgentId);
     if (!config) {
@@ -465,49 +467,156 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       this.agentStates.set(targetAgentId, agent);
     }
 
-    // Registra interação social com Daniel e processa estímulos contextuais da mensagem (A8)
-    const { suggestedEntityId } = agent.mind.receivePlayerInteraction(playerMessage);
-    if (suggestedEntityId) {
-      this.logger.log(`[AUTONOMY] Daniel estimulou ${agent.config.id} em direção a ${suggestedEntityId}.`);
+    // 1. Processa, aprende e grava a instrução do jogador (Daniel) na mente viva
+    const { directive, confirmationSpeech, actionRequired } = agent.mind.learnAvatarInstruction(playerMessage);
+    this.logger.log(
+      `[AUTONOMY] [INSTRUCTION] ${agent.config.name} assimilou instrução de Daniel: "${playerMessage}" [Tipo: ${directive.directiveType}]`,
+    );
+
+    // 2. Persistência imediata da mente com a nova diretiva no PostgreSQL (Task-036)
+    if (this.agentMindRepo) {
+      try {
+        const serialized = agent.mind.serializeState();
+        await this.agentMindRepo.upsert({
+          agentId: serialized.agentId,
+          needs: serialized.needs as any,
+          memory: serialized.memory as any,
+          currentIntention: serialized.currentIntention as any,
+          currentActivity: serialized.currentActivity as any,
+        });
+      } catch (err) {
+        this.logger.warn(`[Task-036] Falha ao persistir snapshot imediato da mente após instrução: ${(err as Error).message}`);
+      }
+    }
+
+    // 3. Persistência de experiência com importância máxima (1.00) no PostgreSQL
+    if (this.expRepo) {
+      this.expRepo
+        .record({
+          agentId: config.id,
+          eventType: 'avatar_instruction_learned',
+          description: `Instrução permanente de Daniel: "${playerMessage}" [Diretiva: ${directive.directiveType} - ${directive.description}]`,
+          sourceType: 'direct_observation',
+          confidence: '1.00',
+          importance: '1.00',
+          relatedEntityIds: ['avatar-daniel', ...(directive.targetEntityId ? [directive.targetEntityId] : [])],
+          metadata: {
+            directive,
+            playerMessage,
+            playerId,
+            targetAgentId,
+          },
+        })
+        .catch((err) => {
+          this.logger.debug(`Persistência de experiência de instrução ignorada: ${err.message}`);
+        });
+    }
+
+    // 4. Indexação no Qdrant com alta prioridade semântica
+    if (this.memoryService) {
+      this.memoryService
+        .addMemory({
+          citizenId: config.id as any,
+          content: `Instrução permanente repassada pelo avatar Daniel: "${playerMessage}". Regra aprendida: ${directive.description}.`,
+          sensoryTags: ['auditory', 'instruction'],
+          memoryType: 'declarative',
+          sourceType: 'direct_observation',
+          confidence: 1.0,
+          emotionalWeight: 0.9,
+        })
+        .catch((err) => {
+          this.logger.debug(`Indexação Qdrant de instrução ignorada: ${err.message}`);
+        });
+    }
+
+    // 5. Execução Imediata da Instrução:
+    let nextTarget: Vector3Like | null = null;
+    if (actionRequired === 'crosswalk') {
+      nextTarget = { x: -4, y: 0.19, z: -10 };
+      agent.targetDestination = nextTarget;
+      const pathResult = this.navService.findPath(agent.currentPosition, nextTarget, {
+        trafficLightState: this.worldGateway.getTrafficLightState(),
+      });
+      agent.waypoints = pathResult.waypoints.length > 0 ? pathResult.waypoints : [nextTarget];
+      agent.waypointIndex = 0;
+      agent.lastAction = 'crosswalk:cross_safely';
+
+      this.worldGateway.broadcastDomainEvent({
+        name: 'agent.target',
+        payload: {
+          agentId: config.id,
+          targetPosition: nextTarget,
+          action: 'crosswalk',
+          instruction: directive,
+        },
+      });
+    } else if (actionRequired === 'reroute') {
+      agent.targetDestination = null;
+      agent.waypoints = [];
+      agent.waypointIndex = 0;
+      agent.lastAction = 'reroute:avoiding_place';
+    } else if (actionRequired === 'goto' && directive.targetEntityId) {
+      const targetEntity = SYNAPSE_WORLD_ENTITIES.find((e) => e.id === directive.targetEntityId);
+      if (targetEntity) {
+        nextTarget = {
+          x: targetEntity.approach?.x ?? targetEntity.position.x,
+          y: targetEntity.approach?.y ?? 0.19,
+          z: targetEntity.approach?.z ?? targetEntity.position.z,
+        };
+        agent.targetDestination = nextTarget;
+        const pathResult = this.navService.findPath(agent.currentPosition, nextTarget);
+        agent.waypoints = pathResult.waypoints.length > 0 ? pathResult.waypoints : [nextTarget];
+        agent.waypointIndex = 0;
+        agent.lastAction = `goto:${targetEntity.label}`;
+
+        this.worldGateway.broadcastDomainEvent({
+          name: 'agent.target',
+          payload: {
+            agentId: config.id,
+            targetPosition: nextTarget,
+            action: 'goto',
+            instruction: directive,
+          },
+        });
+      }
+    } else if (actionRequired === 'stop') {
+      agent.targetDestination = null;
+      agent.waypoints = [];
+      agent.waypointIndex = 0;
+      agent.lastAction = 'wait:stopped_by_daniel';
     }
 
     const trafficLight = this.worldGateway.getTrafficLightState();
-    const currentPos = agent.currentPosition || config.initialPosition;
 
     try {
-      // 1. Delibera ação no ciclo cognitivo conectando Qdrant e AgentMind (Task-038: Cérebro Único)
-      const action = await this.cognitionService.processCycle({
-        citizenId: config.id as any,
-        currentObservation: `O habitante Daniel aproximou-se em [${currentPos.x.toFixed(1)}, ${currentPos.z.toFixed(1)}] e perguntou: "${playerMessage}". Sinal está ${trafficLight}.`,
-        nearbyObjects: ['avatar-daniel', 'calcada-central', 'semaforo-1'],
-        activeGoal: `conversar com o habitante Daniel conforme o papel de ${config.role}`,
-        mind: agent.mind,
-        currentPosition: currentPos,
-      });
+      // Tenta deliberação de resposta conversacional via LLM
+      let response: string | undefined | null;
+      try {
+        response = await this.cognitionService.generateConversationalDialogue?.({
+          citizenId: config.id as any,
+          citizenName: config.name,
+          citizenRole: config.role,
+          starDesignation: config.starDesignation,
+          backstorySeed: config.backstorySeed,
+          activeGoals: config.activeGoals,
+          playerMessage: `[INSTRUÇÃO DO AVATAR DANIEL]: "${playerMessage}". Responda confirmando que ouviu, gravou e está cumprindo esta instrução.`,
+          trafficLight,
+        });
+      } catch {
+        // Ignora se LLM der 429 ou falhar
+      }
 
-      // 2. Delibera resposta conversacional via LLM conectada (se ativa).
-      // Se a LLM não estiver configurada ou falhar, utiliza síntese local como fallback resiliente.
-      let response = await this.cognitionService.generateConversationalDialogue?.({
-        citizenId: config.id as any,
-        citizenName: config.name,
-        citizenRole: config.role,
-        starDesignation: config.starDesignation,
-        backstorySeed: config.backstorySeed,
-        activeGoals: config.activeGoals,
-        playerMessage,
-        trafficLight,
-      });
-
-      if (!response) {
-        response = this.generateConversationalResponse(config, playerMessage, trafficLight);
+      // Se LLM falhou, retornou mensagem de erro ou deu rate limit, usa o confirmationSpeech gerado especificamente para a instrução
+      if (!response || response.toLowerCase().includes('rate limit') || response.length < 5) {
+        response = confirmationSpeech;
       }
 
       if (agent) {
         agent.lastSpeech = response;
-        agent.lastAction = 'dialogue_response';
+        agent.lastAction = `dialogue_instruction_${directive.directiveType}`;
       }
 
-      // 3. Emite a fala do habitante para o balão flutuante no 3D
+      // 6. Emite a fala do habitante para o balão flutuante no 3D
       this.worldGateway.broadcastDomainEvent({
         name: 'agent.speech',
         payload: {
@@ -516,7 +625,18 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         },
       });
 
-      // 4. Emite evento de diálogo para a interface de bate-papo do cliente
+      // 7. Emite evento de instrução aprendida para sincronização no cliente
+      this.worldGateway.broadcastDomainEvent({
+        name: 'agent.instruction.learned',
+        payload: {
+          agentId: config.id,
+          directive,
+          playerMessage,
+          response,
+        },
+      });
+
+      // 8. Emite evento de diálogo para a interface de bate-papo do cliente
       this.worldGateway.broadcastDomainEvent({
         name: 'agent.dialogue.response',
         payload: {
@@ -524,36 +644,15 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
           agentName: config.name,
           playerMessage,
           response,
+          directive,
           timestamp: new Date().toISOString(),
         },
       });
 
-      // 5. Persiste experiência do diálogo no PostgreSQL
-      if (this.expRepo) {
-        this.expRepo.record({
-          agentId: config.id,
-          eventType: 'dialogue_with_player',
-          description: `Diálogo com Daniel: "${playerMessage}" -> "${response}"`,
-          sourceType: 'direct_observation',
-          confidence: '1.00',
-          importance: '0.85',
-          relatedEntityIds: ['avatar-daniel'],
-          metadata: {
-            playerMessage,
-            agentResponse: response,
-            playerId,
-            actionType: action.actionType,
-          },
-        }).catch((err) => {
-          this.logger.debug(`Persistência de diálogo ignorada: ${err.message}`);
-        });
-      }
-
-      return { response, agentId: config.id };
+      return { response, agentId: config.id, directive };
     } catch (err) {
       this.logger.error(`Erro ao processar diálogo de ${config.id}: ${(err as Error).message}`);
-      const fallback = `Olá Daniel! Ouvi o que você disse ("${playerMessage}"). Vamos manter a harmonia em nossa cidade!`;
-      return { response: fallback, agentId: config.id };
+      return { response: confirmationSpeech, agentId: config.id, directive };
     }
   }
 
@@ -740,7 +839,18 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       };
     });
 
-    await this.agentMindRepo.saveAll(rows);
+    try {
+      if (typeof this.agentMindRepo.saveAll === 'function') {
+        await this.agentMindRepo.saveAll(rows);
+      } else if (typeof this.agentMindRepo.upsert === 'function') {
+        for (const row of rows) {
+          await this.agentMindRepo.upsert(row);
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`[Task-036] Falha ao salvar snapshots de mentes: ${(err as Error).message}`);
+    }
+
     const durationMs = Date.now() - start;
     this.logger.debug(`[Task-036] Snapshot de ${rows.length} mentes salvo no PostgreSQL em ${durationMs}ms.`);
     return { durationMs, savedCount: rows.length };

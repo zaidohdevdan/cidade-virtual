@@ -1234,6 +1234,51 @@ Atendimento à solicitação de refinamento de experiência urbana e visual:
 - `npx vitest run apps/web-client`: **8 arquivos e 53 testes aprovados (100%)**.
 - `npm test`: **26/26 projetos NX aprovados (100%)**.
 
+---
+
+## Task ID: aprendizado-e-execucao-permanente-instrucoes-avatar
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Cognitivo, Decisório & Persistência (Autonomia Real e Memória Permanente)
+
+### 1. Resumo Executivo
+Implementação de ponta a ponta da capacidade dos agentes autônomos de **ouvir, gravar, aprender, executar imediatamente e jamais esquecer** instruções repassadas pelo avatar Daniel (ex: *"você deve evitar o café"*, *"você deve atravessar a faixa"*, *"vá para o mercado"*):
+1. **Ouvir e Interpretar:** Reconhecimento semântico robusto de diretivas e regras em tempo real através de `learnAvatarInstruction()`, identificando tipo de diretiva (`avoid_place`, `use_crosswalk`, `go_to_place`, `wait_stop`, `custom_rule`), categoria de alvo (`cafe`, `market`, `praca`, `street`, `crosswalk`) e confirmação falada específica para a instrução.
+2. **Executar Imediatamente:**
+   - Para instruções de **evitar lugar**: penalidade decisória máxima (`preference -= 999.0`), cancelamento imediato de rota ativa para o local, repulsão direcional ativa nos sensores de navegação 3D (`computeAvoidanceSteering` e `getRepulsionFromAvoidedZone`), impedindo que o NPC se aproxime ou selecione o local evitado.
+   - Para instruções de **atravessar pela faixa**: reforço da preferência pelas faixas (`preference += 15.0`), cálculo imediato de caminho para a faixa central e navegação segura respeitando o semáforo.
+   - Para instruções de **ir a local**: reforço de atratividade (`preference += 20.0`), redirecionamento de alvo e busca de rota no NavMesh.
+3. **Persistência Sem Esquecimento (Não Esquecer):**
+   - As diretivas aprendidas (`LearnedDirective`) são salvas na memória de longo prazo do agente (`agent_minds.memory.learnedDirectives` no PostgreSQL), sobrevivendo a reboots e reloads.
+   - Registro de experiência com `importance: 1.00` em `agent_experiences` e indexação vetorial declarativa no Qdrant (`MemoryService.addMemory`) com `directiveType` e contexto de Daniel.
+4. **Resiliência a Falhas de LLM (Erro 429):**
+   - Quando a cota de LLM gratuita atinge rate-limit (HTTP 429), o sistema faz fallback gracioso para confirmações personalizadas e determinísticas geradas para a diretiva, garantindo que o agente sempre confirme a instrução ouvida e a execute.
+5. **Correção de Integridade Relacional (FK Constraint):**
+   - Corrigido `seedDefaultCitizens` no `CitizensService` para popular todos os cidadãos em `agent_identities`, sanando violações de FK em snapshots periódicos de `agent_minds`.
+
+### 2. Implementações Realizadas
+- **Pacotes Compartilhados:**
+  - `packages/agent-planning/autonomy/types.ts`: Adicionadas interfaces `DirectiveType` e `LearnedDirective`.
+  - `packages/agent-planning/autonomy/utility-decider.ts`: Integrado `learnedDirectives` no cálculo de utilidade (`-999.0` para evitar, `+15.0` para faixa, `+20.0` para ir ao local).
+  - `packages/agent-planning/autonomy/agent-mind.ts`: Implementado `learnAvatarInstruction()`, serialização e restauração de `learnedDirectives`.
+  - `packages/agent-planning/autonomy.spec.ts`: 3 novos testes unitários validando aprendizado, execução de evitação, travessia por faixa e persistência pós-restauração.
+- **Backend API:**
+  - `apps/api/src/modules/citizens/citizens.service.ts`: Corrigido seeding para todos os cidadãos de `ALL_CITIZENS`.
+  - `apps/api/src/modules/simulation/simulation.service.ts`: Integração com `MemoryService`, persistência imediata em `agent_minds`, emissão de eventos `agent.instruction.learned` e `agent.target`.
+  - `apps/api/src/gateways/world.gateway.ts`: Repasse da diretiva aprendida e resposta contextual.
+- **Frontend 3D & UI:**
+  - `apps/web-client/src/avatars/agent-avatar.ts`: Métodos `learnInstruction()`, `isTargetInAvoidedZone()`, `isPositionInAvoidedDirective()`, `getRepulsionFromAvoidedZone()`, e aplicação em `computeAvoidanceSteering`.
+  - `apps/web-client/src/App.tsx`: Listeners de `agent.instruction.learned` e `agent.target`, integrados ao chat.
+  - `apps/web-client/src/avatars/agent-avatar.spec.ts`: Testes unitários para desvio repulsivo do café e travessia da faixa.
+
+### 3. Validação
+- `packages/agent-planning`: **30/30 testes aprovados (100%)**.
+- `apps/web-client`: **55/55 testes aprovados (100%) em 8 arquivos**.
+- `apps/api`: **29/29 testes aprovados (100%) em 6 arquivos**.
+- Monorepo Nx (`npx nx run-many -t test`): **26/26 projetos aprovados (100%)**.
+
+
 
 
 

@@ -6,7 +6,9 @@ import type { LLMProviderAdapter } from '@cidade-virtual/llm-adapters';
 import {
   type ActionCandidate,
   type ActivityState,
+  type DirectiveType,
   type Intention,
+  type LearnedDirective,
   type Needs,
   type Percept,
   type Personality,
@@ -89,6 +91,7 @@ export class AgentMind {
           actorAffinity: { ...(config.initialMemory.actorAffinity ?? {}) },
           placePreferences: { ...(config.initialMemory.placePreferences ?? {}) },
           suggestedTargets: { ...(config.initialMemory.suggestedTargets ?? {}) },
+          learnedDirectives: [...(config.initialMemory.learnedDirectives ?? [])],
         }
       : {
           lastVisitedAt: {},
@@ -96,6 +99,7 @@ export class AgentMind {
           actorAffinity: {},
           placePreferences: {},
           suggestedTargets: {},
+          learnedDirectives: [],
         };
   }
 
@@ -118,6 +122,7 @@ export class AgentMind {
         actorAffinity: { ...(this.memory.actorAffinity ?? {}) },
         placePreferences: { ...(this.memory.placePreferences ?? {}) },
         suggestedTargets: { ...(this.memory.suggestedTargets ?? {}) },
+        learnedDirectives: [...(this.memory.learnedDirectives ?? [])],
       },
       currentIntention: this.currentIntention ? JSON.parse(JSON.stringify(this.currentIntention)) : null,
       currentActivity: this.currentActivity ? JSON.parse(JSON.stringify(this.currentActivity)) : null,
@@ -143,6 +148,7 @@ export class AgentMind {
         actorAffinity: { ...(state.memory.actorAffinity ?? {}) },
         placePreferences: { ...(state.memory.placePreferences ?? {}) },
         suggestedTargets: { ...(state.memory.suggestedTargets ?? {}) },
+        learnedDirectives: [...(state.memory.learnedDirectives ?? [])],
       };
     }
     if (state.currentIntention !== undefined) {
@@ -327,35 +333,175 @@ export class AgentMind {
   }
 
   /**
+   * Ouve, interpreta, memoriza e executa instruções repassadas pelo avatar Daniel.
+   * Modifica a utilidade, registra diretiva permanente em learnedDirectives e
+   * ajusta intenções ativas para executar imediatamente sem jamais esquecer.
+   */
+  public learnAvatarInstruction(playerMessage: string): {
+    directive: LearnedDirective;
+    confirmationSpeech: string;
+    actionRequired?: 'reroute' | 'crosswalk' | 'goto' | 'stop';
+  } {
+    this.recordSocialInteraction('avatar-daniel', true);
+    this.memory.learnedDirectives = this.memory.learnedDirectives || [];
+    this.memory.placePreferences = this.memory.placePreferences || {};
+    this.memory.suggestedTargets = this.memory.suggestedTargets || {};
+
+    const text = playerMessage.toLowerCase().trim();
+
+    // 1. Detectar instrução de EVITAR local (ex: "vc deve evitar tal lugar", "evite o café", "não vá à praça")
+    const isAvoid =
+      /evit(ar|e|em)?|não\s+(deve\s+)?(ir|vá|ande|passe)|proibid[oa]|longe\s+d[eo]|fuja\s+d[eo]|saia\s+d[eo]/i.test(
+        text,
+      );
+
+    // 2. Detectar instrução de ATRAVESSAR PELA FAIXA (ex: "vc deve atravessar a faixa", "use a faixa de pedestre")
+    const isCrosswalk =
+      /faixa(\s+de\s+pedestre)?|atravess(ar|e|em)?|cruzar|travessia/i.test(text) &&
+      !isAvoid;
+
+    // 3. Detectar instrução de IR A UM LOCAL / SUGESTÃO DE DESTINO (ex: "vá para o mercado", "vamos ao café", "que tal irmos ao café")
+    const isGoTo =
+      /(vá|vai|ir|irmos|vamos|bora|ande|rumo|dirija-se|siga|caminhe)\s+(para|ao|até|na|no|pro|pra)\s+(.+)/i.test(
+        text,
+      ) && !isAvoid;
+
+    // 4. Detectar instrução de PARAR / ESPERAR (ex: "pare aí", "aguarde na calçada")
+    const isStop = /(pare|parar|aguard(e|ar)|espere|fique\s+(aí|parado))/i.test(text);
+
+    let directiveType: DirectiveType = 'custom_rule';
+    let targetCategory: string | undefined;
+    let targetEntityId: string | undefined;
+    let description = '';
+    let confirmationSpeech = '';
+    let actionRequired: 'reroute' | 'crosswalk' | 'goto' | 'stop' | undefined;
+
+    // Extração de local alvo se houver
+    if (text.includes('café') || text.includes('bistro') || text.includes('lanche')) {
+      targetCategory = 'cafe';
+      targetEntityId = 'cafe-bistro';
+    } else if (text.includes('mercado') || text.includes('compras') || text.includes('comprar')) {
+      targetCategory = 'market';
+      targetEntityId = 'market-central';
+    } else if (text.includes('praça') || text.includes('banco') || text.includes('fonte')) {
+      targetCategory = 'praca';
+      targetEntityId = 'fountain-monumental';
+    } else if (text.includes('rua') || text.includes('avenida') || text.includes('asfalto') || text.includes('pista')) {
+      targetCategory = 'street';
+    } else if (text.includes('faixa')) {
+      targetCategory = 'crosswalk';
+      targetEntityId = 'crosswalk-north';
+    }
+
+    if (isAvoid) {
+      directiveType = 'avoid_place';
+      description = `Evitar ${targetCategory || 'o local indicado'}`;
+      actionRequired = 'reroute';
+
+      // Aplica penalidade hedônica máxima no mapa de preferências
+      if (targetEntityId) {
+        this.memory.placePreferences[targetEntityId] = -1.0;
+      }
+      if (targetCategory === 'cafe') {
+        this.memory.placePreferences['cafe-bistro'] = -1.0;
+        this.memory.placePreferences['cafe-table-outdoor'] = -1.0;
+      } else if (targetCategory === 'market') {
+        this.memory.placePreferences['market-central'] = -1.0;
+      } else if (targetCategory === 'praca') {
+        this.memory.placePreferences['bench-praca-west'] = -1.0;
+        this.memory.placePreferences['bench-praca-east'] = -1.0;
+        this.memory.placePreferences['bench-praca-north'] = -1.0;
+        this.memory.placePreferences['bench-praca-south'] = -1.0;
+        this.memory.placePreferences['fountain-monumental'] = -1.0;
+      }
+
+      // Se a intenção atual era ir para este local, cancela imediatamente
+      if (this.currentIntention) {
+        const intentTarget = this.currentIntention.candidate.targetId.toLowerCase();
+        if (targetEntityId && intentTarget.includes(targetEntityId)) {
+          this.currentIntention = null;
+          this.currentActivity = null;
+        } else if (targetCategory && intentTarget.includes(targetCategory)) {
+          this.currentIntention = null;
+          this.currentActivity = null;
+        }
+      }
+
+      confirmationSpeech = `Entendido e gravado, Daniel! Aprendi que devo evitar ${targetCategory ? 'o(a) ' + targetCategory : 'esse local'}. Rota cancelada e memorizada permanentemente!`;
+    } else if (isCrosswalk) {
+      directiveType = 'use_crosswalk';
+      targetCategory = 'crosswalk';
+      targetEntityId = 'crosswalk-north';
+      description = 'Atravessar exclusivamente pela faixa de pedestres respeitando o semáforo';
+      actionRequired = 'crosswalk';
+
+      // Reforça preferência máxima pelas faixas
+      this.memory.placePreferences['crosswalk-north'] = 1.0;
+      this.memory.placePreferences['crosswalk-south'] = 1.0;
+      this.memory.suggestedTargets['crosswalk-north'] = 1.0;
+
+      confirmationSpeech = 'Instrução gravada com sucesso, Daniel! Aprendi que devo sempre utilizar a faixa de pedestres. Estou indo para a faixa e jamais esquecerei!';
+    } else if (isGoTo && targetCategory) {
+      directiveType = 'go_to_place';
+      description = `Dirigir-se ao local: ${targetCategory}`;
+      actionRequired = 'goto';
+
+      if (targetEntityId) {
+        this.memory.suggestedTargets[targetEntityId] = 1.0;
+        this.memory.placePreferences[targetEntityId] = 0.9;
+      }
+
+      confirmationSpeech = `Instrução assimilada, Daniel! Roteando imediatamente em direção a ${targetCategory} conforme sua orientação.`;
+    } else if (isStop) {
+      directiveType = 'wait_stop';
+      description = 'Parar e aguardar com segurança';
+      actionRequired = 'stop';
+      this.currentIntention = null;
+      this.currentActivity = null;
+
+      confirmationSpeech = 'Compreendido, Daniel! Parando no local e mantendo postura segura na calçada.';
+    } else {
+      directiveType = 'custom_rule';
+      description = `Instrução cívica: "${playerMessage}"`;
+      confirmationSpeech = `Instrução ouvida e gravada, Daniel: "${playerMessage}". Guardei esta diretiva na minha memória permanente e não a esquecerei!`;
+      if (targetEntityId && !isAvoid) {
+        this.memory.suggestedTargets[targetEntityId] = 0.85;
+      }
+    }
+
+    const directive: LearnedDirective = {
+      id: `dir-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      instruction: playerMessage,
+      directiveType,
+      targetEntityId,
+      targetCategory,
+      strength: 1.0,
+      learnedAt: Date.now(),
+      active: true,
+      description,
+    };
+
+    // Atualiza ou insere diretiva
+    const existingIdx = this.memory.learnedDirectives.findIndex(
+      (d) => d.directiveType === directiveType && d.targetCategory === targetCategory,
+    );
+    if (existingIdx >= 0) {
+      this.memory.learnedDirectives[existingIdx] = directive;
+    } else {
+      this.memory.learnedDirectives.push(directive);
+    }
+
+    return { directive, confirmationSpeech, actionRequired };
+  }
+
+  /**
    * Processa interação recebida do avatar Daniel (A8):
    * Constrói memória afetiva, satisfaz carência social e extrai possíveis
    * estímulos de locais sugeridos na mensagem de Daniel (ex: "vai ao café").
    */
   public receivePlayerInteraction(playerMessage: string): { suggestedEntityId?: string } {
-    this.recordSocialInteraction('avatar-daniel', true);
-
-    const lower = playerMessage.toLowerCase();
-    this.memory.suggestedTargets = this.memory.suggestedTargets || {};
-
-    let suggestedEntityId: string | undefined;
-
-    if (lower.includes('café') || lower.includes('bistro') || lower.includes('comer') || lower.includes('lanche')) {
-      suggestedEntityId = 'cafe-bistro';
-    } else if (lower.includes('mercado') || lower.includes('compras') || lower.includes('comprar')) {
-      suggestedEntityId = 'market-central';
-    } else if (lower.includes('praça') || lower.includes('fonte')) {
-      suggestedEntityId = 'fountain-monumental';
-    } else if (lower.includes('banco') || lower.includes('descansar') || lower.includes('sentar')) {
-      suggestedEntityId = 'bench-praca-west';
-    } else if (lower.includes('árvore') || lower.includes('verde') || lower.includes('sombra')) {
-      suggestedEntityId = 'tree-boulevard-nw';
-    }
-
-    if (suggestedEntityId) {
-      this.memory.suggestedTargets[suggestedEntityId] = 0.85;
-    }
-
-    return { suggestedEntityId };
+    const { directive } = this.learnAvatarInstruction(playerMessage);
+    return { suggestedEntityId: directive.targetEntityId };
   }
 
   public static readonly SOCIAL_TRANSMISSION_FACTOR = SOCIAL_TRANSMISSION_FACTOR;

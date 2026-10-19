@@ -6,6 +6,7 @@
 import {
   type ActionCandidate,
   type AffordanceType,
+  type LearnedDirective,
   type Needs,
   type Percept,
   type Personality,
@@ -26,6 +27,8 @@ export interface MemoryContext {
   placePreferences?: Record<string, number>;
   /** Estímulos ou sugestões recebidas do avatar Daniel ou de outros agentes (0..1). */
   suggestedTargets?: Record<string, number>;
+  /** Diretivas e instruções permanentes aprendidas do avatar Daniel */
+  learnedDirectives?: LearnedDirective[];
 }
 
 export interface DeciderOptions {
@@ -257,6 +260,46 @@ export function scoreCandidate(
   // Estímulo / sugestão direta recente do jogador Daniel (A8)
   const suggestionBonus = memory.suggestedTargets?.[cand.targetId] ?? 0;
   preference += suggestionBonus * 0.65;
+
+  // 4b. Diretivas explícitas e regras permanentes ensinadas pelo avatar Daniel
+  if (memory.learnedDirectives && memory.learnedDirectives.length > 0) {
+    for (const directive of memory.learnedDirectives) {
+      if (!directive.active) continue;
+
+      // Diretiva: EVITAR lugar (ex: "evitar café", "evitar praça", "não vá ao mercado")
+      if (directive.directiveType === 'avoid_place') {
+        const matchesTarget = directive.targetEntityId && cand.targetId === directive.targetEntityId;
+        const matchesCategory = directive.targetCategory && (
+          cand.targetId.toLowerCase().includes(directive.targetCategory.toLowerCase()) ||
+          cand.targetLabel.toLowerCase().includes(directive.targetCategory.toLowerCase())
+        );
+        if (matchesTarget || matchesCategory) {
+          // Penalidade decisiva: o agente NUNCA escolherá este local
+          preference -= 999.0;
+        }
+      }
+
+      // Diretiva: ATRAVESSAR PELA FAIXA (ex: "vc deve atravessar a faixa", "use a faixa de pedestre")
+      else if (directive.directiveType === 'use_crosswalk') {
+        const isCrosswalk = cand.targetId.includes('crosswalk') || cand.targetLabel.toLowerCase().includes('faixa');
+        if (isCrosswalk) {
+          preference += 15.0 * (directive.strength || 1.0);
+        }
+      }
+
+      // Diretiva: IR PARA UM LUGAR ESPECÍFICO (ex: "vá ao mercado", "vá para a fonte")
+      else if (directive.directiveType === 'go_to_place') {
+        const matchesTarget = directive.targetEntityId && cand.targetId === directive.targetEntityId;
+        const matchesCategory = directive.targetCategory && (
+          cand.targetId.toLowerCase().includes(directive.targetCategory.toLowerCase()) ||
+          cand.targetLabel.toLowerCase().includes(directive.targetCategory.toLowerCase())
+        );
+        if (matchesTarget || matchesCategory) {
+          preference += 20.0 * (directive.strength || 1.0);
+        }
+      }
+    }
+  }
 
   // 5. Salência do estímulo (proximidade imediata):
   const salience = cand.distance < 4.0 ? 0.08 : 0;

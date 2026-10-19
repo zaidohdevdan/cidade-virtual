@@ -214,6 +214,33 @@ export const App: React.FC = () => {
               }
             }
           }
+          if (event.name === 'agent.instruction.learned' && event.payload) {
+            const { agentId, directive, playerMessage } = event.payload as {
+              agentId?: string;
+              directive?: any;
+              playerMessage?: string;
+            };
+            const agent = agents.find((a) => a.config.id === agentId);
+            if (agent && (directive || playerMessage)) {
+              agent.learnInstruction(playerMessage || directive?.instruction || '', directive);
+            }
+          }
+          if (event.name === 'agent.target' && event.payload) {
+            const { agentId, targetPosition, instruction } = event.payload as {
+              agentId?: string;
+              targetPosition?: { x: number; y?: number; z: number };
+              instruction?: any;
+            };
+            const agent = agents.find((a) => a.config.id === agentId);
+            if (agent) {
+              if (instruction) {
+                agent.learnInstruction(instruction.instruction || '', instruction);
+              }
+              if (targetPosition) {
+                agent.setTargetPosition(targetPosition);
+              }
+            }
+          }
           if (event.name === 'npc.alert' && event.payload) {
             const { message, citizenIds } = event.payload as { message?: string; citizenIds?: string[] };
             if (message) {
@@ -379,7 +406,7 @@ export const App: React.FC = () => {
         socketRef.current.emit(
           'agent:dialogue',
           { targetAgentId, message: text },
-          (ack: { success: boolean; response?: string; error?: string }) => {
+          (ack: { success: boolean; response?: string; error?: string; directive?: any }) => {
             setIsThinking(false);
             if (ack && ack.success && ack.response) {
               const agentMsg: DialogueMessage = {
@@ -391,8 +418,10 @@ export const App: React.FC = () => {
               };
               setDialogueMessages((prev) => [...prev, agentMsg]);
               activeDialogueAgent.say(ack.response, 6, true);
+              activeDialogueAgent.learnInstruction(text, ack.directive);
             } else {
-              const fallbackResponse = `Entendido, Daniel. Registrei sua observação e sigo monitorando o fluxo urbano.`;
+              activeDialogueAgent.learnInstruction(text);
+              const fallbackResponse = `Instrução gravada, Daniel! Aprendi e executarei: "${text}". Não esquecerei!`;
               const agentMsg: DialogueMessage = {
                 id: `msg-a-${Date.now()}`,
                 sender: 'agent',
@@ -408,7 +437,8 @@ export const App: React.FC = () => {
       } else {
         setTimeout(() => {
           setIsThinking(false);
-          const fallback = `Olá Daniel! Estou conectado à rede local de Synapse City. Em que posso auxiliá-lo?`;
+          activeDialogueAgent.learnInstruction(text);
+          const fallback = `Instrução ouvida e gravada, Daniel! Aprendi e cumprirei: "${text}". Jamais esquecerei!`;
           const agentMsg: DialogueMessage = {
             id: `msg-a-${Date.now()}`,
             sender: 'agent',
@@ -418,7 +448,7 @@ export const App: React.FC = () => {
           };
           setDialogueMessages((prev) => [...prev, agentMsg]);
           activeDialogueAgent.say(fallback, 6, true);
-        }, 800);
+        }, 500);
       }
     },
     [activeDialogueAgent, player],

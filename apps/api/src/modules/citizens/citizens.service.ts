@@ -16,7 +16,7 @@ import {
 } from '@cidade-virtual/persistence';
 import { WorldGateway } from '../../gateways/world.gateway';
 import { MemoryService } from '../memory/memory.service';
-import { SEED_CITIZENS, SeedCitizenConfig } from './citizens.seed';
+import { ALL_CITIZENS, SeedCitizenConfig } from './citizens.seed';
 
 @Injectable()
 export class CitizensService implements OnModuleInit {
@@ -55,7 +55,7 @@ export class CitizensService implements OnModuleInit {
       }
     }
 
-    for (const citizenConfig of SEED_CITIZENS) {
+    for (const citizenConfig of ALL_CITIZENS) {
       try {
         // 1. Upsert da identidade no PostgreSQL
         await this.agentRepo.upsert({
