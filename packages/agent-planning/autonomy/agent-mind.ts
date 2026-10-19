@@ -19,6 +19,7 @@ import {
   createInitialNeeds,
   decayNeeds,
   wellbeing,
+  type EnvironmentalContext,
 } from './needs.js';
 import {
   distance2D,
@@ -156,8 +157,8 @@ export class AgentMind {
    * Atualiza as necessidades internas pelo decaimento temporal,
    * arrefece sugestões recebidas e processa ticks de atividades em andamento.
    */
-  public update(dtSeconds: number): { activityFinished?: ActivityState } {
-    this.needs = decayNeeds(this.needs, this.personality, dtSeconds);
+  public update(dtSeconds: number, env?: EnvironmentalContext): { activityFinished?: ActivityState } {
+    this.needs = decayNeeds(this.needs, this.personality, dtSeconds, env);
 
     // Arrefecimento temporal de sugestões do jogador ou de pares
     if (this.memory.suggestedTargets) {
@@ -219,7 +220,7 @@ export class AgentMind {
       this.needs,
       this.personality,
       this.memory,
-      { ...options, rng: this.rng },
+      { ...options, percept, rng: this.rng },
     );
 
     // Detecta presença do jogador avatar (Daniel) próximo

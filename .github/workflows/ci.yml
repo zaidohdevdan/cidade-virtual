@@ -58,7 +58,7 @@ jobs:
       - name: Verify Schema Drift in environment
         run: npm run check:schema-drift
 
-      - name: Run Root Integration & E2E Test Suite (21 files / 101 tests)
+      - name: Run Root Integration & E2E Test Suite (22 files / 112 tests)
         run: npx vitest run tests/
 
       - name: Run Full Monorepo Tests (All 26 Projects)

@@ -12,6 +12,7 @@ import {
   distance2D,
   type Percept,
   type PerceivedActor,
+  type WorldWeather,
 } from '@cidade-virtual/agent-planning';
 import { WorldGateway } from '../../gateways/world.gateway';
 import { CognitionService } from '../cognition/cognition.service';
@@ -206,8 +207,20 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     agent: AutonomousAgentRuntimeState,
     trafficLight: 'green' | 'yellow' | 'red',
   ): Promise<void> {
-    // 1. Atualiza necessidades internas e progresso de atividades físicas
-    agent.mind.update(3.5);
+    // 1. Atualiza necessidades internas e progresso de atividades físicas moduladas pelo ambiente
+    let weather: WorldWeather = 'clear';
+    let timeOfDay = 12;
+    try {
+      const worldState = await this.worldService.getWorldState();
+      if (worldState) {
+        weather = (worldState.weather as WorldWeather) ?? 'clear';
+        timeOfDay = worldState.timeOfDay ?? 12;
+      }
+    } catch {
+      // fallback defensivo caso worldState não esteja disponível no tick
+    }
+
+    agent.mind.update(3.5, { weather, timeOfDay });
 
     // 2. Constrói percepção espacial real do mundo físico
     const closestPlayer = typeof (this.worldGateway as any)?.getClosestPlayer === 'function'
@@ -248,6 +261,9 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       entities: perceivedEntities,
       actors: perceivedActors,
       trafficLight,
+      weather,
+      timeOfDay,
+      trafficDensity: 0.15,
     };
 
     // 3. Se o agente não tem destino ou completou o percurso anterior,

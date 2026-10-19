@@ -1,5 +1,39 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Task-040 — Mundo que afeta a mente: clima, hora e tráfego no decisor
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Cognição Ecológica, Física do Mundo e Decisão Autônoma
+
+### 1. Resumo Executivo
+Implementação da interação ecológica do ambiente sobre o circuito cognitivo dos habitantes autônomos. As condições físicas do mundo (clima, relógio solar e tráfego veicular) deixam de ser puramente cosméticas e passam a moldar dinamicamente o decaimento fisiológico de necessidades e as utilidades marginais de ação:
+1. **Extensão Canônica da Percepção (`Percept`)**:
+   - `packages/agent-planning/autonomy/types.ts` estendido com `weather` (`clear`, `rain`, `storm`, `fog`, `snow`), `timeOfDay` (0..24), `trafficDensity` (0..1) e `vehicles` (`PerceivedVehicle[]`).
+   - `WorldEntity` e `ActionCandidate` enriquecidos com a propriedade física `hasCover` (presença de teto/cobertura contra intempéries).
+   - Inclusão da affordance contextual `shelter` nas entidades cobertas (`cafe-bistro`, `market-central`, `bus-stop-west`).
+2. **Fisiologia e Decaimento sob Pressão Ambiental (`needs.ts`)**:
+   - `needWeights(p, env)` modula os pesos vitais: de noite (`timeOfDay >= 20 || timeOfDay < 6`), o multiplicador de `energy` é elevado para 2.5x, tornando o repouso urgente; sob chuva ao ar livre, a aversão/carência de `fun` é ampliada em 1.6x.
+   - `decayNeeds(needs, p, dtSeconds, env)`: acelera o consumo de energia à noite (1.8x, sono acumulado) e drena diversão/humor sob chuva desabrigada (2.2x).
+   - `mostPressingNeed(needs, p, env)`: garante fisiologicamente que à noite, com necessidades basais equilibradas, a necessidade prioritária selecionada é `'energy'` (orientando o comportamento de `rest`).
+3. **Física Global do Decisor de Utilidade (`utility-decider.ts`)**:
+   - Criação da função pura `calculateEnvironmentalModifier(cand, percept)`:
+     - **Chuva / Tempestade:** Bônus expressivo (`+0.55` a `+0.82`) para alvos cobertos (`hasCover = true` / affordance `shelter`) e penalidade severa (`-0.60` a `-0.90`) para exposição a céu aberto (bancos na praça, fontes, travessias).
+     - **Noite:** Bônus ambiental de repouso (`+0.45` para affordance `rest`) e desestímulo a atividades externas como `explore` (`-0.35`) e `shop` (`-0.30`).
+     - **Segurança e Tráfego:** Penalidade de segurança proporcional à proximidade imediata de veículos em movimento (`minDist < 6m`) e fluxo denso na pista (`trafficDensity > 0.4`), favorecendo calçadas protegidas e interiores.
+   - O modificador entra no `score` final e no breakdown auditável `{ environmentalModifier }`.
+4. **Neutralidade e Regras Universais**:
+   - Nenhuma regra depende de `agentId`, arquétipo ou nome de habitante. As regras ambientais são leis físicas globais da simulação de Synapse City, iguais para todos.
+5. **Integração no Runtime Autoritativo (`simulation.service.ts` e `cognition.service.ts`)**:
+   - A cada tick, `SimulationService` consulta o estado real do mundo em `WorldService.getWorldState()` e alimenta `agent.mind.update(dt, { weather, timeOfDay })` e o `Percept`.
+6. **Validação de Testes**:
+   - Suíte unitária dedicada criada em `tests/unit/world-modifiers.test.ts` (11 testes, 100% aprovados).
+   - Testes integrados no pacote `@cidade-virtual/agent-planning/autonomy.spec.ts` (27 testes aprovados).
+   - Suíte raiz (`npx vitest run tests/`): 22 arquivos, 112 testes aprovados (100% green) em 9.83s.
+   - Monorepo completo (`npm test`): 26/26 projetos aprovados.
+
+---
+
 ## Task: Task-016 — Expandir cobertura de testes
 - **Data:** 2026-10-19
 - **Status:** Concluído

@@ -555,21 +555,22 @@
   - [x] `tests/e2e/learning-flow.test.ts` continua verde.
 
 ### Task-040 — Mundo que afeta a mente: clima, hora e tráfego no decisor
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-19)
 - **Prioridade:** 🟡 Média
 - **Esforço:** S
 - **Tipo:** `feat`
 - **Risco:** Operacional
 - **Dependências:** Task-038 (cérebro único)
-- **Descrição:** O `Percept` contém entidades e atores; o mundo tem clima, hora do dia e tráfego que ainda não modulam as necessidades. Regras ambientais globais (física do mundo, nunca por agente) devem entrar na utilidade — é a interação com o ambiente pressionando a decisão.
+- **Descrição:** O `Percept` contém entidades e atores; o mundo tem clima, hora do dia e tráfego que modulam as necessidades e a tomada de decisão autônoma. Regras ambientais globais (física do mundo, nunca por agente) entram na utilidade — a interação com o ambiente pressiona a decisão.
 - **Escopo:**
-  - Estender `Percept` com `weather`, `timeOfDay` e `trafficDensity` (fontes: `WorldService` e posições de veículos no raio de percepção).
-  - Modificadores ambientais globais: chuva → `-fun` e busca por abrigo/interior; noite → `-energia` (prioridade de `rest` sobe); tráfego denso próximo → penalidade de segurança na atividade/rota.
-  - Possível affordance contextual `shelter` ligada a entidades com cobertura.
+  - [x] Estender `Percept` com `weather`, `timeOfDay`, `trafficDensity` e `vehicles` (fontes: `WorldService` e simulação autoritativa).
+  - [x] Modificadores ambientais globais: chuva → `-fun`, desgaste físico aumentado e busca prioritária por abrigo/interior (`shelter`, `hasCover`); noite → sono acumulando e prioridade de `rest` sobe; tráfego denso próximo → penalidade de segurança na atividade/rota na via.
+  - [x] Affordance contextual `shelter` e flag física `hasCover` ligadas a entidades com cobertura (`cafe-bistro`, `market-central`, `bus-stop-west`).
+  - [x] Suíte de testes unitários dedicada `tests/unit/world-modifiers.test.ts` (11 testes) e extensão de `autonomy.spec.ts`.
 - **Critérios de aceite:**
-  - [ ] Sob chuva, agentes preferem entidades com cobertura (teste determinístico com seed).
-  - [ ] De noite, `mostPressingNeed` favorece `rest` (teste unitário).
-  - [ ] Nenhum modificador é específico de agente (regras globais, revisadas em code review).
+  - [x] Sob chuva, agentes preferem entidades com cobertura (teste determinístico com seed).
+  - [x] De noite, `mostPressingNeed` favorece `rest` (teste unitário).
+  - [x] Nenhum modificador é específico de agente (regras globais, revisadas em code review).
 
 ### Task-041 — Prova MA "Nasce um Hábito" (DoD da autonomia emergente)
 - **Status:** ✅ Concluída (2026-10-19)
@@ -744,11 +745,11 @@
 
 ## 4. Resumo por Prioridade
 
-| Prioridade | Tasks | Situação (v3.2) |
+| Prioridade | Tasks | Situação (v3.3) |
 |---|---|---|
 | 🔴 Crítica | ✅ 001, 002, 009, 019, 020, 036, 037, 041 | **100% Concluídas** (Épico G, gate MA atingido com evidências) |
 | 🟠 Alta | ✅ 003, 004, 005, 006, 013, 021, 022, 025, 026B, 038, 039 | **100% Concluídas** (Cérebro único e transmissão social operantes) |
-| 🟡 Média | ✅ 007, 008, 010, 014, 015, 016, 023, 024 · ⬜ **040, 028, 032** | Pendentes: Task-040 (mundo→mente) e ondas 4-5 |
+| 🟡 Média | ✅ 007, 008, 010, 014, 015, 016, 023, 024, 040 · ⬜ **028, 032** | Concluídas: Task-040 (mundo→mente). Pendentes: Ondas 4-5 |
 | 🟢 Baixa | ✅ 011, 012, 018 · ⬜ **017, 026, 027, 029, 030, 031, 033, 034, 035** | Pendentes ≈ 8 semanas (evolução, gated por MA e ondas) |
 
 ## 5. Ordem Sugerida de Execução (Critical Path)

@@ -8,6 +8,10 @@ import {
   rankCandidates,
   generateCandidates,
   distance2D,
+  calculateEnvironmentalModifier,
+  isCoveredEntity,
+  mostPressingNeed,
+  isNightTime,
   type Needs,
   type Personality,
   type Percept,
@@ -459,6 +463,83 @@ describe('Autonomia Real dos Agentes — Sem Roteiros Pré-fixados', () => {
       // O agente deve evitar o mercado e escolher outra opção para saciar sua fome (ex: café bistro)
       expect(intention.candidate.targetId).not.toBe('market-central');
       expect(['cafe-bistro', 'cafe-table-outdoor']).toContain(intention.candidate.targetId);
+    });
+  });
+
+  describe('Task-040 — Modificadores Ambientais Globais: Clima, Hora e Tráfego', () => {
+    it('deve priorizar entidades cobertas sob chuva com seed determinística', async () => {
+      const agentPos = { x: -20, y: 0.19, z: 20 };
+      const mind = new AgentMind({
+        id: 'test-agent-rain',
+        name: 'Climático',
+        role: 'citizen',
+        biography: 'Habitante em dia chuvoso',
+        personality: basePersonality,
+        initialNeeds: fullNeeds,
+        rng: () => 0.5,
+      });
+
+      const rainyPercept: Percept = {
+        position: agentPos,
+        entities: SYNAPSE_WORLD_ENTITIES.map((e) => ({
+          entity: e,
+          distance: distance2D(agentPos, e.approach ?? e.position),
+        })),
+        actors: [],
+        trafficLight: 'green',
+        weather: 'rain',
+        timeOfDay: 15,
+      };
+
+      const intention = await mind.decideNextIntention(agentPos, rainyPercept);
+      expect(intention).toBeDefined();
+      expect(intention.candidate.hasCover).toBe(true);
+      expect(intention.candidate.breakdown?.environmentalModifier).toBeGreaterThan(0);
+    });
+
+    it('deve favorecer descanso à noite via mostPressingNeed', () => {
+      const eveningNeeds: Needs = {
+        energy: 0.45,
+        hunger: 0.40,
+        social: 0.50,
+        curiosity: 0.50,
+        fun: 0.50,
+      };
+
+      const daytimeNeed = mostPressingNeed(eveningNeeds, basePersonality, { timeOfDay: 14 });
+      expect(daytimeNeed).not.toBe('energy');
+
+      const nighttimeNeed = mostPressingNeed(eveningNeeds, basePersonality, { timeOfDay: 22 });
+      expect(nighttimeNeed).toBe('energy');
+    });
+
+    it('deve garantir neutralidade global dos modificadores ambientais', () => {
+      const cand = {
+        id: 'eat:cafe-bistro',
+        affordance: 'eat' as const,
+        targetId: 'cafe-bistro',
+        targetLabel: 'Café Bistro',
+        targetKind: 'entity' as const,
+        destination: { x: 32, y: 0.19, z: -20 },
+        distance: 12,
+        quality: 1.2,
+        hasCover: true,
+        score: 0,
+      };
+
+      const percept: Percept = {
+        position: { x: 0, y: 0.19, z: 0 },
+        entities: [],
+        actors: [],
+        trafficLight: 'green',
+        weather: 'rain',
+        timeOfDay: 23,
+      };
+
+      const modA = calculateEnvironmentalModifier(cand, percept);
+      const modB = calculateEnvironmentalModifier(cand, percept);
+      expect(modA).toBe(modB);
+      expect(modA).toBeGreaterThan(0);
     });
   });
 });

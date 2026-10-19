@@ -24,7 +24,7 @@ export interface Personality {
 }
 
 /** O que uma entidade do mundo permite fazer. É física do mundo, não tarefa de um agente. */
-export type AffordanceType = 'rest' | 'eat' | 'socialize' | 'observe' | 'contemplate' | 'shop' | 'explore';
+export type AffordanceType = 'rest' | 'eat' | 'socialize' | 'observe' | 'contemplate' | 'shop' | 'explore' | 'shelter';
 
 export interface WorldEntity {
   id: string;
@@ -36,6 +36,8 @@ export interface WorldEntity {
   affordances: AffordanceType[];
   /** Multiplicador da qualidade da experiência (ex.: fonte monumental contempla melhor que uma placa). */
   quality?: number;
+  /** Indica se a entidade possui cobertura/teto físico que serve como abrigo contra chuva ou sol intenso (Task-040). */
+  hasCover?: boolean;
 }
 
 export interface PerceivedEntity {
@@ -55,13 +57,29 @@ export interface PerceivedActor extends ActorSnapshot {
   distance: number;
 }
 
+export interface PerceivedVehicle {
+  id: string;
+  position: Vec3;
+  distance: number;
+  speed?: number;
+}
+
 export type TrafficLight = 'green' | 'yellow' | 'red';
+export type WorldWeather = 'clear' | 'rain' | 'storm' | 'fog' | 'snow';
 
 export interface Percept {
   position: Vec3;
   entities: PerceivedEntity[];
   actors: PerceivedActor[];
   trafficLight: TrafficLight;
+  /** Condição climática do mundo afetando a cognição física (Task-040). */
+  weather?: WorldWeather;
+  /** Hora do dia no relógio da simulação (0..24), determinando dia/noite (Task-040). */
+  timeOfDay?: number;
+  /** Densidade média de tráfego percebida no entorno imediato (0..1) (Task-040). */
+  trafficDensity?: number;
+  /** Veículos percebidos no raio físico de atenção (Task-040). */
+  vehicles?: PerceivedVehicle[];
 }
 
 export type CandidateTargetKind = 'entity' | 'agent' | 'player' | 'place';
@@ -73,6 +91,8 @@ export interface ScoreBreakdown {
   novelty: number;
   salience: number;
   noise: number;
+  /** Modificador ambiental global da física do mundo: clima, hora do dia e segurança de tráfego (Task-040). */
+  environmentalModifier?: number;
 }
 
 export interface ActionCandidate {
@@ -85,6 +105,8 @@ export interface ActionCandidate {
   destination: Vec3;
   distance: number;
   quality: number;
+  /** Indica se o alvo oferece abrigo/cobertura climática (Task-040). */
+  hasCover?: boolean;
   score: number;
   breakdown?: ScoreBreakdown;
 }

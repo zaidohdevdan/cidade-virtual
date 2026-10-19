@@ -12,7 +12,8 @@ import {
   type Vec3,
   NEED_KEYS,
 } from './types.js';
-import { AFFORDANCE_EFFECTS, needWeights } from './needs.js';
+import { AFFORDANCE_EFFECTS, needWeights, type EnvironmentalContext } from './needs.js';
+import { isCoveredEntity } from './world-affordances.js';
 
 export interface MemoryContext {
   /** Timestamp do último uso de cada affordance:alvo. */
@@ -33,6 +34,8 @@ export interface DeciderOptions {
   explorationNoise?: number;
   rng?: () => number;
   forceLLM?: boolean;
+  /** Percepção ambiental física do mundo (clima, hora, tráfego) (Task-040). */
+  percept?: Percept;
 }
 
 export function distance2D(a: Vec3, b: Vec3): number {
@@ -55,6 +58,7 @@ export function generateCandidates(
     const e = item.entity;
     const dest = e.approach ?? e.position;
     const dist = distance2D(agentPos, dest);
+    const hasCover = isCoveredEntity(e);
 
     for (const affordance of e.affordances) {
       candidates.push({
@@ -66,6 +70,7 @@ export function generateCandidates(
         destination: dest,
         distance: dist,
         quality: e.quality ?? 1.0,
+        hasCover,
         score: 0,
       });
     }
@@ -85,6 +90,7 @@ export function generateCandidates(
       destination: actor.position,
       distance: dist,
       quality: isPlayer ? 1.4 : 1.1,
+      hasCover: false,
       score: 0,
     });
 
@@ -97,11 +103,76 @@ export function generateCandidates(
       destination: actor.position,
       distance: dist,
       quality: 0.9,
+      hasCover: false,
       score: 0,
     });
   }
 
   return candidates;
+}
+
+/**
+ * Modificadores ambientais globais baseados na física do mundo (Task-040).
+ * NUNCA depende da identidade, nome ou arquétipo do agente (regra universal da física da cidade).
+ */
+export function calculateEnvironmentalModifier(
+  cand: ActionCandidate,
+  percept?: Percept,
+): number {
+  if (!percept) return 0;
+
+  let modifier = 0;
+  const weather = percept.weather ?? 'clear';
+  const timeOfDay = percept.timeOfDay;
+  const trafficDensity = percept.trafficDensity ?? 0;
+  const vehicles = percept.vehicles ?? [];
+
+  // 1. Clima: Chuva e tempestade incentivam busca por abrigo e penalizam exposição a céu aberto
+  if (weather === 'rain' || weather === 'storm') {
+    const severity = weather === 'storm' ? 1.5 : 1.0;
+    if (cand.hasCover || cand.affordance === 'shelter') {
+      modifier += 0.55 * severity;
+    } else {
+      modifier -= 0.60 * severity;
+    }
+  }
+
+  // 2. Hora do dia: À noite, descanso é favorecido e exploração/compras arrefecem
+  if (timeOfDay !== undefined) {
+    const isNight = timeOfDay >= 20 || timeOfDay < 6;
+    if (isNight) {
+      if (cand.affordance === 'rest') {
+        modifier += 0.45;
+      } else if (cand.affordance === 'explore') {
+        modifier -= 0.35;
+      } else if (cand.affordance === 'shop') {
+        modifier -= 0.30;
+      }
+    }
+  }
+
+  // 3. Segurança e Tráfego: Veículos próximos e alta densidade viária penalizam travessias/atividades na via
+  if (vehicles.length > 0) {
+    let minDistToVehicle = Infinity;
+    for (const v of vehicles) {
+      const dist = distance2D(cand.destination, v.position);
+      if (dist < minDistToVehicle) minDistToVehicle = dist;
+    }
+    if (minDistToVehicle < 6.0) {
+      // Penalidade de segurança proporcional à proximidade imediata de veículos
+      modifier -= 0.40 * (1 - minDistToVehicle / 6.0);
+    }
+  }
+
+  if (trafficDensity > 0.4) {
+    // Se o alvo for travessia ou área da pista (ex.: crosswalk ou |X| <= 6), penaliza pela intensidade do fluxo
+    const isNearStreet = Math.abs(cand.destination.x) <= 6.5;
+    if (isNearStreet || cand.targetId.includes('crosswalk')) {
+      modifier -= 0.35 * trafficDensity;
+    }
+  }
+
+  return modifier;
 }
 
 /**
@@ -116,7 +187,13 @@ export function scoreCandidate(
 ): ActionCandidate {
   const now = opts.now ?? Date.now();
   const rng = opts.rng ?? Math.random;
-  const weights = needWeights(p);
+  const percept = opts.percept;
+  const env: EnvironmentalContext = {
+    weather: percept?.weather,
+    timeOfDay: percept?.timeOfDay,
+    isSheltered: cand.hasCover,
+  };
+  const weights = needWeights(p, env);
   const effect = AFFORDANCE_EFFECTS[cand.affordance] ?? {};
 
   // 1. Ganho de satisfação das necessidades: quanto mais carente estiver o agente,
@@ -188,8 +265,11 @@ export function scoreCandidate(
   const noiseScale = opts.explorationNoise ?? 0.08 * (0.5 + p.openness * 0.5);
   const noise = (rng() - 0.5) * noiseScale;
 
+  // 7. Modificador ambiental global da física do mundo (Task-040)
+  const environmentalModifier = calculateEnvironmentalModifier(cand, opts.percept);
+
   // Pontuação final agregada
-  const score = needGain - distanceCost + preference + novelty + salience + noise;
+  const score = needGain - distanceCost + preference + novelty + salience + noise + environmentalModifier;
 
   return {
     ...cand,
@@ -201,6 +281,7 @@ export function scoreCandidate(
       novelty,
       salience,
       noise,
+      environmentalModifier,
     },
   };
 }

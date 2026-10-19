@@ -11,6 +11,7 @@ import {
   type Percept,
   type PerceivedActor,
   type TrafficLight,
+  type WorldWeather,
   SYNAPSE_WORLD_ENTITIES,
   distance2D,
 } from '@cidade-virtual/agent-planning';
@@ -218,12 +219,21 @@ export class CognitionService {
     }
 
     const trafficLight: TrafficLight = /vermelho|red/i.test(context.currentObservation) ? 'red' : 'green';
+    const weather: WorldWeather = /tempestade|storm/i.test(context.currentObservation)
+      ? 'storm'
+      : /chuva|rain/i.test(context.currentObservation)
+      ? 'rain'
+      : 'clear';
+    const timeOfDay = /noite|madrugada|night/i.test(context.currentObservation) ? 22 : 12;
 
     const percept: Percept = context.percept ?? {
       position: currentPos,
       entities: perceivedEntities,
       actors: perceivedActors,
       trafficLight,
+      weather,
+      timeOfDay,
+      trafficDensity: 0.15,
     };
 
     if (options?.forceLLM && this.llmAdapter) {

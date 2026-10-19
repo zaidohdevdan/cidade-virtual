@@ -60,8 +60,9 @@ export const SYNAPSE_WORLD_ENTITIES: WorldEntity[] = [
     kind: 'market',
     position: { x: 0, y: 0.19, z: -48 },
     approach: { x: 0, y: 0.19, z: -38 },
-    affordances: ['shop', 'eat', 'socialize'],
+    affordances: ['shop', 'eat', 'socialize', 'shelter'],
     quality: 1.25,
+    hasCover: true,
   },
   {
     id: 'cafe-bistro',
@@ -69,8 +70,9 @@ export const SYNAPSE_WORLD_ENTITIES: WorldEntity[] = [
     kind: 'cafe',
     position: { x: 32, y: 0.19, z: -20 },
     approach: { x: 24, y: 0.19, z: -20 },
-    affordances: ['eat', 'socialize', 'rest'],
+    affordances: ['eat', 'socialize', 'rest', 'shelter'],
     quality: 1.2,
+    hasCover: true,
   },
   {
     id: 'cafe-table-outdoor',
@@ -80,6 +82,7 @@ export const SYNAPSE_WORLD_ENTITIES: WorldEntity[] = [
     approach: { x: 25, y: 0.19, z: -16 },
     affordances: ['eat', 'rest', 'socialize'],
     quality: 1.15,
+    hasCover: false,
   },
 
   // ─── MOBILIDADE E ESPERAS ───
@@ -89,8 +92,9 @@ export const SYNAPSE_WORLD_ENTITIES: WorldEntity[] = [
     kind: 'bus_stop',
     position: { x: -11.5, y: 0.19, z: -20 },
     approach: { x: -10, y: 0.19, z: -20 },
-    affordances: ['rest', 'observe'],
+    affordances: ['rest', 'observe', 'shelter'],
     quality: 0.9,
+    hasCover: true,
   },
   {
     id: 'crosswalk-north',
@@ -216,3 +220,17 @@ export const SYNAPSE_WORLD_ENTITIES: WorldEntity[] = [
     quality: 1.2,
   },
 ];
+
+/**
+ * Avalia se uma entidade do mundo oferece cobertura contra chuva e intempéries climáticas (Task-040).
+ * Regra física global e objetiva, independente de agente.
+ */
+export function isCoveredEntity(entity: WorldEntity): boolean {
+  if (entity.hasCover !== undefined) return entity.hasCover;
+  return (
+    entity.affordances.includes('shelter') ||
+    entity.kind === 'market' ||
+    entity.kind === 'cafe' ||
+    entity.kind === 'bus_stop'
+  );
+}

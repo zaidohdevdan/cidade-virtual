@@ -12,6 +12,7 @@ export const AFFORDANCE_EFFECTS: Record<AffordanceType, Partial<Needs>> = {
   contemplate: { curiosity: 0.15, fun: 0.12, energy: 0.1 },
   shop: { hunger: 0.4, curiosity: 0.1 },
   explore: { curiosity: 0.35, fun: 0.15, energy: -0.08 },
+  shelter: { energy: 0.15, fun: 0.1, curiosity: 0.05 },
 };
 
 /** Quantos ticks a atividade dura depois que o agente chega ao alvo. */
@@ -23,6 +24,7 @@ export const AFFORDANCE_DURATION_TICKS: Record<AffordanceType, number> = {
   contemplate: 2,
   shop: 2,
   explore: 1,
+  shelter: 2,
 };
 
 /** Taxa base de decaimento por minuto. */
@@ -36,26 +38,64 @@ const BASE_DECAY_PER_MINUTE: Needs = {
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 
+/** Contexto ambiental global para modulação fisiológica e cognitiva (Task-040). */
+export interface EnvironmentalContext {
+  weather?: 'clear' | 'rain' | 'storm' | 'fog' | 'snow';
+  timeOfDay?: number; // 0..24
+  isSheltered?: boolean;
+}
+
+/** Determina se a hora do dia corresponde ao período noturno (Task-040). */
+export function isNightTime(timeOfDay?: number): boolean {
+  if (timeOfDay === undefined) return false;
+  return timeOfDay >= 20 || timeOfDay < 6;
+}
+
 /**
- * Peso subjetivo de cada necessidade segundo a personalidade.
- * Extrovertidos sentem mais falta de companhia; abertos à experiência, de novidade; etc.
+ * Peso subjetivo de cada necessidade segundo a personalidade e o ambiente global.
+ * Extrovertidos sentem mais falta de companhia; abertos à experiência, de novidade;
+ * De noite, a biologia humana exige repouso (energia); sob chuva, diversão decai (Task-040).
  */
-export function needWeights(p: Personality): Needs {
+export function needWeights(p: Personality, env?: EnvironmentalContext): Needs {
+  const isNight = isNightTime(env?.timeOfDay);
+  const isRaining = env?.weather === 'rain' || env?.weather === 'storm';
+
+  // À noite, o corpo e a mente demandam sono/descanso com prioridade urgente
+  const energyMultiplier = isNight ? 2.5 : 1.0;
+  // Chuva e intempéries ao ar livre drenam a paciência e elevam a urgência de conforto/diversão
+  const funMultiplier = isRaining && !env?.isSheltered ? 1.6 : 1.0;
+
   return {
-    energy: 0.8 + p.neuroticism * 0.4,
+    energy: (0.8 + p.neuroticism * 0.4) * energyMultiplier,
     hunger: 1.0,
     social: 0.5 + p.extraversion,
     curiosity: 0.5 + p.openness,
-    fun: 0.6 + (1 - p.conscientiousness) * 0.8,
+    fun: (0.6 + (1 - p.conscientiousness) * 0.8) * funMultiplier,
   };
 }
 
-export function decayNeeds(needs: Needs, p: Personality, dtSeconds: number): Needs {
-  const w = needWeights(p);
+export function decayNeeds(
+  needs: Needs,
+  p: Personality,
+  dtSeconds: number,
+  env?: EnvironmentalContext,
+): Needs {
+  const w = needWeights(p, env);
   const minutes = Math.max(0, dtSeconds) / 60;
   const next = { ...needs };
+
+  const isNight = isNightTime(env?.timeOfDay);
+  const isRaining = env?.weather === 'rain' || env?.weather === 'storm';
+
   for (const k of NEED_KEYS) {
-    next[k] = clamp01(needs[k] - BASE_DECAY_PER_MINUTE[k] * w[k] * minutes);
+    let envDecayMult = 1.0;
+    // Noite acelera o gasto de energia (sono acumulando)
+    if (k === 'energy' && isNight) envDecayMult = 1.8;
+    // Chuva sem abrigo drena diversão mais rápido (-fun) e aumenta desgaste físico
+    if (k === 'fun' && isRaining && !env?.isSheltered) envDecayMult = 2.2;
+    if (k === 'energy' && isRaining && !env?.isSheltered) envDecayMult = 1.3;
+
+    next[k] = clamp01(needs[k] - BASE_DECAY_PER_MINUTE[k] * w[k] * envDecayMult * minutes);
   }
   return next;
 }
@@ -70,8 +110,8 @@ export function applyEffect(needs: Needs, effect: Partial<Needs>, fraction = 1):
 }
 
 /** Bem-estar ponderado (0..1): quanto mais alto, mais satisfeito o agente está. */
-export function wellbeing(needs: Needs, p: Personality): number {
-  const w = needWeights(p);
+export function wellbeing(needs: Needs, p: Personality, env?: EnvironmentalContext): number {
+  const w = needWeights(p, env);
   let sum = 0;
   let wsum = 0;
   for (const k of NEED_KEYS) {
@@ -81,8 +121,12 @@ export function wellbeing(needs: Needs, p: Personality): number {
   return wsum > 0 ? sum / wsum : 0;
 }
 
-export function mostPressingNeed(needs: Needs, p: Personality): NeedKey {
-  const w = needWeights(p);
+export function mostPressingNeed(
+  needs: Needs,
+  p: Personality,
+  env?: EnvironmentalContext,
+): NeedKey {
+  const w = needWeights(p, env);
   let best: NeedKey = 'energy';
   let bestScore = -Infinity;
   for (const k of NEED_KEYS) {
