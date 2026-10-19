@@ -9,3 +9,4 @@ export * from './src/client';
 export * from './src/repositories/world-state.repository';
 export * from './src/repositories/agent-identity.repository';
 export * from './src/repositories/experience.repository';
+export * from './src/repositories/agent-mind.repository';

@@ -4,6 +4,7 @@ import {
   WorldStateRepository,
   AgentIdentityRepository,
   ExperienceRepository,
+  AgentMindRepository,
 } from '@cidade-virtual/persistence';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
@@ -38,12 +39,20 @@ export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
       },
       inject: [DATABASE_CONNECTION],
     },
+    {
+      provide: AgentMindRepository,
+      useFactory: (conn: ReturnType<typeof createDatabaseConnection>) => {
+        return new AgentMindRepository(conn.db);
+      },
+      inject: [DATABASE_CONNECTION],
+    },
   ],
   exports: [
     DATABASE_CONNECTION,
     WorldStateRepository,
     AgentIdentityRepository,
     ExperienceRepository,
+    AgentMindRepository,
   ],
 })
 export class PersistenceModule implements OnModuleDestroy {

@@ -4,7 +4,11 @@ import { AutonomousSimulationService } from './simulation.service';
 import type { WorldGateway } from '../../gateways/world.gateway';
 import type { CognitionService } from '../cognition/cognition.service';
 import type { WorldService } from '../world/world.service';
-import type { AgentIdentityRepository, ExperienceRepository } from '@cidade-virtual/persistence';
+import type {
+  AgentIdentityRepository,
+  ExperienceRepository,
+  AgentMindRepository,
+} from '@cidade-virtual/persistence';
 
 describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
   let service: AutonomousSimulationService;
@@ -27,6 +31,12 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
   };
   let mockExpRepo: {
     record: ReturnType<typeof vi.fn>;
+  };
+  let mockAgentMindRepo: {
+    listAll: ReturnType<typeof vi.fn>;
+    saveAll: ReturnType<typeof vi.fn>;
+    deleteByAgentId: ReturnType<typeof vi.fn>;
+    deleteAll: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -61,6 +71,13 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
       record: vi.fn().mockResolvedValue({ id: 'exp-1' }),
     };
 
+    mockAgentMindRepo = {
+      listAll: vi.fn().mockResolvedValue([]),
+      saveAll: vi.fn().mockResolvedValue(undefined),
+      deleteByAgentId: vi.fn().mockResolvedValue(true),
+      deleteAll: vi.fn().mockResolvedValue(undefined),
+    };
+
     service = new AutonomousSimulationService(
       mockWorldGateway as unknown as WorldGateway,
       mockCognitionService as unknown as CognitionService,
@@ -68,11 +85,12 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
       undefined,
       mockAgentRepo as unknown as AgentIdentityRepository,
       mockExpRepo as unknown as ExperienceRepository,
+      mockAgentMindRepo as unknown as AgentMindRepository,
     );
   });
 
-  afterEach(() => {
-    service.onModuleDestroy();
+  afterEach(async () => {
+    await service.onModuleDestroy();
     vi.useRealTimers();
   });
 
@@ -145,9 +163,54 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     expect(speechCalls.length).toBe(0);
   });
 
-  it('deve encerrar o timer de heartbeat no onModuleDestroy', async () => {
+  it('deve encerrar timers e persistir todas as mentes no onModuleDestroy', async () => {
     await service.onModuleInit();
-    service.onModuleDestroy();
-    expect(true).toBe(true);
+    await service.onModuleDestroy();
+
+    expect(mockAgentMindRepo.saveAll).toHaveBeenCalled();
+  });
+
+  it('deve restaurar o estado hedônico e necessidades a partir do banco de dados no onModuleInit', async () => {
+    mockAgentMindRepo.listAll.mockResolvedValue([
+      {
+        agentId: 'agent-vega',
+        needs: { energy: 0.35, hunger: 0.8, social: 0.9, curiosity: 0.2, fun: 0.4 },
+        memory: {
+          lastVisitedAt: { 'cafe-bistro': 123456 },
+          visitCounts: { 'cafe-bistro': 4 },
+          placePreferences: { 'cafe-bistro': 0.75, 'market-central': -0.2 },
+          actorAffinity: { 'avatar-daniel': 0.9 },
+        },
+        currentIntention: null,
+        currentActivity: null,
+      },
+    ]);
+
+    await service.onModuleInit();
+
+    const vegaState = service.getAgentStates().get('agent-vega');
+    expect(vegaState).toBeDefined();
+    expect(vegaState?.mind.needs.energy).toBe(0.35);
+    expect(vegaState?.mind.needs.hunger).toBe(0.8);
+    expect(vegaState?.mind.memory.placePreferences?.['cafe-bistro']).toBe(0.75);
+    expect(vegaState?.mind.memory.placePreferences?.['market-central']).toBe(-0.2);
+    expect(vegaState?.mind.memory.actorAffinity?.['avatar-daniel']).toBe(0.9);
+    expect(vegaState?.mind.memory.visitCounts?.['cafe-bistro']).toBe(4);
+  });
+
+  it('deve redefinir a mente do agente para os padrões de nascimento com resetMind', async () => {
+    await service.onModuleInit();
+
+    const vegaState = service.getAgentStates().get('agent-vega');
+    if (vegaState) {
+      vegaState.mind.memory.placePreferences = { 'market-central': 0.99 };
+    }
+
+    await service.resetMind('agent-vega');
+
+    expect(mockAgentMindRepo.deleteByAgentId).toHaveBeenCalledWith('agent-vega');
+    const resetVega = service.getAgentStates().get('agent-vega');
+    expect(resetVega?.mind.memory.placePreferences?.['market-central']).toBeUndefined();
   });
 });
+

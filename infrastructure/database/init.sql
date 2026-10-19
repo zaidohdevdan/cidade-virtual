@@ -58,3 +58,16 @@ CREATE TABLE IF NOT EXISTS shared_knowledge (
 
 CREATE INDEX IF NOT EXISTS idx_agent_exp_agent_id ON agent_experiences(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_exp_occurred_at ON agent_experiences(occurred_at DESC);
+
+-- 5. Mente Subjetiva e Memória Hedônica dos Habitantes (Task-036)
+CREATE TABLE IF NOT EXISTS agent_minds (
+    agent_id VARCHAR(64) PRIMARY KEY REFERENCES agent_identities(id) ON DELETE CASCADE,
+    needs JSONB NOT NULL DEFAULT '{"energy": 1, "hunger": 0, "social": 0.5, "curiosity": 0.5, "fun": 0.5}'::jsonb,
+    memory JSONB NOT NULL DEFAULT '{"lastVisitedAt": {}, "visitCounts": {}, "actorAffinity": {}, "placePreferences": {}, "suggestedTargets": {}}'::jsonb,
+    current_intention JSONB,
+    current_activity JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_minds_updated_at ON agent_minds(updated_at DESC);

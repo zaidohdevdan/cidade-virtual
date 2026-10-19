@@ -93,3 +93,28 @@ export const sharedKnowledgeTable = pgTable('shared_knowledge', {
 
 export type SharedKnowledgeRow = typeof sharedKnowledgeTable.$inferSelect;
 export type NewSharedKnowledgeRow = typeof sharedKnowledgeTable.$inferInsert;
+
+/**
+ * 5. Mente Subjetiva e Memória Hedônica dos Habitantes (Task-036)
+ */
+export const agentMindsTable = pgTable(
+  'agent_minds',
+  {
+    agentId: varchar('agent_id', { length: 64 })
+      .primaryKey()
+      .references(() => agentIdentitiesTable.id, { onDelete: 'cascade' }),
+    needs: jsonb('needs').notNull(),
+    memory: jsonb('memory').notNull(),
+    currentIntention: jsonb('current_intention'),
+    currentActivity: jsonb('current_activity'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_agent_minds_updated_at').on(table.updatedAt.desc()),
+  ]
+);
+
+export type AgentMindRow = typeof agentMindsTable.$inferSelect;
+export type NewAgentMindRow = typeof agentMindsTable.$inferInsert;
+

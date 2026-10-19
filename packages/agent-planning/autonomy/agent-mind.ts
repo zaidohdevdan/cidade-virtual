@@ -36,6 +36,7 @@ export interface AgentMindConfig {
   biography: string;
   personality: Personality;
   initialNeeds?: Needs;
+  initialMemory?: MemoryContext;
   rng?: () => number;
 }
 
@@ -62,13 +63,75 @@ export class AgentMind {
     this.rng = config.rng ?? Math.random;
 
     this.needs = config.initialNeeds ?? createInitialNeeds(this.rng);
-    this.memory = {
-      lastVisitedAt: {},
-      visitCounts: {},
-      actorAffinity: {},
-      placePreferences: {},
-      suggestedTargets: {},
+    this.memory = config.initialMemory
+      ? {
+          lastVisitedAt: { ...(config.initialMemory.lastVisitedAt ?? {}) },
+          visitCounts: { ...(config.initialMemory.visitCounts ?? {}) },
+          actorAffinity: { ...(config.initialMemory.actorAffinity ?? {}) },
+          placePreferences: { ...(config.initialMemory.placePreferences ?? {}) },
+          suggestedTargets: { ...(config.initialMemory.suggestedTargets ?? {}) },
+        }
+      : {
+          lastVisitedAt: {},
+          visitCounts: {},
+          actorAffinity: {},
+          placePreferences: {},
+          suggestedTargets: {},
+        };
+  }
+
+  /**
+   * Serializa o estado psicológico e hedônico completo para persistência relacional (Task-036).
+   */
+  public serializeState(): {
+    agentId: string;
+    needs: Needs;
+    memory: MemoryContext;
+    currentIntention: Intention | null;
+    currentActivity: ActivityState | null;
+  } {
+    return {
+      agentId: this.id,
+      needs: { ...this.needs },
+      memory: {
+        lastVisitedAt: { ...this.memory.lastVisitedAt },
+        visitCounts: { ...this.memory.visitCounts },
+        actorAffinity: { ...(this.memory.actorAffinity ?? {}) },
+        placePreferences: { ...(this.memory.placePreferences ?? {}) },
+        suggestedTargets: { ...(this.memory.suggestedTargets ?? {}) },
+      },
+      currentIntention: this.currentIntention ? JSON.parse(JSON.stringify(this.currentIntention)) : null,
+      currentActivity: this.currentActivity ? JSON.parse(JSON.stringify(this.currentActivity)) : null,
     };
+  }
+
+  /**
+   * Restaura o estado da mente a partir do snapshot persistido no PostgreSQL (Task-036).
+   */
+  public restoreState(state: {
+    needs?: Needs;
+    memory?: MemoryContext;
+    currentIntention?: Intention | null;
+    currentActivity?: ActivityState | null;
+  }): void {
+    if (state.needs) {
+      this.needs = { ...state.needs };
+    }
+    if (state.memory) {
+      this.memory = {
+        lastVisitedAt: { ...(state.memory.lastVisitedAt ?? {}) },
+        visitCounts: { ...(state.memory.visitCounts ?? {}) },
+        actorAffinity: { ...(state.memory.actorAffinity ?? {}) },
+        placePreferences: { ...(state.memory.placePreferences ?? {}) },
+        suggestedTargets: { ...(state.memory.suggestedTargets ?? {}) },
+      };
+    }
+    if (state.currentIntention !== undefined) {
+      this.currentIntention = state.currentIntention;
+    }
+    if (state.currentActivity !== undefined) {
+      this.currentActivity = state.currentActivity;
+    }
   }
 
   /**

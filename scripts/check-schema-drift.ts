@@ -89,6 +89,53 @@ function main() {
     errors.push('schema.ts: índice idx_agent_exp_occurred_at com table.occurredAt.desc() ausente.');
   }
 
+  // 5. Verificar tabela agent_minds (Task-036 — Mente Subjetiva e Memória Hedônica)
+  const expectedMindColumnsSql = [
+    'agent_id',
+    'needs',
+    'memory',
+    'current_intention',
+    'current_activity',
+  ];
+
+  for (const col of expectedMindColumnsSql) {
+    if (!initSql.includes(col)) {
+      errors.push(`init.sql: coluna '${col}' ausente em agent_minds.`);
+    }
+  }
+
+  if (!initSql.includes('idx_agent_minds_updated_at')) {
+    errors.push('init.sql: índice idx_agent_minds_updated_at ausente.');
+  }
+
+  if (!schemaTs.includes('agentMindsTable')) {
+    errors.push('schema.ts: export agentMindsTable ausente.');
+  }
+
+  const expectedDrizzleMindFields = [
+    { field: 'agentId', column: 'agent_id' },
+    { field: 'needs', column: 'needs' },
+    { field: 'memory', column: 'memory' },
+    { field: 'currentIntention', column: 'current_intention' },
+    { field: 'currentActivity', column: 'current_activity' },
+  ];
+
+  for (const item of expectedDrizzleMindFields) {
+    if (!schemaTs.includes(item.field) || !schemaTs.includes(item.column)) {
+      errors.push(`schema.ts: mapeamento '${item.field}' -> '${item.column}' ausente em agentMindsTable.`);
+    }
+  }
+
+  if (!typesTs.includes('interface AgentMindState')) {
+    errors.push('packages/types/index.ts: interface AgentMindState ausente.');
+  }
+  if (!typesTs.includes('interface AgentNeedsState')) {
+    errors.push('packages/types/index.ts: interface AgentNeedsState ausente.');
+  }
+  if (!typesTs.includes('interface AgentMemoryContextState')) {
+    errors.push('packages/types/index.ts: interface AgentMemoryContextState ausente.');
+  }
+
   if (errors.length > 0) {
     console.error('❌ Schema Drift Detectado:');
     for (const err of errors) {

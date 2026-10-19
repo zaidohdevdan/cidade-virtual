@@ -226,3 +226,30 @@ export function createPrincipal(params: {
     metadata: params.metadata,
   };
 }
+
+// ── Contrato de Mente Subjetiva e Memória Hedônica (Task-036) ──
+export interface AgentNeedsState {
+  energy: number;
+  hunger: number;
+  social: number;
+  curiosity: number;
+  fun: number;
+}
+
+export interface AgentMemoryContextState {
+  lastVisitedAt: Record<string, number>;
+  visitCounts: Record<string, number>;
+  actorAffinity?: Record<string, number>;
+  placePreferences?: Record<string, number>;
+  suggestedTargets?: Record<string, number>;
+}
+
+export interface AgentMindState {
+  agentId: string;
+  needs: AgentNeedsState;
+  memory: AgentMemoryContextState;
+  currentIntention?: Record<string, unknown> | null;
+  currentActivity?: Record<string, unknown> | null;
+  createdAt?: string;
+  updatedAt?: string;
+}

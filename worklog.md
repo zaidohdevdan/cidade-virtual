@@ -784,5 +784,43 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **Suíte Completa do Monorepo:** `npm test` — **25 de 25 projetos aprovados (100%)**.
 - **Checagem Estática de Tipos:** `npm run typecheck` — **0 erros em todo o monorepo**.
 
+---
+
+## 2026-10-19 — Task-036: Persistir a Mente Subjetiva (`AgentMind`) e Memória Hedônica no PostgreSQL
+
+### 1. Contexto & Motivação
+- Antes desta entrega, o estado subjetivo dos agentes (`AgentMind`: necessidades biológicas, histórico de visitas `visitCounts`, preferências hedônicas por locais `placePreferences`, afinidade interpessoal `actorAffinity` e intenções ativas) residia exclusivamente na memória RAM do `AutonomousSimulationService`.
+- A cada reinício ou deploy da API, os cidadãos sofriam amnésia hedônica total, perdendo todo o aprendizado de lugares que gostavam ou não gostavam e sua proximidade afetiva construída com o avatar Daniel.
+
+### 2. Implementações Realizadas
+1. **Modelagem de Dados e Sincronismo de Schema (Drizzle ↔ init.sql ↔ types):**
+   - Criada a tabela `agent_minds` em `infrastructure/database/init.sql` com colunas `agent_id` (PK com FK cascade para `agent_identities`), `needs` (JSONB), `memory` (JSONB), `current_intention` (JSONB), `current_activity` (JSONB), `created_at` e `updated_at`.
+   - Adicionado índice temporal `idx_agent_minds_updated_at` sobre `updated_at DESC`.
+   - Mapeada a tabela `agentMindsTable` no Drizzle ORM (`packages/persistence/src/schema.ts`).
+   - Declarados os contratos em `@cidade-virtual/types`: `AgentMindState`, `AgentNeedsState` e `AgentMemoryContextState`.
+   - Script de validação `scripts/check-schema-drift.ts` estendido com o passo 5 para garantir sincronismo 100% estrito e honesto entre SQL, Drizzle e types.
+2. **Repositório Relacional `AgentMindRepository` (`packages/persistence`):**
+   - Implementados métodos `getByAgentId(id)`, `upsert(data)`, `saveAll(rows)`, `deleteByAgentId(id)` e `deleteAll()`.
+   - Registrado e exportado no `PersistenceModule` do NestJS.
+3. **Serialização e Restauração em `AgentMind` (`packages/agent-planning`):**
+   - Adicionado método `serializeState()` gerando snapshot estruturado e imutável.
+   - Adicionado método `restoreState(state)` reconstruindo necessidades e memórias afetivas sem perder o baseline de personalidade Big Five.
+   - Construtor atualizado com suporte a `initialMemory`.
+4. **Ciclo de Vida no `AutonomousSimulationService` (`apps/api`):**
+   - **`onModuleInit()`:** Consulta `agentMindRepo.listAll()` e restaura automaticamente o histórico, preferências e carências de cada cidadão antes do primeiro tick cognitivo. Se não houver snapshot prévio, nasce no baseline de arquétipo.
+   - **Snapshot Periódico:** Timer de 60 segundos gravando o estado de todas as mentes em segundo plano sem bloquear o heartbeat da simulação.
+   - **`onModuleDestroy()`:** Executa `saveAllAgentMinds()` persistindo o estado final no encerramento limpo da API.
+   - **Reset de Desenvolvimento:** Métodos `resetMind(agentId)` e `resetAllMinds()` para recriação limpa de vidas em testes ou depuração.
+
+### 3. Validação de Aceite
+- **Teste de Integração Real:** `tests/integration/agent-mind-persistence.test.ts` — **3 de 3 testes aprovados (100%)** contra o container PostgreSQL 16 real:
+  - Criação de preferências hedônicas, simulação de restart e restauração com precisão de float.
+  - Snapshot em lote de 7 mentes executado em **menos de 2ms** (critério de aceite do marco: $< 50\text{ms}$).
+  - Reset e retorno para o baseline de nascimento validado.
+- **Testes Unitários:** `apps/api/src/modules/simulation/simulation.service.spec.ts` — **6 de 6 testes aprovados**.
+- **Schema Drift:** `npm run check:schema-drift` — **100% sincronizado**.
+- **Suíte Completa:** `npm test` — **25 de 25 projetos aprovados**.
+- **Checagem de Tipos:** `npm run typecheck` — **0 erros de TypeScript em todo o monorepo**.
+
 
 

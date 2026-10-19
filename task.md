@@ -1,11 +1,12 @@
 # TASK.md — Synapse City Engine
 
-> **Backlog consolidado v3.0** (2026-10-18) — substitui a v2.0.
+> **Backlog consolidado v3.1** (2026-10-19) — substitui a v3.0.
 > **Fontes consolidadas:**
 > 1. Backlog original (18 tasks, `Task-001..018`) — IDs e detalhes preservados, prioridades recalibradas;
 > 2. **Auditoria estática independente** (`task-recommended.md`, out/2026) — 18 recomendações P0/P1/P2. Nota: auditoria declarou-se estática (não executou testes/containers) e não conseguiu gravar no GitHub; este arquivo é a consolidação canônica;
 > 3. **Plano de Execução da Onda 1** (`Synapse_City_Plano_Execucao_Onda1.pdf`) — blocos B0-B5, DoD do M0;
-> 4. **Decisões de roadmap out/2026** — 5 pilares de visão (IoT/VR, economia, construção, mobilidade, agentes externos), rota **WebXR-first** e plano de evolução Three.js/R3F (F1-F4).
+> 4. **Decisões de roadmap out/2026** — 5 pilares de visão (IoT/VR, economia, construção, mobilidade, agentes externos), rota **WebXR-first** e plano de evolução Three.js/R3F (F1-F4);
+> 5. **Auditoria de autonomia (2026-10-19, pós-motor A1-A10)** — lente "zero pré-fabricado": pendências para que os agentes decidam sozinhos, aonde ir e o que fazer, via interação com o ambiente e com o avatar (Tasks 036-041, Épico G).
 >
 > Convenção: cada task tem ID, prioridade, esforço, tipo, risco, dependências, escopo e critérios de aceite verificáveis.
 
@@ -42,7 +43,8 @@
 | Drift de schema | `init.sql` tem `related_entity_ids TEXT[]` e índice `occurred_at DESC` que não existem em `schema.ts` |
 
 ### 0.3 Marco vigente
-**M0** — *"O habitante persiste e o mundo emite eventos em tempo real"*, cuja prova é o fluxo de aprendizagem de 7 passos (Task-020). Nada da Onda 2 em diante antes do M0 com evidências.
+**M0 ✅ atingido (2026-10-18)** — o habitante persiste, o mundo emite eventos em tempo real e o fluxo de aprendizagem de 7 passos passa E2E (Task-020). Onda 2 concluída, incluindo o motor de autonomia emergente A1-A10 (`AutonomousSimulationService`, necessidades, affordances, decisor por utilidade, Recast NavMesh, diálogo por proximidade).
+**MA (vigente)** — *"O habitante decide sozinho, aprende sem scripts e sobrevive a restart"*, cuja prova é o hábito emergente E2E (Task-041). Nada das Ondas 4-8 em diante antes do MA com evidências.
 
 ### 0.4 Síntese da auditoria externa → mapeamento de tasks
 
@@ -473,6 +475,124 @@
   - [x] `nx run @cidade-virtual/web-client:build` passa com sucesso.
   - [x] Bootstrap paralelo e duplicação eliminados.
 
+### Épico G — Consolidação da Autonomia Emergente (lente "zero pré-fabricado", out/2026)
+
+> **Contexto:** o motor de autonomia (Fases 1 e 2, A1-A10) está implementado e server-authoritative (`apps/api/src/modules/simulation/simulation.service.ts`, `packages/agent-planning/autonomy`): 5 necessidades moduladas pelo Big Five, affordances sem dono no mundo, decisor por utilidade + LLM, Recast NavMesh WASM, diálogo por proximidade com o avatar e TTS. Este épico fecha as lacunas que impedem a prova **MA**: continuidade da mente, confiança de CI, cérebro único, aprendizado fechado e influência do mundo físico nas decisões.
+
+### Task-036 — Persistir a mente subjetiva (`AgentMind`) sobrevivendo a restarts
+- **Status:** ✅ Concluída (2026-10-19)
+- **Prioridade:** 🔴 Crítica (a "vida" aprendida hoje morre no restart — amnésia hedônica total)
+- **Esforço:** M
+- **Tipo:** `feat`
+- **Risco:** Estrutural
+- **Dependências:** Nenhuma (executada); habilita a Task-041
+- **Descrição:** Implementada persistência relacional do `AgentMind` (necessidades biológicas, histórico de visitas `visitCounts`, preferências hedônicas aprendidas `placePreferences`, afinidade `actorAffinity` e intenções ativas) na tabela `agent_minds` (PostgreSQL/Drizzle). Os dados sobrevivem a restarts da API e deploys, restaurando a personalidade e o histórico aprendido de cada habitante.
+- **Escopo:**
+  - Tabela `agent_minds` (JSONB) no `init.sql` e `schema.ts` (Drizzle) sincronizados com `@cidade-virtual/types` (`AgentMindState`, `AgentNeedsState`, `AgentMemoryContextState`) com `check:schema-drift` 100% verde.
+  - Snapshot automático no shutdown (`onModuleDestroy`) e periódico (60s) sem bloquear o heartbeat do servidor.
+  - Restauração no `onModuleInit` antes do primeiro tick cognitivo; se não houver snapshot salvo, nasce com o baseline de arquétipo (`createInitialNeeds`).
+  - Métodos `resetMind(agentId)` e `resetAllMinds()` para recriação limpa de vidas em desenvolvimento.
+- **Critérios de aceite:**
+  - [x] Teste de integração em `tests/integration/agent-mind-persistence.test.ts`: cria preferências hedônicas, recria a mente (simulando restart) e valida restauração 100% fiel de necessidades e preferências no PostgreSQL real.
+  - [x] `npm run check:schema-drift` alinhado (SQL ↔ Drizzle ↔ types).
+  - [x] Snapshot não adiciona > 50 ms de pausa ao heartbeat (medição real no teste: < 2ms).
+  - [x] Reinício real da API preserva o hábito de um NPC e sobrevive a restarts sem amnésia.
+
+### Task-037 — CI confiável para o motor de autonomia (fim do fake-green)
+- **Status:** ⬜ Pendente
+- **Prioridade:** 🔴 Crítica (o coração do projeto roda sem nenhum gate real)
+- **Esforço:** M
+- **Tipo:** `chore` / `test`
+- **Risco:** Operacional
+- **Dependências:** Nenhuma; habilita Tasks 038-041 (executa parte da Task-016)
+- **Descrição:** O passo de teste do GitHub Actions dura ~5s: `packages/*` — incluindo `agent-planning` (que abriga o motor de autonomia), `world-engine`, `memory` e `llm-adapters` — têm scripts fake ("test ok" via `console.log`), e as suítes `tests/{integration,e2e,unit}` (Postgres/Qdrant/Redis) não pertencem a nenhum projeto Nx, logo não rodam no Actions. Além disso, `.github/workflows/ci.yml` tem o gatilho corrompido desde o scaffold: `branches: ain]` em vez de `[main]`.
+- **Escopo:**
+  - Corrigir o gatilho do `ci.yml` (`branches: [main]`).
+  - Substituir scripts fake por `vitest run` + `tsc --noEmit` nos pacotes do motor (`agent-planning`, `world-engine`, `memory`, `llm-adapters`, `event-system`, `agent-cognition`).
+  - Integrar as suítes da raiz: projeto Nx (`project.json`) para `tests/` **ou** job dedicado no workflow com `npx vitest run` + containers de serviço (Postgres 5433, Qdrant 6333, Redis 6379) no runner.
+  - Gate de cobertura inicial (≥ 50% statements) nos pacotes do motor, integrado ao mecanismo de gates da Task-019.
+- **Critérios de aceite:**
+  - [ ] Push em `main` dispara o CI (filtro corrigido, com evidência no Actions).
+  - [ ] `agent-planning`, `world-engine`, `memory` e `llm-adapters` executam testes reais no Actions (specs existentes: `autonomy.spec.ts`, `navigation.service.spec.ts`, `llm-adapters.spec.ts`, `speech-synth.spec.ts`...).
+  - [ ] Job de integração sobe Postgres/Qdrant/Redis e roda `tests/integration` + `tests/e2e` no runner.
+  - [ ] CI reprova se um pacote do motor regredir (demonstrar com regressão proposital revertida).
+
+### Task-038 — Cérebro único: aposentar a política por palavra-chave
+- **Status:** ⬜ Pendente
+- **Prioridade:** 🟠 Alta (resíduo do comportamento pré-fixado que o objetivo do projeto proíbe)
+- **Esforço:** S
+- **Tipo:** `refactor`
+- **Risco:** Estrutural
+- **Dependências:** Task-037 (rede de segurança antes do refactor)
+- **Descrição:** `packages/agent-cognition` mantém o caminho legado `interpretSituation` (keyword-matching de `'caminha'/'rotina'/'patrulha'` → ação enlatada `routine_navigation`/`ROUTINE_POLICY`) em paralelo ao `AgentMind`/`utility-decider`. Dois cérebros coexistindo = risco de decisão divergente e violação do princípio zero pré-fabricado.
+- **Escopo:**
+  - `CognitionService` passa a orquestrar exclusivamente `AgentMind.decideNextIntention` (+ `llm-deliberator`).
+  - `CognitiveCycleManager` é aposentado ou reduzido a instrumentação/auditoria do ciclo — sem gerar decisões.
+  - Migração dos testes `cognition.service.spec.ts` para o contrato novo.
+- **Critérios de aceite:**
+  - [ ] `rg "includes\('caminha'|ROUTINE_POLICY|routine_navigation"` retorna 0 em caminhos de decisão.
+  - [ ] 100% das ações auditadas em produção têm `reasonCode` de utilidade (`UTILITY_*`) ou `LLM_*`.
+  - [ ] Suíte completa verde após a migração.
+
+### Task-039 — Loop de aprendizado fechado: memória semântica → utilidade + transmissão social
+- **Status:** ⬜ Pendente
+- **Prioridade:** 🟠 Alta
+- **Esforço:** M
+- **Tipo:** `feat`
+- **Risco:** Estrutural
+- **Dependências:** Task-036 (mente persistida), Task-038 (cérebro único)
+- **Descrição:** Hoje o decisor usa contadores in-memory (`MemoryContext`) e a memória semântica do Qdrant só informa o ciclo legado. Fechar o circuito: experiências consolidadas viram viés de utilidade e aprendizados se espalham entre habitantes (cultura emergente).
+- **Escopo:**
+  - Alimentar `placePreferences`/scores do `utility-decider` a partir de experiências consolidadas (Postgres/Qdrant), com decaimento temporal.
+  - Transmissão social NPC→NPC: ao `socialize`, agentes trocam preferências/informações com fator 0,85 por salto (decaimento por geração — Dossiê Técnico, proposta P6).
+  - Manter o fluxo de ensino do avatar (7 passos, Task-020) funcionando sobre o mesmo mecanismo.
+- **Critérios de aceite:**
+  - [ ] Teste de integração: NPC A com experiência ruim em X transmite viés negativo ao NPC B numa conversa (B evita X por N ticks).
+  - [ ] Teste unitário: preferência transmitida decai 0,85 por salto e arrefece com o tempo.
+  - [ ] `utility-decider` consome preferências vindas da persistência, não só contadores voláteis.
+  - [ ] `tests/e2e/learning-flow.test.ts` continua verde.
+
+### Task-040 — Mundo que afeta a mente: clima, hora e tráfego no decisor
+- **Status:** ⬜ Pendente
+- **Prioridade:** 🟡 Média
+- **Esforço:** S
+- **Tipo:** `feat`
+- **Risco:** Operacional
+- **Dependências:** Task-038 (cérebro único)
+- **Descrição:** O `Percept` contém entidades e atores; o mundo tem clima, hora do dia e tráfego que ainda não modulam as necessidades. Regras ambientais globais (física do mundo, nunca por agente) devem entrar na utilidade — é a interação com o ambiente pressionando a decisão.
+- **Escopo:**
+  - Estender `Percept` com `weather`, `timeOfDay` e `trafficDensity` (fontes: `WorldService` e posições de veículos no raio de percepção).
+  - Modificadores ambientais globais: chuva → `-fun` e busca por abrigo/interior; noite → `-energia` (prioridade de `rest` sobe); tráfego denso próximo → penalidade de segurança na atividade/rota.
+  - Possível affordance contextual `shelter` ligada a entidades com cobertura.
+- **Critérios de aceite:**
+  - [ ] Sob chuva, agentes preferem entidades com cobertura (teste determinístico com seed).
+  - [ ] De noite, `mostPressingNeed` favorece `rest` (teste unitário).
+  - [ ] Nenhum modificador é específico de agente (regras globais, revisadas em code review).
+
+### Task-041 — Prova MA "Nasce um Hábito" (DoD da autonomia emergente)
+- **Status:** ⬜ Pendente
+- **Prioridade:** 🔴 Crítica (gate da autonomia — análogo à Task-020 para o M0)
+- **Esforço:** M
+- **Tipo:** `test`
+- **Risco:** Estrutural
+- **Dependências:** Task-036, Task-037, Task-038, Task-039
+- **Descrição:** Prova E2E observável de que um habitante decide sozinho, aprende e muda de decisão — sem nenhum script por agente, sobrevivendo a restart. É o gate **MA**: nada das Ondas 4-8 antes dela verde no CI.
+- **Roteiro da prova (`tests/e2e/autonomy-habit.test.ts` + relatório no `worklog.md`):**
+  1. Cidade iniciada; NPC percebe o avatar se aproximando (`Percept` com ator `kind: 'player'`);
+  2. Forma objetivo próprio (necessidades + utilidade; **zero** keyword no trace);
+  3. Planeja ≥ 3 passos (HTN + Recast) e executa com navegação real;
+  4. Registra memória/experiência do resultado;
+  5. Aprende preferência hedônica pelo lugar/ator;
+  6. **Restart** da API — mente restaurada (Task-036);
+  7. A decisão seguinte diverge em favor do aprendido;
+  8. Transmite o aprendizado a outro NPC no `socialize` (Task-039).
+- **Critérios de aceite:**
+  - [ ] E2E verde no CI (job de integração da Task-037).
+  - [ ] Zero ocorrência de `ROUTINE_POLICY` no trace da prova.
+  - [ ] Decisão pós-restart diverge da pré-restart em favor do aprendido (assert determinístico com seed).
+  - [ ] Transmissão social verificada (segundo NPC exibe o viés).
+  - [ ] Marco **MA** registrado como atingido no Mapa de Marcos com data e evidências.
+
 ---
 
 ## 3. Roadmap de Evolução 2026+ — Ondas 3 a 8
@@ -490,7 +610,7 @@
 | 8 | Cidade Aberta (agentes da web) | M7 | 035 |
 
 ### Task-032 — Módulo `dialogue`: conversa por voz com NPCs (Onda 3)
-- **Status:** ⬜ Pendente
+- **Status:** 🔨 Em andamento (parcialmente entregue pela autonomia emergente: TTS Web Speech com 7 perfis de voz, diálogo bidirecional por proximidade e `DialogueModal`; restam ASR/pipeline server-side e memória conversacional persistente)
 - **Prioridade:** 🟡 Média
 - **Esforço:** M
 - **Tipo:** `feat`
@@ -622,12 +742,12 @@
 
 ## 4. Resumo por Prioridade
 
-| Prioridade | Tasks | Esforço Total |
+| Prioridade | Tasks | Situação (v3.1) |
 |---|---|---|
-| 🔴 Crítica | 001, 002, 009, 019, 020 | M + S + XS + S + M ≈ 2,5 semanas |
-| 🟠 Alta | 003, 004, 005, 006, 013, 021, 022 | XS + S + M + S + S + S + M ≈ 3 semanas |
-| 🟡 Média | 007, 008, 010, 014, 015, 016, 023, 024, 025, 026, 027, 028, 032 | ≈ 8-9 semanas |
-| 🟢 Baixa | 011, 012, 017, 018, 029, 030, 031, 033, 034, 035 | ≈ 8 semanas (evolução, gated pelas ondas) |
+| 🔴 Crítica | ✅ 001, 002, 009, 019, 020, 036 · ⬜ **037, 041** | Pendentes ≈ 1,5 semanas (Épico G, gate MA) |
+| 🟠 Alta | ✅ 003, 004, 005, 006, 013, 021, 022, 025, 026B · ⬜ **038, 039** | Pendentes ≈ 1,5 semanas |
+| 🟡 Média | ✅ 007, 008, 010, 014, 015, 023, 024 · ⬜ **016, 028, 032, 040** | Pendentes ≈ 5-6 semanas |
+| 🟢 Baixa | ✅ 011, 012, 018 · ⬜ **017, 026, 027, 029, 030, 031, 033, 034, 035** | Pendentes ≈ 8 semanas (evolução, gated por MA e ondas) |
 
 ## 5. Ordem Sugerida de Execução (Critical Path)
 
@@ -646,8 +766,13 @@ ONDA 2 — Autonomia (após M0)
   Task-022 (segurança) — GATE antes de qualquer exposição externa
   Task-023 ∥ Task-024 (web-client) — paralelos a qualquer momento
 
+FASE A — Consolidação da Autonomia Emergente (Épico G; GATE MA: nada das Ondas 4-8 sem evidências)
+  Task-036 (persistir mente) ∥ Task-037 (CI confiável — fim do fake-green)
+  Task-037 ──► Task-038 (cérebro único) ──► Task-039 (loop aprendizado) ∥ Task-040 (mundo→mente)
+  Task-039 ──► Task-041 (prova MA "Nasce um Hábito")        ⇒ MA
+
 ONDAS 3-8 — Evolução (sequência de dependências, cada onda entrega seu marco)
-  Onda 3: Task-032 (voz)                    após Task-025
+  Onda 3: Task-032 (voz)                    após MA (parcialmente entregue — ver nota na task)
   Onda 4: Task-026 ──► Task-027             ⇒ M3
   Onda 5: Task-028 ──► Task-029             ⇒ M4
   Onda 6: Task-030 ∥ Task-031               ⇒ M5
@@ -662,7 +787,8 @@ TRANSVERSAL
 
 | Marco | Prova observável | Onda | Tasks-chave |
 |---|---|---|---|
-| **M0** | Habitante persiste, o mundo emite eventos em tempo real e o fluxo de aprendizagem de 7 passos passa E2E | 1 | 001, 002, 003, 009, 019, 020, 021 |
+| **M0 ✅** (2026-10-18) | Habitante persiste, o mundo emite eventos em tempo real e o fluxo de aprendizagem de 7 passos passa E2E | 1 | 001, 002, 003, 009, 019, 020, 021 |
+| **MA** | Habitante decide sozinho, aprende sem scripts, sobrevive a restart e transmite o aprendido | A (Épico G) | 036, 037, 038, 039, 040, 041 |
 | M1/M2 | Reservados ao ciclo de ensino avatar→NPC (Dossiê Técnico) | — | — |
 | **M3** | NPCs compram e vendem entre si, com dinheiro que persiste | 4 | 026, 027 |
 | **M4** | Jogador constrói uma loja; fábrica NPC fornece o estoque | 5 | 028, 029 |

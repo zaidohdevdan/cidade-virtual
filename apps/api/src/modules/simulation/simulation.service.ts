@@ -1,7 +1,11 @@
 // apps/api/src/modules/simulation/simulation.service.ts
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional, Inject } from '@nestjs/common';
 import { NavigationService, Vector3Like } from '@cidade-virtual/world-engine';
-import { AgentIdentityRepository, ExperienceRepository } from '@cidade-virtual/persistence';
+import {
+  AgentIdentityRepository,
+  ExperienceRepository,
+  AgentMindRepository,
+} from '@cidade-virtual/persistence';
 import {
   AgentMind,
   SYNAPSE_WORLD_ENTITIES,
@@ -33,6 +37,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
   private readonly logger = new Logger(AutonomousSimulationService.name);
   private navService: NavigationService;
   private heartbeatTimer: NodeJS.Timeout | null = null;
+  private snapshotTimer: NodeJS.Timeout | null = null;
   private agentStates = new Map<string, AutonomousAgentRuntimeState>();
   private activeAgentIndex = 0;
   private isProcessingTick = false;
@@ -44,6 +49,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     @Optional() @Inject(CitizensService) private readonly citizensService?: CitizensService,
     @Optional() @Inject(AgentIdentityRepository) private readonly agentRepo?: AgentIdentityRepository,
     @Optional() @Inject(ExperienceRepository) private readonly expRepo?: ExperienceRepository,
+    @Optional() @Inject(AgentMindRepository) private readonly agentMindRepo?: AgentMindRepository,
   ) {
     this.navService = new NavigationService();
   }
@@ -60,6 +66,21 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     }
 
     // 2. Registra e sincroniza estados dos 7 habitantes autônomos com mentes vivas
+    let savedMindsMap = new Map<string, any>();
+    if (this.agentMindRepo) {
+      try {
+        const savedRows = await this.agentMindRepo.listAll();
+        for (const row of savedRows) {
+          savedMindsMap.set(row.agentId, row);
+        }
+        if (savedRows.length > 0) {
+          this.logger.log(`[Task-036] Recuperadas ${savedRows.length} mentes subjetivas persistidas no PostgreSQL.`);
+        }
+      } catch (err) {
+        this.logger.warn(`[Task-036] Não foi possível carregar mentes do PostgreSQL (usando baseline): ${(err as Error).message}`);
+      }
+    }
+
     for (const citizen of ALL_CITIZENS) {
       const personality = citizen.personality ?? {
         openness: 0.8,
@@ -76,6 +97,18 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         biography: citizen.backstorySeed,
         personality,
       });
+
+      const savedMind = savedMindsMap.get(citizen.id);
+      if (savedMind) {
+        mind.restoreState({
+          needs: savedMind.needs as any,
+          memory: savedMind.memory as any,
+          currentIntention: savedMind.currentIntention as any,
+          currentActivity: savedMind.currentActivity as any,
+        });
+        const prefCount = Object.keys(savedMind.memory?.placePreferences ?? {}).length;
+        this.logger.log(`[AgentMind] Mente de ${citizen.name} (${citizen.id}) restaurada do PostgreSQL (${prefCount} preferências hedônicas).`);
+      }
 
       this.agentStates.set(citizen.id, {
         config: citizen,
@@ -106,7 +139,14 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         });
       }, tickIntervalMs);
 
-      this.logger.log(`Heartbeat da Cidade Virtual ativo (intervalo: ${tickIntervalMs}ms, ${this.agentStates.size} agentes autônomos).`);
+      // Snapshot periódico das mentes a cada 60 segundos (Task-036)
+      this.snapshotTimer = setInterval(() => {
+        this.saveAllAgentMinds().catch((err) => {
+          this.logger.error(`[Task-036] Erro no snapshot periódico de mentes: ${(err as Error).message}`);
+        });
+      }, 60_000);
+
+      this.logger.log(`Heartbeat da Cidade Virtual ativo (intervalo: ${tickIntervalMs}ms, ${this.agentStates.size} agentes autônomos, snapshots a cada 60s).`);
     } else {
       this.logger.log(`Ambiente de testes detectado: Heartbeat em modo controlado.`);
     }
@@ -648,11 +688,80 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     return this.agentStates;
   }
 
-  onModuleDestroy(): void {
+  /**
+   * Salva o snapshot atômico das mentes de todos os agentes no PostgreSQL (Task-036).
+   */
+  async saveAllAgentMinds(): Promise<{ durationMs: number; savedCount: number }> {
+    if (!this.agentMindRepo) return { durationMs: 0, savedCount: 0 };
+
+    const start = Date.now();
+    const rows = Array.from(this.agentStates.values()).map((state) => {
+      const serialized = state.mind.serializeState();
+      return {
+        agentId: serialized.agentId,
+        needs: serialized.needs as any,
+        memory: serialized.memory as any,
+        currentIntention: serialized.currentIntention as any,
+        currentActivity: serialized.currentActivity as any,
+      };
+    });
+
+    await this.agentMindRepo.saveAll(rows);
+    const durationMs = Date.now() - start;
+    this.logger.debug(`[Task-036] Snapshot de ${rows.length} mentes salvo no PostgreSQL em ${durationMs}ms.`);
+    return { durationMs, savedCount: rows.length };
+  }
+
+  /**
+   * Redefine a mente de um agente para as configurações padrão de nascimento (dev/admin reset).
+   */
+  async resetMind(agentId: string): Promise<void> {
+    if (this.agentMindRepo) {
+      await this.agentMindRepo.deleteByAgentId(agentId);
+    }
+    const state = this.agentStates.get(agentId);
+    if (state) {
+      const citizen = state.config;
+      state.mind = new AgentMind({
+        id: citizen.id,
+        name: citizen.name,
+        role: citizen.role,
+        biography: citizen.backstorySeed,
+        personality: citizen.personality ?? {
+          openness: 0.8,
+          conscientiousness: 0.7,
+          extraversion: 0.7,
+          agreeableness: 0.8,
+          neuroticism: 0.25,
+        },
+      });
+      this.logger.log(`[Task-036] Mente do agente ${agentId} redefinida para baseline.`);
+    }
+  }
+
+  /**
+   * Redefine as mentes de todos os agentes para as configurações padrão.
+   */
+  async resetAllMinds(): Promise<void> {
+    if (this.agentMindRepo) {
+      await this.agentMindRepo.deleteAll();
+    }
+    for (const agentId of this.agentStates.keys()) {
+      await this.resetMind(agentId);
+    }
+    this.logger.log(`[Task-036] Todas as mentes dos agentes foram redefinidas para o baseline.`);
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    if (this.snapshotTimer) {
+      clearInterval(this.snapshotTimer);
+      this.snapshotTimer = null;
+    }
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+    await this.saveAllAgentMinds();
     this.logger.log('Motor de simulação autônoma encerrado com sucesso.');
   }
 }
