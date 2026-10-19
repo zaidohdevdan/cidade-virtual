@@ -202,6 +202,55 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **Sincronismo de Schema:** `npm run check:schema-drift` — 100% alinhado entre SQL, Drizzle e Types.
 - **Tipagem Estática:** `npm run typecheck` — 0 erros no monorepo.
 
+---
+
+## 2026-10-18 — Bloco de Segurança: Task-022 (Endurecimento de Segurança para Exposição Pública)
+
+### 1. Contexto & Motivação
+- A superfície da Synapse City necessitava de endurecimento rigoroso para suportar conexões da internet com garantias estritas do OWASP Top 10 e de `mandatory-secure-web-skills`:
+  - Handshake do Socket.IO aberto sem autenticação ou com credenciais estáticas.
+  - CORS permissive (`origin: '*'`).
+  - Ausência de headers defensivos (CSP, anti-clickjacking, no-sniff).
+  - Ausência de rate limiting em rotas HTTP e conexões WS.
+  - Movimentos do avatar aceitos no servidor sem validação física (vulnerável a teletransporte forjado e atravessamento de edifícios).
+
+### 2. Implementações Realizadas
+- **Gestão de Segredos & Criptografia (mandatory-secure-web-skills):**
+  - Implementado `apps/api/src/auth/jwt.util.ts`:
+    - Resolução multi-tiered segura: variável de ambiente `JWT_SECRET` com fallback automático via CSPRNG de 256 bits (`crypto.randomBytes(32)`) e log de alerta explícito `[SECURITY] [WARN] Ephemeral secret generated. Instance-isolated!`.
+    - Assinatura estrita com algoritmo fixo `HS256`, validação compulsória de `exp` e rejeição de algoritmo `none`.
+  - Criado `apps/api/src/auth/auth.controller.ts` e `AuthService`:
+    - Endpoint seguro `POST /auth/guest-token` para o cliente Web obter sessão legítima com papel `guest`.
+    - Endpoint `POST /auth/admin-token` e `GET /auth/me` para autenticação do `Principal`.
+- **Proteção HTTP & CORS:**
+  - Registrado `@fastify/helmet` no Fastify com Content Security Policy restrito, anti-clickjacking (`X-Frame-Options: DENY` e `frame-ancestors: 'none'`) e `X-Content-Type-Options: nosniff`.
+  - Registrado `@fastify/rate-limit` com limite derivado de `OPERATIONAL_LIMITS.maxHttpRequestsPerMinute` (120 req/min).
+  - CORS restrito por allowlist configurável via `CORS_ALLOWED_ORIGINS` (sem wildcard `*`).
+  - Network binding seguro: `127.0.0.1` em desenvolvimento e testes; `0.0.0.0` apenas sob flag de produção.
+- **Endurecimento de WebSockets (`WorldGateway`):**
+  - Middleware no handshake do Socket.IO (`/world` namespace) validando o token JWT. Conexões sem token ou com tokens forjados são rejeitadas com `AUTHENTICATION_FAILED`.
+  - Rate limiting individual por socket derivado de `OPERATIONAL_LIMITS.maxSocketMessagesPerSecond` (30 msgs/s) com alerta auditável `[SECURITY] [AUDIT]`.
+  - Controle de Acesso Baseado em Papéis (RBAC): Comando administrativo de semáforo (`traffic_light:set`) restrito exclusivamente ao papel `admin`. Tentativas por `guest` ou outros papéis são bloqueadas com erro `FORBIDDEN`.
+- **Validação Física Server-Side de Movimentos (`city-colliders.ts`):**
+  - Mapeamento autoritativo de colisores estáticos da cidade (`CITY_STATIC_COLLIDERS`) e limites territoriais (`CITY_BOUNDS`).
+  - Função autoritativa `validateAvatarMovement`:
+    1. Rejeita coordenadas fora dos limites da cidade ($|x| > 65$ ou $|z| > 65$).
+    2. Rejeita ponto de destino dentro de colisor de edifício, mureta, fonte monumental ou obstáculo urbano.
+    3. Rejeita atravessamento de paredes (*wall phasing*) por amostragem ao longo da trajetória.
+    4. Rejeita saltos instantâneos anômalos de teletransporte ($> 20\text{ m}$).
+    5. Rejeita velocidade calculada superior a `OPERATIONAL_LIMITS.maxAvatarSpeedMps` (15 m/s).
+  - Ao detectar violação, o servidor registra log de auditoria `[SECURITY] [AUDIT]` e emite evento `avatar:correction` com rollback para a última posição autorizada, impedindo broadcast de movimentos forjados.
+- **Cliente Web 3D (`App.tsx`):**
+  - Inicialização com handshake autenticado: obtém token em `/auth/guest-token` e envia no `auth: { token }` do Socket.IO.
+  - Listener para eventos de erro e `avatar:correction`.
+- **Documentação de Segurança:**
+  - Elaborado documento completo `docs/security/OWASP_TOP10_CHECKLIST.md` com análise e status de cada item do Top 10 reduzido.
+
+### 3. Validação de Aceite
+- **Suíte de Testes:** `npx vitest run` — **14 arquivos de teste, 57 testes executados e 100% aprovados** (incluindo 17 novos testes em `tests/integration/security.test.ts`).
+- **Verificação de Tipos:** `npm run typecheck` — 0 erros no monorepo.
+- **Sincronismo de Schema:** `npm run check:schema-drift` — 100% síncrono.
+
 
 
 

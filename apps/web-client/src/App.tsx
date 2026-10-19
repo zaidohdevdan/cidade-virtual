@@ -34,59 +34,93 @@ export const App: React.FC = () => {
   const isFirstPerson = useCityStore((s) => s.isFirstPerson);
   const cameraAngleY = useCityStore((s) => s.cameraAngleY);
 
-  // Conexão em tempo real Socket.IO com o namespace autoritativo /world do backend NestJS
+  // Conexão em tempo real Socket.IO autenticada (JWT) com o namespace autoritativo /world (Task-022)
   useEffect(() => {
     let socket: Socket | null = null;
-    try {
-      const serverUrl =
-        window.location.hostname === 'localhost'
-          ? 'http://localhost:3001/world'
-          : `http://${window.location.hostname}:3001/world`;
+    let isMounted = true;
 
-      socket = io(serverUrl, {
-        autoConnect: true,
-        transports: ['websocket', 'polling'],
-      });
-      socketRef.current = socket;
+    async function connectSocket() {
+      try {
+        const host = window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
+        const apiBase = `http://${host}:3001`;
+        const serverUrl = `${apiBase}/world`;
 
-      socket.on('connect', () => {
-        cityStore.setIsConnected(true);
-        console.log('[Socket.IO] Conectado ao servidor autoritativo /world:', socket?.id);
-      });
-
-      socket.on('disconnect', () => {
-        cityStore.setIsConnected(false);
-        console.warn('[Socket.IO] Desconectado do servidor autoritativo.');
-      });
-
-      socket.on('world:state', (state: { trafficLight?: TrafficLightState; timeOfDay?: number | string }) => {
-        if (state.trafficLight) {
-          cityStore.setTrafficLightState(state.trafficLight);
+        // 1. Obtém token JWT de convidado (Guest Principal) via HTTP seguro
+        let token: string | undefined = undefined;
+        try {
+          const res = await fetch(`${apiBase}/auth/guest-token`, { method: 'POST' });
+          if (res.ok) {
+            const data = await res.json();
+            token = data.token;
+          }
+        } catch {
+          console.warn('[Socket.IO] Não foi possível obter guest token via HTTP. Tentando handshake direto...');
         }
-        if (state.timeOfDay !== undefined) {
-          const hour = typeof state.timeOfDay === 'number' ? state.timeOfDay : 12;
-          const tod: 'day' | 'sunset' | 'night' =
-            hour >= 6 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'sunset' : 'night';
-          cityStore.setTimeOfDay(tod);
-        }
-      });
 
-      socket.on('world:event', (event: { name: string; payload: Record<string, unknown> }) => {
-        if (event.name === 'traffic_light.changed' && typeof event.payload?.state === 'string') {
-          cityStore.setTrafficLightState(event.payload.state as TrafficLightState);
-        }
-        if (event.name === 'world.weather.changed' && typeof event.payload?.timeOfDay === 'number') {
-          const hour = event.payload.timeOfDay;
-          const tod: 'day' | 'sunset' | 'night' =
-            hour >= 6 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'sunset' : 'night';
-          cityStore.setTimeOfDay(tod);
-        }
-      });
-    } catch (err) {
-      console.warn('[Socket.IO] Falha na conexão com o servidor autoritativo.');
+        if (!isMounted) return;
+
+        // 2. Conecta ao WebSocket enviando token no auth do handshake
+        socket = io(serverUrl, {
+          autoConnect: true,
+          transports: ['websocket', 'polling'],
+          auth: { token },
+        });
+        socketRef.current = socket;
+
+        socket.on('connect', () => {
+          cityStore.setIsConnected(true);
+          console.log('[Socket.IO] Conectado e autenticado no /world:', socket?.id);
+        });
+
+        socket.on('connect_error', (err) => {
+          console.warn('[Socket.IO] Erro de autenticação no handshake:', err.message);
+        });
+
+        socket.on('disconnect', () => {
+          cityStore.setIsConnected(false);
+          console.warn('[Socket.IO] Desconectado do servidor autoritativo.');
+        });
+
+        socket.on('error', (err: { code?: string; message?: string }) => {
+          console.warn('[Socket.IO] Alerta de segurança do servidor:', err?.code, err?.message);
+        });
+
+        socket.on('avatar:correction', (corr: { x: number; y: number; z: number; reason: string }) => {
+          console.warn('[Socket.IO] Correção server-side de posição aplicada:', corr.reason);
+        });
+
+        socket.on('world:state', (state: { trafficLight?: TrafficLightState; timeOfDay?: number | string }) => {
+          if (state.trafficLight) {
+            cityStore.setTrafficLightState(state.trafficLight);
+          }
+          if (state.timeOfDay !== undefined) {
+            const hour = typeof state.timeOfDay === 'number' ? state.timeOfDay : 12;
+            const tod: 'day' | 'sunset' | 'night' =
+              hour >= 6 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'sunset' : 'night';
+            cityStore.setTimeOfDay(tod);
+          }
+        });
+
+        socket.on('world:event', (event: { name: string; payload: Record<string, unknown> }) => {
+          if (event.name === 'traffic_light.changed' && typeof event.payload?.state === 'string') {
+            cityStore.setTrafficLightState(event.payload.state as TrafficLightState);
+          }
+          if (event.name === 'world.weather.changed' && typeof event.payload?.timeOfDay === 'number') {
+            const hour = event.payload.timeOfDay;
+            const tod: 'day' | 'sunset' | 'night' =
+              hour >= 6 && hour < 17 ? 'day' : hour >= 17 && hour < 20 ? 'sunset' : 'night';
+            cityStore.setTimeOfDay(tod);
+          }
+        });
+      } catch (err) {
+        console.warn('[Socket.IO] Falha na conexão com o servidor autoritativo.');
+      }
     }
 
+    connectSocket();
+
     return () => {
+      isMounted = false;
       socket?.disconnect();
       socketRef.current = null;
     };

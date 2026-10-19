@@ -16,15 +16,44 @@ import type {
   WorldStateEventPayload,
   AvatarPositionPayload,
 } from '@cidade-virtual/types';
+import {
+  OPERATIONAL_LIMITS,
+  validateAvatarMovement,
+  PositionPoint,
+} from '@cidade-virtual/config';
+import { verifyJwtToken } from '../auth/jwt.util';
 
 /**
  * Gateway WebSocket para sincronização em tempo real do estado autoritativo do mundo
- * entre o servidor (apps/api) e todos os clientes conectados (apps/web-client).
+ * com endurecimento completo de segurança (Task-022 / mandatory-secure-web-skills).
  *
- * Alinhado com SKILL.md v2.0.0 Seção 4 e Task-003 / Task-021 do Backlog.
+ * - Whitelist estrita de CORS sem wildcard '*'
+ * - Handshake autenticado via JWT (rejeição de handshake anônimo / token inválido)
+ * - Rate limiting individual de mensagens por socket (OPERATIONAL_LIMITS.maxSocketMessagesPerSecond)
+ * - Validação física server-side de posições (rejeita colisões, pulos anômalos e wall phasing com log [SECURITY] [AUDIT])
+ * - Controle de acesso por papel (RBAC): God Mode reservado exclusivamente para admins
  */
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      const allowedOrigins = (
+        process.env['CORS_ALLOWED_ORIGINS'] ?? 'http://localhost:3000,http://127.0.0.1:3000'
+      )
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean);
+
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS_NOT_ALLOWED: Origem não permitida pela whitelist'), false);
+      }
+    },
+    credentials: true,
+  },
   namespace: '/world',
 })
 export class WorldGateway
@@ -39,13 +68,45 @@ export class WorldGateway
   private currentTrafficLight: TrafficLightSignal = 'green';
   private trafficLightTimer: NodeJS.Timeout | null = null;
 
-  afterInit(_server: Server): void {
-    this.logger.log('WorldGateway inicializado no namespace /world');
+  // Mapas em memória para segurança e validação física server-side
+  private clientMessageCounts = new Map<string, { count: number; windowStart: number }>();
+  private lastKnownPositions = new Map<string, PositionPoint>();
+
+  afterInit(server: Server): void {
+    this.logger.log('WorldGateway inicializado no namespace /world com controles de segurança ativos');
+
+    // Middleware de Autenticação no Handshake do Socket.IO (Task-022)
+    server.use((socket, next) => {
+      const authHeader = socket.handshake.headers['authorization'];
+      const token =
+        socket.handshake.auth?.token ||
+        (typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '') : undefined);
+
+      if (!token) {
+        this.logger.warn(`[SECURITY] [AUDIT] Conexão WS rejeitada: Handshake sem token (socket: ${socket.id})`);
+        return next(new Error('AUTHENTICATION_FAILED: Token não fornecido'));
+      }
+
+      try {
+        const user = verifyJwtToken(token);
+        socket.data.user = user;
+        this.logger.log(
+          `[SECURITY] [AUDIT] Handshake WS autenticado com sucesso para: ${user.userId} (role: ${user.role}, socket: ${socket.id})`,
+        );
+        next();
+      } catch (err: any) {
+        this.logger.warn(
+          `[SECURITY] [AUDIT] Conexão WS rejeitada: Token inválido (${err.message}) (socket: ${socket.id})`,
+        );
+        return next(new Error('AUTHENTICATION_FAILED: Token inválido ou expirado'));
+      }
+    });
+
     this.startAuthoritativeTrafficLightCycle();
   }
 
   handleConnection(client: Socket): void {
-    this.logger.log(`Cliente conectado no /world: ${client.id}`);
+    this.logger.log(`Cliente conectado no /world: ${client.id} (user: ${client.data?.user?.userId ?? 'unknown'})`);
 
     // Envia imediatamente o estado autoritativo atual para o cliente recém-conectado
     client.emit('world:event', {
@@ -56,12 +117,42 @@ export class WorldGateway
 
   handleDisconnect(client: Socket): void {
     this.logger.log(`Cliente desconectado do /world: ${client.id}`);
+    this.clientMessageCounts.delete(client.id);
+    this.lastKnownPositions.delete(client.id);
+  }
+
+  /**
+   * Rate limiting por socket derivado de OPERATIONAL_LIMITS.maxSocketMessagesPerSecond
+   */
+  private checkSocketRateLimit(client: Socket): boolean {
+    const now = Date.now();
+    const windowMs = 1000;
+    const maxPerSec = OPERATIONAL_LIMITS.maxSocketMessagesPerSecond;
+
+    let entry = this.clientMessageCounts.get(client.id);
+    if (!entry || now - entry.windowStart > windowMs) {
+      entry = { count: 1, windowStart: now };
+      this.clientMessageCounts.set(client.id, entry);
+      return true;
+    }
+
+    entry.count++;
+    if (entry.count > maxPerSec) {
+      this.logger.warn(
+        `[SECURITY] [AUDIT] Rate limit de socket excedido para cliente ${client.id} (${entry.count} msgs/s)`,
+      );
+      client.emit('error', {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: `Limite de taxa de mensagens excedido (máximo de ${maxPerSec} msgs/s).`,
+      });
+      return false;
+    }
+    return true;
   }
 
   /**
    * Ciclo Semafórico Autoritativo Server-Side (Padrão DENATRAN em 2 Fases)
    * 8s Verde -> 3s Amarelo -> 8s Vermelho -> repete
-   * Garante que todos os clientes compartilham o mesmo relógio universal.
    */
   private startAuthoritativeTrafficLightCycle(): void {
     const scheduleNext = (state: TrafficLightSignal) => {
@@ -83,13 +174,53 @@ export class WorldGateway
   }
 
   /**
-   * Recebe posição atualizada do avatar do cliente e faz broadcast.
+   * Recebe posição atualizada do avatar do cliente, valida fisicamente no servidor
+   * contra colisores e velocidade, e faz broadcast apenas de movimentos legítimos.
    */
   @SubscribeMessage('avatar:position')
   handleAvatarPosition(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: Omit<AvatarPositionPayload, 'clientId'>,
   ): void {
+    if (!this.checkSocketRateLimit(client)) {
+      return;
+    }
+
+    if (
+      typeof data?.x !== 'number' ||
+      typeof data?.y !== 'number' ||
+      typeof data?.z !== 'number' ||
+      isNaN(data.x) ||
+      isNaN(data.y) ||
+      isNaN(data.z)
+    ) {
+      this.logger.warn(`[SECURITY] [AUDIT] Posição rejeitada por payload numérico inválido de ${client.id}`);
+      return;
+    }
+
+    const prev = this.lastKnownPositions.get(client.id);
+    const now = Date.now();
+    const nextPoint: PositionPoint = { x: data.x, y: data.y, z: data.z, timestamp: now };
+
+    const validation = validateAvatarMovement(prev, nextPoint, now);
+    if (!validation.valid) {
+      this.logger.warn(
+        `[SECURITY] [AUDIT] Movimento forjado ou colisão detectada para cliente ${client.id}: ${validation.reason}`,
+      );
+      if (prev) {
+        client.emit('avatar:correction', {
+          x: prev.x,
+          y: prev.y,
+          z: prev.z,
+          reason: validation.reason,
+        });
+      }
+      return;
+    }
+
+    // Posição válida: atualiza estado do cliente e realiza broadcast
+    this.lastKnownPositions.set(client.id, nextPoint);
+
     client.broadcast.emit('avatar:position', {
       ...data,
       clientId: client.id,
@@ -98,15 +229,30 @@ export class WorldGateway
 
   /**
    * Permite que comandos administrativos (God Mode) alterem o semáforo autoritativamente.
+   * RESTRITO EXCLUSIVAMENTE a usuários com papel 'admin'.
    */
   @SubscribeMessage('traffic_light:set')
   handleSetTrafficLight(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { state: TrafficLightSignal },
   ): void {
+    const user = client.data?.user;
+    if (!user || user.role !== 'admin') {
+      this.logger.warn(
+        `[SECURITY] [AUDIT] Tentativa de comando administrativo [traffic_light:set] por usuário sem permissão: ${user?.userId ?? client.id}`,
+      );
+      client.emit('error', {
+        code: 'FORBIDDEN',
+        message: 'Acesso negado: Requer privilégios de administrador',
+      });
+      return;
+    }
+
     if (data?.state && ['green', 'yellow', 'red'].includes(data.state)) {
       this.currentTrafficLight = data.state;
-      this.logger.log(`[GodMode] Semáforo alterado manualmente por ${client.id} para ${data.state}`);
+      this.logger.log(
+        `[SECURITY] [AUDIT] [GodMode] Semáforo alterado autoritativamente por admin ${user.userId} para ${data.state}`,
+      );
 
       this.broadcastDomainEvent({
         name: 'traffic_light.changed',
@@ -147,5 +293,7 @@ export class WorldGateway
     if (this.trafficLightTimer) {
       clearTimeout(this.trafficLightTimer);
     }
+    this.clientMessageCounts.clear();
+    this.lastKnownPositions.clear();
   }
 }

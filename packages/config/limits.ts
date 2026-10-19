@@ -5,6 +5,9 @@ export const OPERATIONAL_LIMITS = {
   maxToolCallsPerMinute: 100,
   maxLLMCallsPerMinute: 60,
   maxNPCsCreatedPerSession: 50,
+  maxHttpRequestsPerMinute: 120, // Rate limit de requisições HTTP por IP
+  maxSocketMessagesPerSecond: 30, // Rate limit de mensagens WebSocket por socket
+  maxAvatarSpeedMps: 15, // Velocidade máxima tolerada do avatar (15 m/s)
 
   // Cost limits
   maxDailyCostUSD: 50,

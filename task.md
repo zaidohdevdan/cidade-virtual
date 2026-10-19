@@ -187,13 +187,13 @@
   - [x] Teste unitário em `apps/api/src/modules/world/world.service.spec.ts` cobre preservação e override do horário.
 
 ### Task-022 — Endurecimento de segurança para exposição pública
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟠 Alta (P1 da auditoria; **gate obrigatório** antes de qualquer acesso externo — visão inclui acesso remoto via óculos e agentes da web)
 - **Esforço:** M
 - **Tipo:** `feat`
 - **Risco:** Existencial
 - **Dependências:** Nenhuma para o básico; Task-007 para validação de movimento; semeia o `Principal` (Task-025)
-- **Descrição:** A superfície atual não foi desenhada para a internet: WS sem TLS nem auth, CORS por hostname dinâmico, sem rate limit, movimentos aceitos sem validação server-side.
+- **Descrição:** A superfície foi completamente endurecida para exposição segura: Helmet com CSP e anti-clickjacking, CORS por whitelist configurável sem wildcard, rate limiting HTTP e WebSocket derivado de `OPERATIONAL_LIMITS`, autenticação JWT no handshake e endpoints da API, e validação física server-side de movimentação e colisão de avatares com auditoria.
 - **Escopo:**
   - CORS por whitelist em env; `helmet`; WSS atrás de proxy (nginx/caddy) com TLS.
   - Autenticação JWT na API + token no handshake do Socket.IO (primeira peça do `Principal`).
@@ -201,9 +201,9 @@
   - Validação server-side de movimentos (integra com Task-007): posição forjada é rejeitada.
   - Segredos fora do código (`.env` + docker secrets); revisão de endpoints das 8 tools.
 - **Critérios de aceite:**
-  - [ ] Handshake sem token é rejeitado; com token, funciona.
-  - [ ] Posição forjada através de parede é rejeitada pelo servidor.
-  - [ ] Checklist OWASP (top 10 reduzido) documentado e verificado.
+  - [x] Handshake sem token é rejeitado; com token, funciona.
+  - [x] Posição forjada através de parede é rejeitada pelo servidor.
+  - [x] Checklist OWASP (top 10 reduzido) documentado e verificado.
 
 ### Épico C — Ciclo Cognitivo (P1)
 
