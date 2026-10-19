@@ -6,8 +6,8 @@
   "types": "./index.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
-    "lint": "node -e \"console.log('@cidade-virtual/agent-cognition: lint ok')\"",
-    "test": "node -e \"console.log('@cidade-virtual/agent-cognition: test ok')\""
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@cidade-virtual/types": "*",

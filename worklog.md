@@ -946,6 +946,44 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **Build Geral:** `npm run build` — **25 de 25 projetos compilados com sucesso**.
 - **Checagem de Schema Drift:** `npx tsx scripts/check-schema-drift.ts` — **100% sincronizado**.
 
+---
+
+## 2026-10-19 — Task-037: CI Confiável para o Motor de Autonomia (Fim do Fake-Green)
+
+### 1. Resumo Executivo
+- **Objetivo:** Eliminar scripts "fake-green" (`node -e "console.log('... test ok')"`), integrar suítes reais de testes unitários e de integração nos pacotes centrais do motor de autonomia (`packages/agent-planning`, `packages/world-engine`, `packages/memory`, `packages/llm-adapters`, `packages/agent-cognition`, `packages/event-system`), registrar a suíte raiz como projeto oficial Nx (`@cidade-virtual/root-tests` via `tests/project.json`), e atualizar o pipeline do GitHub Actions (`.github/workflows/ci.yml`) com orquestração de containers de banco e mensageria reais (PostgreSQL 16, Qdrant v1.12.1, Redis 7).
+
+### 2. Implementações Realizadas
+1. **Substituição de Scripts Fake nos Pacotes do Motor:**
+   - `packages/agent-planning/package.json`: `"test": "vitest run"`, `"lint": "tsc -p tsconfig.json --noEmit"`.
+   - `packages/world-engine/package.json`: `"test": "vitest run"`, `"lint": "tsc -p tsconfig.json --noEmit"`.
+   - `packages/llm-adapters/package.json`: `"test": "vitest run"`, `"lint": "tsc -p tsconfig.json --noEmit"`.
+   - `packages/memory/package.json`: `"test": "vitest run"`, `"lint": "tsc -p tsconfig.json --noEmit"`.
+   - `packages/agent-cognition/package.json`: `"test": "vitest run"`, `"lint": "tsc -p tsconfig.json --noEmit"`.
+   - `packages/event-system/package.json`: `"test": "vitest run"`, `"lint": "tsc -p tsconfig.json --noEmit"`.
+2. **Novas Suítes Unitárias nos Pacotes:**
+   - `packages/memory/memory.spec.ts`: 11 testes cobrindo geração de embeddings determinísticos (1536 dimensões, normalização L2 euclidiana = 1.0), diferenciação semântica, criação de collection Qdrant (HNSW m=16, Cosine) e busca semântica por similaridade.
+   - `packages/agent-cognition/agent-cognition.spec.ts`: 3 testes validando ciclo deliberativo em grafo (LangGraph StateGraph), deliberação autônoma por utilidade (`UTILITY_EVALUATION`), fallback contextual de regras urbanas, deliberação LLM (`LLM_REASONING`) e emissão de `ActionRequest` assinado com `Principal` do habitante.
+   - `packages/event-system/event-system.spec.ts`: 3 testes cobrindo padronização das 4 filas (`simulation-queue`, `cognition-queue`, `learning-queue`, `dlq-queue`), conexão Redis resiliente com `maxRetriesPerRequest: null`, e políticas de retry exponencial e remoção de jobs completados.
+3. **Integração das Suítes Raiz no Nx:**
+   - Criado `tests/project.json` registrando `@cidade-virtual/root-tests` no monorepo Nx, permitindo execução unificada via `nx test @cidade-virtual/root-tests` e `nx run-many -t test --all` (26 projetos).
+4. **Pipeline GitHub Actions (`.github/workflows/ci.yml`):**
+   - Corrigido gatilho de execução: `push: branches: [main, 'feat/**']` e `pull_request: branches: [main]`.
+   - Adicionado job `validate` executando build, lint e testes unitários de todos os pacotes do motor e web-client sem dependência externa.
+   - Adicionado job `integration-and-e2e` provisionando containers Docker reais via `docker compose -f infrastructure/docker/docker-compose.yml up -d`, aguardando readiness do PostgreSQL, validando paridade de schema Drizzle/SQL/Types e executando a suíte completa de 17 arquivos e 71 testes E2E e de integração.
+
+### 3. Validação e Demonstração do Gate
+- **Teste de Regressão Proposital Honesta:**
+   - Inserida anomalia intencional no cálculo de vetor de `MemoryService` (`vector[0] = 0.0`).
+   - O CI/Nx rejeitou imediatamente: `FAIL memory.spec.ts`, código de saída 1, comprovação de que o gate agora reprova com honestidade.
+   - Regressão revertida com retorno para 100% verde (`vector[0] = 1.0`).
+- **Suítes de Pacotes:** `npx vitest run packages/` — **7 arquivos e 54 testes aprovados (100%)**.
+- **Suíte Geral de Testes:** `npx vitest run tests/` — **17 arquivos e 71 testes aprovados (100%)**.
+- **Monorepo Nx:** `npm test` — **26 de 26 projetos aprovados (100%)**.
+- **Lint Estático Monorepo:** `npm run lint` — **25 de 25 projetos aprovados (100%)**.
+- **Paridade de Schema:** `npm run check:schema-drift` — **100% sincronizado**.
+
+
 
 
 

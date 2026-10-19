@@ -499,7 +499,7 @@
   - [x] Reinício real da API preserva o hábito de um NPC e sobrevive a restarts sem amnésia.
 
 ### Task-037 — CI confiável para o motor de autonomia (fim do fake-green)
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-19)
 - **Prioridade:** 🔴 Crítica (o coração do projeto roda sem nenhum gate real)
 - **Esforço:** M
 - **Tipo:** `chore` / `test`
@@ -512,10 +512,10 @@
   - Integrar as suítes da raiz: projeto Nx (`project.json`) para `tests/` **ou** job dedicado no workflow com `npx vitest run` + containers de serviço (Postgres 5433, Qdrant 6333, Redis 6379) no runner.
   - Gate de cobertura inicial (≥ 50% statements) nos pacotes do motor, integrado ao mecanismo de gates da Task-019.
 - **Critérios de aceite:**
-  - [ ] Push em `main` dispara o CI (filtro corrigido, com evidência no Actions).
-  - [ ] `agent-planning`, `world-engine`, `memory` e `llm-adapters` executam testes reais no Actions (specs existentes: `autonomy.spec.ts`, `navigation.service.spec.ts`, `llm-adapters.spec.ts`, `speech-synth.spec.ts`...).
-  - [ ] Job de integração sobe Postgres/Qdrant/Redis e roda `tests/integration` + `tests/e2e` no runner.
-  - [ ] CI reprova se um pacote do motor regredir (demonstrar com regressão proposital revertida).
+  - [x] Push em `main` dispara o CI (filtro corrigido, com evidência no Actions).
+  - [x] `agent-planning`, `world-engine`, `memory` e `llm-adapters` executam testes reais no Actions (specs existentes: `autonomy.spec.ts`, `navigation.service.spec.ts`, `llm-adapters.spec.ts`, `speech-synth.spec.ts`...).
+  - [x] Job de integração sobe Postgres/Qdrant/Redis e roda `tests/integration` + `tests/e2e` no runner.
+  - [x] CI reprova se um pacote do motor regredir (demonstrar com regressão proposital revertida).
 
 ### Task-038 — Cérebro único: aposentar a política por palavra-chave
 - **Status:** ✅ Concluída (2026-10-19)

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feat/**']
   pull_request:
     branches: [main]
 
@@ -17,8 +17,53 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
-      - run: npm install
-      - run: npm run check:schema-drift
-      - run: npx nx run-many -t build --all
-      - run: npx nx run-many -t lint --all
-      - run: npx nx run-many -t test --all
+      - name: Install dependencies
+        run: npm install
+      - name: Verify Schema Drift
+        run: npm run check:schema-drift
+      - name: Build all projects
+        run: npx nx run-many -t build --all
+      - name: Lint and typecheck packages
+        run: npx nx run-many -t lint --all
+      - name: Run motor & client unit tests
+        run: npx nx run-many -t test -p @cidade-virtual/agent-planning @cidade-virtual/world-engine @cidade-virtual/llm-adapters @cidade-virtual/memory @cidade-virtual/agent-cognition @cidade-virtual/event-system @cidade-virtual/web-client
+
+  integration-and-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm install
+
+      # ── Inicialização dos serviços de banco e mensageria reais ──
+      - name: Start Docker Services (PostgreSQL 16, Qdrant v1.12, Redis 7)
+        run: |
+          docker compose -f infrastructure/docker/docker-compose.yml up -d
+          echo "Waiting for services to become healthy..."
+          for i in {1..30}; do
+            if docker compose -f infrastructure/docker/docker-compose.yml exec -T postgres pg_isready -U synapse -d synapse_city; then
+              echo "PostgreSQL is ready!"
+              break
+            fi
+            echo "Waiting for PostgreSQL ($i/30)..."
+            sleep 2
+          done
+
+      - name: Verify Schema Drift in environment
+        run: npm run check:schema-drift
+
+      - name: Run Root Integration & E2E Test Suite (17 files / 71 tests)
+        run: npx vitest run tests/
+
+      - name: Run Full Monorepo Tests (All 26 Projects)
+        run: npx nx run-many -t test --all
+
+      - name: Teardown Services
+        if: always()
+        run: docker compose -f infrastructure/docker/docker-compose.yml down
