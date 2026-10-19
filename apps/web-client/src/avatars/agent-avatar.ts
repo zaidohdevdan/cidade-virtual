@@ -29,9 +29,12 @@ export class AgentAvatar {
   public label!: HTMLDivElement;
   public speechBubble?: HTMLDivElement;
   public speechTimer: number = 0;
+  public speechText: string = '';
   public targetPosition: THREE.Vector3 | null = null;
   public isWaitingAtCrosswalk: boolean = false;
   public emotionState: string = 'calm';
+  public isNearPlayer: boolean = false;
+  private proximityGreetingCooldown: number = 0;
 
   private leftLeg!: THREE.Mesh;
   private rightLeg!: THREE.Mesh;
@@ -452,6 +455,7 @@ export class AgentAvatar {
    */
   public say(message: string, durationSeconds: number = 4.0): void {
     this.speechTimer = durationSeconds;
+    this.speechText = message;
     if (!this.speechBubble) {
       this.speechBubble = document.createElement('div');
       this.speechBubble.className = 'agent-speech-bubble';
@@ -576,7 +580,12 @@ export class AgentAvatar {
     return false;
   }
 
-  public update(delta: number, colliders: ObstacleCollider[] = [], trafficLightState: string = 'green'): void {
+  public update(
+    delta: number,
+    colliders: ObstacleCollider[] = [],
+    trafficLightState: string = 'green',
+    playerPos?: THREE.Vector3,
+  ): void {
     // Atualiza temporizador do balão de fala
     if (this.speechTimer > 0) {
       this.speechTimer -= delta;
@@ -588,6 +597,56 @@ export class AgentAvatar {
           }
         }, 250);
       }
+    }
+
+    if (this.proximityGreetingCooldown > 0) {
+      this.proximityGreetingCooldown -= delta;
+    }
+
+    // Interação e atenção com o avatar do jogador Daniel em proximidade (≤ 3.5m)
+    if (playerPos) {
+      const distToPlayer = this.position.distanceTo(playerPos);
+      if (distToPlayer <= 3.5) {
+        this.isNearPlayer = true;
+        // Gira suavemente o corpo para encarar o avatar Daniel
+        const dirToPlayer = new THREE.Vector3().subVectors(playerPos, this.position);
+        const targetAngle = Math.atan2(dirToPlayer.x, dirToPlayer.z);
+        const angleDiff = ((targetAngle - this.rotationY + Math.PI) % (Math.PI * 2)) - Math.PI;
+        this.rotationY += angleDiff * Math.min(1, delta * 5);
+        this.mesh.rotation.y = this.rotationY;
+
+        // Desacelera para permitir diálogo presencial
+        this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
+
+        // Saudação espontânea com cooldown de 25s
+        if (this.proximityGreetingCooldown <= 0) {
+          this.proximityGreetingCooldown = 25.0;
+          const greetings: Record<string, string> = {
+            'agent-vega': 'Olá Daniel! Mantenha a atenção na sinalização viária.',
+            'agent-sulafat': 'Olá Daniel! Cuidando da praça hoje? Vamos manter nossa cidade limpa!',
+            'agent-sheliak': 'E aí Daniel! O fluxo de tráfego na Avenida Central tá suave hoje.',
+            'agent-epsilon': 'Saudações, jovem Daniel. É sempre revigorante ver cidadãos conscientes.',
+            'agent-chason': 'E aí Daniel! Bora curtir a praça e dar umas voltas de skate com cuidado!',
+            'agent-aladfar': 'Oi Daniel! Reparou nas cores da cidade refletindo nas vitrines?',
+            'agent-xihe': 'Olá Daniel! Estou conferindo as espécies botânicas dos canteiros.',
+          };
+          this.say(greetings[this.config.id] || `Olá Daniel! Bom dia!`, 5.0);
+        }
+
+        // Se estiver muito próximo (≤ 2.2m), para completamente para conversar
+        if (distToPlayer <= 2.2) {
+          this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
+          this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, delta * 8);
+          this.leftArm.rotation.x = THREE.MathUtils.lerp(this.leftArm.rotation.x, 0, delta * 8);
+          this.rightArm.rotation.x = THREE.MathUtils.lerp(this.rightArm.rotation.x, 0, delta * 8);
+          this.mesh.position.y = 0.04;
+          return;
+        }
+      } else {
+        this.isNearPlayer = false;
+      }
+    } else {
+      this.isNearPlayer = false;
     }
 
     if (this.waitTimer > 0) {

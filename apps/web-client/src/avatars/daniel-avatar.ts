@@ -385,5 +385,94 @@ export class DanielAvatar {
 
     // Animação Contínua da Áurea de Fogo Azul
     this.updateBlueFlameAura(delta);
+
+    // Atualização do temporizador de fala do jogador
+    if (this.speechTimer > 0) {
+      this.speechTimer -= delta;
+      if (this.speechTimer <= 0 && this.speechBubble) {
+        this.speechBubble.style.opacity = '0';
+        setTimeout(() => {
+          if (this.speechTimer <= 0 && this.speechBubble) {
+            this.speechBubble.style.display = 'none';
+          }
+        }, 250);
+      }
+    }
+  }
+
+  public speechBubble?: HTMLDivElement;
+  public speechTimer: number = 0;
+
+  /**
+   * Emite uma fala do jogador visível em balão 3D estilizado com aura azul.
+   */
+  public say(message: string, durationSeconds: number = 4.0): void {
+    if (typeof document === 'undefined') return;
+    this.speechTimer = durationSeconds;
+    if (!this.speechBubble) {
+      this.speechBubble = document.createElement('div');
+      this.speechBubble.className = 'player-speech-bubble';
+      this.speechBubble.style.cssText = `
+        position: absolute;
+        max-width: 240px;
+        padding: 8px 12px;
+        background: rgba(10, 25, 47, 0.92);
+        border: 1.5px solid rgba(0, 229, 255, 0.6);
+        border-radius: 12px;
+        color: #e2f1ff;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        font-size: 11.5px;
+        line-height: 1.35;
+        font-weight: 500;
+        pointer-events: none;
+        transform: translate(-50%, -100%);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(0, 229, 255, 0.3);
+        backdrop-filter: blur(10px);
+        z-index: 106;
+        text-align: center;
+        transition: opacity 0.25s ease;
+      `;
+      document.body.appendChild(this.speechBubble);
+    }
+
+    this.speechBubble.innerHTML = `
+      <div style="font-size: 9px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; color: #38bdf8;">
+        👤 Daniel (Você)
+      </div>
+      <div>${message}</div>
+    `;
+    this.speechBubble.style.opacity = '1';
+    this.speechBubble.style.display = 'block';
+  }
+
+  /**
+   * Projeta a posição 3D do balão de fala do Daniel no plano 2D da tela.
+   */
+  public updateLabel(camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
+    if (!this.speechBubble) return;
+
+    if (this.speechTimer > 0) {
+      const bubblePos = this.position.clone().add(new THREE.Vector3(0, 2.7, 0));
+      bubblePos.project(camera);
+      const w = renderer.domElement.clientWidth;
+      const h = renderer.domElement.clientHeight;
+      const bx = (bubblePos.x * 0.5 + 0.5) * w;
+      const by = (-bubblePos.y * 0.5 + 0.5) * h;
+      if (bubblePos.z < 1) {
+        this.speechBubble.style.display = 'block';
+        this.speechBubble.style.left = `${bx}px`;
+        this.speechBubble.style.top = `${by}px`;
+      } else {
+        this.speechBubble.style.display = 'none';
+      }
+    } else {
+      this.speechBubble.style.display = 'none';
+    }
+  }
+
+  public dispose(): void {
+    if (this.speechBubble?.parentNode) {
+      this.speechBubble.parentNode.removeChild(this.speechBubble);
+    }
   }
 }

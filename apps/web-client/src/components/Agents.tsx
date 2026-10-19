@@ -64,7 +64,7 @@ export const Agents: React.FC<AgentsProps> = ({ agents, vehicles, colliders = []
         });
       }
 
-      agent.update(clampedDelta, agentColliders, trafficLight);
+      agent.update(clampedDelta, agentColliders, trafficLight, playerPos);
       agent.updateLabel(camera, gl);
     }
 

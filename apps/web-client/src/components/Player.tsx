@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { DanielAvatar, MovementInput } from '../avatars/daniel-avatar';
 import { AgentAvatar } from '../avatars/agent-avatar';
 import { InteractiveObject, ObstacleCollider } from '../scenes/city-scene';
@@ -27,6 +27,7 @@ export const Player: React.FC<PlayerProps> = ({
   onTelemetryUpdate,
   onObservationUpdate,
 }) => {
+  const { camera, gl } = useThree();
   const inputRef = useRef<MovementInput>({
     forward: false,
     backward: false,
@@ -159,12 +160,15 @@ export const Player: React.FC<PlayerProps> = ({
       }
     }
 
-    // Atualiza observação apenas quando houver transição de alvo
-    cityStore.setObservation(closest);
-    if (onObservationUpdate) {
-      onObservationUpdate(closest);
-    }
+    // Projeta balão de fala do jogador para tela 2D
+    player.updateLabel(camera, gl);
   });
+
+  useEffect(() => {
+    return () => {
+      player.dispose();
+    };
+  }, [player]);
 
   return <primitive object={player.mesh} />;
 };

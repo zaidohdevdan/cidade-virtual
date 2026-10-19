@@ -15,6 +15,8 @@ interface HUDProps {
   isSnapshotOpen: boolean;
   onCloseSnapshot: () => void;
   snapshotData?: unknown;
+  nearbyAgent?: { id: string; name: string; role: string } | null;
+  onOpenDialogue?: () => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -25,6 +27,8 @@ export const HUD: React.FC<HUDProps> = ({
   isSnapshotOpen,
   onCloseSnapshot,
   snapshotData,
+  nearbyAgent,
+  onOpenDialogue,
 }) => {
   // Subscrições reativas seletivas (só re-renderizam se o valor específico mudar)
   const trafficLightState = useCityStore((s) => s.trafficLightState);
@@ -176,6 +180,9 @@ export const HUD: React.FC<HUDProps> = ({
               <span className="key-badge">Shift</span> Correr
             </div>
             <div>
+              <span className="key-badge">E</span> Conversar
+            </div>
+            <div>
               <span className="key-badge">Drag</span> Câmera
             </div>
             <div>
@@ -231,6 +238,40 @@ export const HUD: React.FC<HUDProps> = ({
           </pre>
         </div>
       </div>
+
+      {/* ▌PROXIMIDADE COM HABITANTE AUTÔNOMO ▌ */}
+      {nearbyAgent && (
+        <div
+          className="dialogue-prompt-card"
+          style={{
+            position: 'absolute',
+            bottom: '100px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92))',
+            border: '1.5px solid rgba(56, 189, 248, 0.7)',
+            borderRadius: '28px',
+            padding: '10px 22px',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(56, 189, 248, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            zIndex: 95,
+            cursor: 'pointer',
+            userSelect: 'none',
+            transition: 'transform 0.15s ease',
+          }}
+          onClick={onOpenDialogue}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateX(-50%) scale(1.03)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateX(-50%) scale(1.0)')}
+          title="Conversar com o habitante"
+        >
+          <span style={{ fontSize: '18px' }}>💬</span>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc' }}>
+            Pressione <span style={{ background: '#0284c7', padding: '2px 8px', borderRadius: '6px', color: '#fff', fontWeight: 700 }}>E</span> ou clique para conversar com <strong>{nearbyAgent.name}</strong> ({nearbyAgent.role})
+          </span>
+        </div>
+      )}
     </>
   );
 };

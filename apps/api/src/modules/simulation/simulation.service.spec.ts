@@ -11,6 +11,8 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
   let mockWorldGateway: {
     getTrafficLightState: ReturnType<typeof vi.fn>;
     broadcastDomainEvent: ReturnType<typeof vi.fn>;
+    setSimulationService?: ReturnType<typeof vi.fn>;
+    getClosestPlayer?: ReturnType<typeof vi.fn>;
   };
   let mockCognitionService: {
     processCycle: ReturnType<typeof vi.fn>;
@@ -31,6 +33,8 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     mockWorldGateway = {
       getTrafficLightState: vi.fn().mockReturnValue('green'),
       broadcastDomainEvent: vi.fn(),
+      setSimulationService: vi.fn(),
+      getClosestPlayer: vi.fn().mockReturnValue(null),
     };
 
     mockCognitionService = {

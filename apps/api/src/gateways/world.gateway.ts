@@ -342,6 +342,81 @@ export class WorldGateway
     };
   }
 
+  private simulationService?: {
+    handlePlayerDialogue(
+      targetAgentId: string,
+      message: string,
+      playerId?: string,
+    ): Promise<{ response: string; agentId: string }>;
+  };
+
+  /**
+   * Conecta a instância do AutonomousSimulationService ao gateway.
+   */
+  setSimulationService(service: {
+    handlePlayerDialogue(
+      targetAgentId: string,
+      message: string,
+      playerId?: string,
+    ): Promise<{ response: string; agentId: string }>;
+  }): void {
+    this.simulationService = service;
+  }
+
+  /**
+   * Retorna a posição do jogador mais próximo a uma coordenada no mundo.
+   */
+  getClosestPlayer(point: { x: number; y: number; z: number }): {
+    id: string;
+    x: number;
+    y: number;
+    z: number;
+    distance: number;
+  } | null {
+    let closest: { id: string; x: number; y: number; z: number; distance: number } | null = null;
+    let minDist = Infinity;
+
+    for (const [id, pos] of this.lastKnownPositions.entries()) {
+      const dx = pos.x - point.x;
+      const dz = pos.z - point.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = { id, x: pos.x, y: pos.y, z: pos.z, distance: dist };
+      }
+    }
+    return closest;
+  }
+
+  /**
+   * Canal bidirecional de conversação entre o jogador (Daniel) e os atores autônomos.
+   */
+  @SubscribeMessage('agent:dialogue')
+  async handlePlayerDialogue(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { targetAgentId: string; message: string },
+  ): Promise<{ success: boolean; response?: string; error?: string }> {
+    if (!this.checkSocketRateLimit(client)) {
+      return { success: false, error: 'Rate limit de mensagens excedido' };
+    }
+
+    if (!data?.targetAgentId || !data?.message) {
+      return { success: false, error: 'targetAgentId e message são obrigatórios' };
+    }
+
+    const playerId = client.data?.user?.userId || client.id;
+    if (this.simulationService) {
+      const res = await this.simulationService.handlePlayerDialogue(
+        data.targetAgentId,
+        data.message,
+        playerId,
+      );
+      return { success: true, response: res.response };
+    }
+
+    return { success: false, error: 'Serviço de simulação autônoma não conectado' };
+  }
+
   /**
    * Retorna o estado atual do semáforo autoritativo.
    */

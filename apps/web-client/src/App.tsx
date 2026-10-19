@@ -14,6 +14,7 @@ import { Agents } from './components/Agents';
 import { Vehicles } from './components/Vehicles';
 import { CameraController } from './components/CameraController';
 import { HUD } from './components/HUD';
+import { DialogueModal, DialogueMessage } from './components/DialogueModal';
 import { cityStore, useCityStore } from './store/city-store';
 
 export const App: React.FC = () => {
@@ -28,11 +29,72 @@ export const App: React.FC = () => {
   const [snapshotData, setSnapshotData] = useState<unknown>(null);
   const socketRef = useRef<Socket | null>(null);
 
+  // Estados do sistema conversacional e de proximidade (Task-026 + Diálogo Bidirecional)
+  const [isDialogueOpen, setIsDialogueOpen] = useState<boolean>(false);
+  const [activeDialogueAgent, setActiveDialogueAgent] = useState<AgentAvatar | null>(null);
+  const [dialogueMessages, setDialogueMessages] = useState<DialogueMessage[]>([]);
+  const [isThinking, setIsThinking] = useState<boolean>(false);
+  const [nearbyAgent, setNearbyAgent] = useState<{ id: string; name: string; role: string } | null>(null);
+
   // Estados do store externo consumidos seletivamente
   const trafficLightState = useCityStore((s) => s.trafficLightState);
   const timeOfDay = useCityStore((s) => s.timeOfDay);
   const isFirstPerson = useCityStore((s) => s.isFirstPerson);
   const cameraAngleY = useCityStore((s) => s.cameraAngleY);
+
+  // Monitora proximidade física entre o avatar Daniel e os habitantes autônomos (raio ≤ 3.5m)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      let closest: AgentAvatar | null = null;
+      let minDistance = 3.5;
+
+      for (const agent of agents) {
+        const dx = agent.position.x - player.position.x;
+        const dz = agent.position.z - player.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist <= minDistance) {
+          minDistance = dist;
+          closest = agent;
+        }
+      }
+
+      if (closest) {
+        setNearbyAgent({
+          id: closest.config.id,
+          name: closest.config.name,
+          role: closest.config.role,
+        });
+      } else {
+        setNearbyAgent(null);
+      }
+    }, 120);
+
+    return () => clearInterval(interval);
+  }, [agents, player]);
+
+  // Transmite periodicamente a posição física autoritativa do avatar Daniel para o servidor via Socket.IO
+  useEffect(() => {
+    let lastSent = 0;
+    let lastPos = { x: 0, y: 0, z: 0 };
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const currentPos = player.position;
+      const distSq = (currentPos.x - lastPos.x) ** 2 + (currentPos.z - lastPos.z) ** 2;
+
+      if ((distSq > 0.05 || now - lastSent > 2000) && socketRef.current?.connected) {
+        socketRef.current.emit('avatar:position', {
+          x: currentPos.x,
+          y: currentPos.y,
+          z: currentPos.z,
+        });
+        lastSent = now;
+        lastPos = { x: currentPos.x, y: currentPos.y, z: currentPos.z };
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [player]);
 
   // Conexão em tempo real Socket.IO autenticada (JWT) com o namespace autoritativo /world (Task-022)
   useEffect(() => {
@@ -169,7 +231,7 @@ export const App: React.FC = () => {
       socket?.disconnect();
       socketRef.current = null;
     };
-  }, []);
+  }, [agents]);
 
   const handleToggleTrafficLight = useCallback(() => {
     const current = cityStore.getState().trafficLightState;
@@ -241,6 +303,115 @@ export const App: React.FC = () => {
     setIsSnapshotOpen(true);
   }, [agents, vehicles, city]);
 
+  // Abertura da interface de diálogo bidirecional com o habitante próximo
+  const handleOpenDialogueForNearbyAgent = useCallback(() => {
+    if (!nearbyAgent) return;
+    const target = agents.find((a) => a.config.id === nearbyAgent.id);
+    if (!target) return;
+
+    setActiveDialogueAgent(target);
+    setIsDialogueOpen(true);
+
+    // Inicializa histórico de conversa com a saudação atual do habitante
+    setDialogueMessages((prev) => {
+      const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const initialGreeting =
+        target.speechText ||
+        `Olá Daniel! Sou ${target.config.name}, atuando como ${target.config.role} em Synapse City. Em que posso colaborar?`;
+
+      return [
+        {
+          id: `greet-${Date.now()}`,
+          sender: 'agent',
+          senderName: target.config.name,
+          text: initialGreeting,
+          time: currentTime,
+        },
+      ];
+    });
+  }, [nearbyAgent, agents]);
+
+  // Escuta tecla 'E' para iniciar diálogo com o habitante no raio de proximidade
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.code === 'KeyE' || e.key === 'e' || e.key === 'E') && !isDialogueOpen && nearbyAgent) {
+        e.preventDefault();
+        handleOpenDialogueForNearbyAgent();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDialogueOpen, nearbyAgent, handleOpenDialogueForNearbyAgent]);
+
+  // Envio de mensagem bidirecional de Daniel para o habitante autônomo
+  const handleSendMessage = useCallback(
+    async (text: string) => {
+      if (!activeDialogueAgent) return;
+
+      const playerMsg: DialogueMessage = {
+        id: `msg-p-${Date.now()}`,
+        sender: 'player',
+        senderName: 'Daniel',
+        text,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+
+      setDialogueMessages((prev) => [...prev, playerMsg]);
+      player.say(text, 5);
+      setIsThinking(true);
+
+      const targetAgentId = activeDialogueAgent.config.id;
+      const targetAgentName = activeDialogueAgent.config.name;
+
+      if (socketRef.current?.connected) {
+        socketRef.current.emit(
+          'agent:dialogue',
+          { targetAgentId, message: text },
+          (ack: { success: boolean; response?: string; error?: string }) => {
+            setIsThinking(false);
+            if (ack && ack.success && ack.response) {
+              const agentMsg: DialogueMessage = {
+                id: `msg-a-${Date.now()}`,
+                sender: 'agent',
+                senderName: targetAgentName,
+                text: ack.response,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              };
+              setDialogueMessages((prev) => [...prev, agentMsg]);
+              activeDialogueAgent.say(ack.response, 6);
+            } else {
+              const fallbackResponse = `Entendido, Daniel. Registrei sua observação e sigo monitorando o fluxo urbano.`;
+              const agentMsg: DialogueMessage = {
+                id: `msg-a-${Date.now()}`,
+                sender: 'agent',
+                senderName: targetAgentName,
+                text: fallbackResponse,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              };
+              setDialogueMessages((prev) => [...prev, agentMsg]);
+              activeDialogueAgent.say(fallbackResponse, 6);
+            }
+          },
+        );
+      } else {
+        setTimeout(() => {
+          setIsThinking(false);
+          const fallback = `Olá Daniel! Estou conectado à rede local de Synapse City. Em que posso auxiliá-lo?`;
+          const agentMsg: DialogueMessage = {
+            id: `msg-a-${Date.now()}`,
+            sender: 'agent',
+            senderName: targetAgentName,
+            text: fallback,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          setDialogueMessages((prev) => [...prev, agentMsg]);
+          activeDialogueAgent.say(fallback, 6);
+        }, 800);
+      }
+    },
+    [activeDialogueAgent, player],
+  );
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
       {/* 3D Canvas via React Three Fiber */}
@@ -288,7 +459,7 @@ export const App: React.FC = () => {
         </Suspense>
       </Canvas>
 
-      {/* HUD Overlay — Controles, Telemetria, Percepção e Legenda */}
+      {/* HUD Overlay — Controles, Telemetria, Percepção e Notificação de Proximidade */}
       <HUD
         agentCount={agents.length}
         onToggleTrafficLight={handleToggleTrafficLight}
@@ -297,7 +468,20 @@ export const App: React.FC = () => {
         isSnapshotOpen={isSnapshotOpen}
         onCloseSnapshot={() => setIsSnapshotOpen(false)}
         snapshotData={snapshotData}
+        nearbyAgent={nearbyAgent}
+        onOpenDialogue={handleOpenDialogueForNearbyAgent}
+      />
+
+      {/* Modal Glassmorphism de Diálogo Bidirecional com Cidadãos Autônomos */}
+      <DialogueModal
+        agent={activeDialogueAgent}
+        isOpen={isDialogueOpen}
+        onClose={() => setIsDialogueOpen(false)}
+        onSendMessage={handleSendMessage}
+        messages={dialogueMessages}
+        isThinking={isThinking}
       />
     </div>
   );
 };
+
