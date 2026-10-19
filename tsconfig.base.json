@@ -35,7 +35,11 @@
       "@cidade-virtual/world-engine": ["packages/world-engine/index.ts"],
       "@cidade-virtual/observability": ["packages/observability/index.ts"],
       "@cidade-virtual/event-system": ["packages/event-system/index.ts"],
-      "@cidade-virtual/event-system/*": ["packages/event-system/*"]
+      "@cidade-virtual/event-system/*": ["packages/event-system/*"],
+      "@cidade-virtual/persistence": ["packages/persistence/index.ts"],
+      "@cidade-virtual/persistence/*": ["packages/persistence/*"],
+      "@cidade-virtual/learning-system": ["packages/learning-system/index.ts"],
+      "@cidade-virtual/learning-system/*": ["packages/learning-system/*"]
     }
   }
 }

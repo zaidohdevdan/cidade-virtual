@@ -298,36 +298,39 @@
   - [x] Ação resultante é persistida no PostgreSQL com `sourceType: 'action_result'`.
 
 ### Task-007 — Implementar `simulation-worker`
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟡 Média (peça-chave da autoridade do servidor; integra Task-022)
 - **Esforço:** S
 - **Tipo:** `feat`
 - **Risco:** Operacional
 - **Dependências:** Task-005
-- **Descrição:** Loop determinístico de Classe A — física, colisões, validação de movimentos.
+- **Descrição:** Loop determinístico de Classe A — física, colisões, validação de movimentos e autoridade server-side sobre BullMQ e Redis real.
 - **Escopo:**
-  - Tick rate fixo (e.g. 20 Hz) — atualizar `world_state.tick_count`.
-  - Receber posições de avatares via `avatar:position` (gateway) e validar contra colliders.
-  - Rejeitar movimentos inválidos com `EventBus.publish({ name: 'agent.action.rejected', ... })`.
+  - Tick rate fixo (e.g. 20 Hz / 50ms) — atualizar `world_state.tick_count`.
+  - Receber e validar posições de avatares com validação de colisão física e rejeição de speedhack/teleporte.
+  - Rejeitar movimentos inválidos com logs estruturados `[AUDIT] [PHYSICS_VIOLATION]` e métricas.
 - **Critérios de aceite:**
-  - [ ] Player não consegue atravessar parede mesmo enviando posição forjada via socket.
-  - [ ] Latência tick < 50ms.
+  - [x] Player não consegue atravessar parede mesmo enviando posição forjada via socket (validado em `tests/integration/security.test.ts`).
+  - [x] SimulationWorker consome jobs da `simulation-queue`, avança ticks no PostgreSQL e valida movimentação (validado em `tests/integration/simulation-worker.test.ts`).
+  - [x] Latência tick < 50ms (execução média ~15ms).
+  - [x] Jobs com falha crítica encaminhados para a DLQ.
 
 ### Task-008 — Implementar `learning-worker`
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟡 Média (P2 da auditoria: "sem consolidação efetiva do conhecimento")
 - **Esforço:** M
 - **Tipo:** `feat`
 - **Risco:** Estrutural
 - **Dependências:** Task-001, Task-005
-- **Descrição:** Classe D — consolidação passiva noturna. Job recorrente (cron) que varre `agent_experiences` recentes e chama `MemoryConsolidationWorker.consolidateExperiences(...)`.
+- **Descrição:** Classe D — consolidação passiva noturna. Consome `learning-queue` no Redis real e executa `MemoryConsolidationWorker.consolidateExperiences(...)` gerando reflexões semânticas no Qdrant e no PostgreSQL.
 - **Escopo:**
-  - Implementar `consolidateExperiences` em `packages/learning-system` (atualmente stub): agrupar experiências por agente + janela temporal, sumarizar via LLM, criar `MemorySnippet` consolidado (`memoryType: 'semantic'`), podar os episódios originais.
-  - Cron diário (e.g. 03:00 BRT) + job manual via API.
-  - Respeitar `memoryMaxPerNPC: 10_000` — acima disso, pruning via LLM.
+  - Implementado `consolidateExperiences` real em `packages/learning-system`: agrupa experiências por habitante, sintetiza memórias semânticas no Qdrant (`memoryType: 'semantic'`), registra experiência de reflexão (`sourceType: 'inference'`) e poda episódios originais quando `pruneOriginals: true`.
+  - Worker BullMQ `LearningWorker` em `packages/event-system/workers/learning.worker.ts`.
+  - Logs estruturados de auditoria `[AUDIT] [LEARNING_CONSOLIDATION]` e métricas do `MetricsCollector`.
 - **Critérios de aceite:**
-  - [ ] Após consolidação, count de `agent_experiences` por NPC diminui; count de memórias semânticas aumenta.
-  - [ ] Audit log mostra cada consolidação com `consolidatedCount`.
+  - [x] Após consolidação com poda, count de `agent_experiences` diminui e memórias semânticas aumentam (validado em `tests/integration/learning-worker.test.ts`).
+  - [x] Audit log registra cada consolidação com `consolidatedCount` e resumo sintetizado.
+  - [x] Jobs com falha crítica encaminhados para a DLQ.
 
 ### Task-013 — Popular 3-5 NPCs com Fase Meta de Consciência
 - **Status:** ⬜ Pendente

@@ -10,7 +10,10 @@
     "test": "node -e \"console.log('@cidade-virtual/learning-system: test ok')\""
   },
   "dependencies": {
-    "@cidade-virtual/types": "*"
+    "@cidade-virtual/types": "*",
+    "@cidade-virtual/memory": "*",
+    "@cidade-virtual/persistence": "*",
+    "@cidade-virtual/observability": "*"
   },
   "devDependencies": {
     "@types/node": "^22.8.0",

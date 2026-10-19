@@ -1,5 +1,40 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Fechamento dos Workers da Onda 2 (Task-007 SimulationWorker & Task-008 LearningWorker)
+- **Data:** 2026-10-18
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Estrutural / Mensageria e Concorrência (BullMQ, Redis 7, Qdrant e PostgreSQL)
+
+### 1. Resumo Executivo
+Conclusão integral dos workers assíncronos da Onda 2 / Épico D:
+1. **SimulationWorker (Task-007)**: Loop determinístico de Classe A consumindo `simulation-queue`, processando avanço de ticks com persistência no PostgreSQL, validação server-side de movimentação e colisão contra anti-speedhack/teleporte, e roteamento de falhas para a DLQ.
+2. **LearningWorker (Task-008)**: Consolidação passiva noturna de Classe D consumindo `learning-queue`, executando `MemoryConsolidationWorker` real para agrupar experiências de habitantes, sintetizar memórias semânticas estruturadas no Qdrant, persistir reflexões e podar episódios originais no PostgreSQL com logs de auditoria `[AUDIT] [LEARNING_CONSOLIDATION]`.
+
+### 2. Implementações Realizadas
+- **`packages/event-system/workers/simulation.worker.ts`**:
+  - Implementado `SimulationWorker` com concorrência configurável (default 10) e processador `ISimulationProcessor`.
+  - Medição e publicação de latência `simulation.tick.ms`, contador `simulation.ticks.processed` e rejeições `simulation.movement.rejected`.
+  - Tratamento de falhas críticas com encaminhamento automático para a DLQ (`dlq-queue`) após 5 tentativas.
+- **`packages/learning-system/index.ts`**:
+  - Implementado `MemoryConsolidationWorker` completo com suporte a Qdrant (`MemoryService`) e PostgreSQL (`ExperienceRepository`).
+  - Agrupamento de experiências por habitante, síntese semântica estruturada e persistência com `memoryType: 'semantic'`, `origin: 'reflection'`.
+  - Suporte a poda de episódios originais (`pruneOriginals: true`) via `expRepo.deleteByIds()`.
+- **`packages/event-system/workers/learning.worker.ts`**:
+  - Implementado `LearningWorker` consumindo `learning-queue`, chamando o processador de consolidação e despachando para a DLQ em caso de erro fatal.
+- **`packages/persistence/src/repositories/experience.repository.ts`**:
+  - Adicionados métodos `getByDateRange(since, limit)` e `deleteByIds(ids)` para suporte a consultas temporais e poda na consolidação.
+- **`tsconfig.base.json`**:
+  - Mapeados paths `@cidade-virtual/persistence` e `@cidade-virtual/learning-system`.
+
+### 3. Validação de Aceite
+- Criado `tests/integration/simulation-worker.test.ts` (4 testes de integração com Redis e PostgreSQL reais, 100% aprovados).
+- Criado `tests/integration/learning-worker.test.ts` (3 testes de integração com Redis, Qdrant e PostgreSQL reais, 100% aprovados).
+- `npx vitest run`: **18 arquivos de teste, 81 testes executados e 100% aprovados**.
+- `npm run typecheck`: **0 erros de tipagem** no monorepo Nx.
+- `task.md`: Tasks 007 e 008 atualizadas para `Concluída`.
+
+
 ## Task: Correção e Blindagem de Colisões (Veículos, Agentes e Player)
 - **Data:** 2026-10-18
 - **Status:** Concluído

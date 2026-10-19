@@ -24,12 +24,18 @@ export interface CognitionJobPayload {
 export interface SimulationJobPayload {
   tick: number;
   deltaMs: number;
+  validateMovement?: {
+    agentId: string;
+    from: { x: number; y: number; z: number };
+    to: { x: number; y: number; z: number };
+  };
   enqueuedAt?: number;
 }
 
 export interface LearningJobPayload {
   agentId?: CitizenId;
   lookbackMinutes?: number;
+  pruneOriginals?: boolean;
   enqueuedAt?: number;
 }
 

@@ -1,4 +1,4 @@
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, gte, inArray } from 'drizzle-orm';
 import { AppDatabase } from '../client';
 import { agentExperiencesTable, AgentExperienceRow, NewAgentExperienceRow } from '../schema';
 
@@ -29,5 +29,23 @@ export class ExperienceRepository {
       .from(agentExperiencesTable)
       .orderBy(desc(agentExperiencesTable.occurredAt))
       .limit(limit);
+  }
+
+  async getByDateRange(since: Date, limit: number = 200): Promise<AgentExperienceRow[]> {
+    return this.db
+      .select()
+      .from(agentExperiencesTable)
+      .where(gte(agentExperiencesTable.occurredAt, since))
+      .orderBy(desc(agentExperiencesTable.occurredAt))
+      .limit(limit);
+  }
+
+  async deleteByIds(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const deleted = await this.db
+      .delete(agentExperiencesTable)
+      .where(inArray(agentExperiencesTable.id, ids))
+      .returning({ id: agentExperiencesTable.id });
+    return deleted.length;
   }
 }

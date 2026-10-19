@@ -21,3 +21,5 @@ export class EventBus {
 
 export * from './queues';
 export * from './workers/cognition.worker';
+export * from './workers/simulation.worker';
+export * from './workers/learning.worker';
