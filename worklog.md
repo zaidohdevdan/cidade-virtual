@@ -1,5 +1,31 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Desvio Ativo de Obstáculos para NPCs e Evasão por Buzina de Automóvel
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Física de Navegação Autônoma, IA Comportamental e Interação Veicular
+
+### 1. Resumo Executivo
+Atendimento pleno à demanda de evasão por buzina de veículos e desvio dinâmico de obstáculos pelos habitantes autônomos (NPCs):
+1. **Desvio Proativo e Preditivo de Obstáculos (`computeAvoidanceSteering`)**:
+   - Implementado algoritmo de sensoriamento preditivo por feixe de sensores (whiskers) em `agent-avatar.ts`.
+   - O habitante projeta sensores de alcance dinâmico (`lookahead = 1.3m a 2.8m`) à frente. Caso detecte um obstáculo (prédio, poste, banco, árvore, veículo dinâmico ou outro cidadão), avalia ângulos alternativos de contorno ($\pm 30^\circ$, $\pm 50^\circ$, $\pm 75^\circ$, $\pm 100^\circ$, $\pm 125^\circ$).
+   - Integrado campo repulsivo contínuo de proximidade para garantir que colisões em quinas e perímetros escorreguem suavemente por deslizamento tangencial sem travar ou penetrar.
+2. **Reação Dinâmica à Buzina de Automóvel (`VehicleHornEvent` & `evadeVehicle`)**:
+   - `VehicleAudioEngine` estendido com barramento pub/sub de eventos acústicos de buzina (`onHorn`, `emitHorn`) integrando posição, vetor direcional, alcance (24m) e ID do veículo.
+   - Os veículos autônomos (`VehicleAgent`) acionam a buzina (`this.honk()`) com prioridade elevada (0.7s) quando pedestres ou o avatar Daniel bloqueiam a faixa de rolamento à frente.
+   - Quando um carro buzina, todo NPC situado na trajetória ou proximidade da via ativa a rotina de fuga (`handleVehicleHorn`):
+     - **Sair da frente:** Move-se lateralmente para fora do eixo de marcha do veículo em direção à calçada.
+     - **Buscar local livre aleatório:** `findFreeRandomLocation` analisa até 24 pontos candidatos no raio seguro de 6m a 16m, rejeitando pistas asfálticas (`isRoadAsphalt === false`), colisões com prédios ou mobília urbana, e mantendo distância de segurança (> 6.5m) do veículo.
+     - **Reação vocal e corrida rápida:** O habitante exclama contextualizadamente (ex: *"Opa! Buzina de carro, saindo da frente!"*), acelera a velocidade para passo de fuga acelerado (`1.65x`), atinge o local livre e descansa brevemente (2.0s) antes de retomar suas rotas.
+3. **Validação de Testes**:
+   - Suíte unitária `agent-avatar.spec.ts` expandida com 2 novos testes específicos de desvio de obstáculos e evasão completa por buzina com saída da pista veicular.
+   - Suíte `apps/web-client`: 8 arquivos de teste e 46 testes aprovados (100% green).
+   - Suíte raiz `tests/`: 22 arquivos e 112 testes aprovados (100% green).
+
+---
+
 ## Task: Refatoração do Chat (Canto Padrão) e Remoção de Balões de Nomes dos NPCs
 - **Data:** 2026-10-19
 - **Status:** Concluído

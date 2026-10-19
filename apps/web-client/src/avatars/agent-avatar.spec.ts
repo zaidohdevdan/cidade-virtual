@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as THREE from 'three';
 import { AgentAvatar, CITY_AGENTS } from './agent-avatar';
 import { speechSynth } from '../audio/speech-synth';
+import { ObstacleCollider } from '../scenes/city-scene';
+import { VehicleHornEvent } from '../vehicles/vehicle-agent';
 
 describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
   let agent: AgentAvatar;
@@ -196,5 +198,75 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
 
     agent.updateLabel(mockCamera, mockRenderer);
     expect(agent.speechBubble.style.display).toBe('none');
+  });
+
+  it('deve desviar proativamente de obstáculos (muro/caixa) à frente usando sensores em leque', () => {
+    // Agente na calçada em (10, 0.19, 10), querendo caminhar no eixo Z para (10, 0.19, 20)
+    agent.position.set(10, 0.19, 10);
+    agent.setTargetPosition({ x: 10, y: 0.19, z: 20 });
+
+    // Obstáculo diretamente no caminho: bloco entre x=[9, 11] e z=[11, 13]
+    const colliders: ObstacleCollider[] = [
+      {
+        type: 'box',
+        minX: 9.0,
+        maxX: 11.0,
+        minZ: 11.0,
+        maxZ: 13.0,
+        name: 'test-building',
+      },
+    ];
+
+    const dirForward = new THREE.Vector3(0, 0, 1);
+    const steer = agent.computeAvoidanceSteering(dirForward, colliders);
+
+    // O vetor de steering deve desviar lateralmente (steer.x != 0), contornando o obstáculo
+    expect(Math.abs(steer.x)).toBeGreaterThan(0.2);
+
+    // Executa múltiplos passos de update e valida que o agente se move sem penetrar no colisor
+    for (let step = 0; step < 15; step++) {
+      agent.update(0.1, colliders, 'red');
+      // Garante que o agente nunca penetrou o interior do obstáculo
+      const isInsideObstacle =
+        agent.position.x > 9.0 - agent.radius &&
+        agent.position.x < 11.0 + agent.radius &&
+        agent.position.z > 11.0 - agent.radius &&
+        agent.position.z < 13.0 + agent.radius;
+      expect(isInsideObstacle).toBe(false);
+    }
+  });
+
+  it('quando um carro buzina à frente, o NPC deve entrar em evasão, sair da frente e buscar local livre aleatório', () => {
+    // Agente no meio da pista da Avenida Central em (0, 0.19, 15)
+    agent.position.set(0, 0.19, 15);
+    expect(agent.isRoadAsphalt(agent.position.x, agent.position.z)).toBe(true);
+
+    // Carro em (0, 0.19, 5) trafegando para o Sul (+Z), buzinando
+    const hornEvent: VehicleHornEvent = {
+      position: new THREE.Vector3(0, 0.19, 5),
+      direction: new THREE.Vector3(0, 0, 1),
+      sourceVehicleId: 'veh-car-1',
+      range: 24.0,
+      timestamp: Date.now(),
+    };
+
+    // Agente recebe a buzina
+    agent.handleVehicleHorn(hornEvent);
+
+    expect(agent.isEvadingVehicle).toBe(true);
+    expect(agent.evasionTarget).not.toBeNull();
+    // O destino livre escolhido deve estar FORA da pista veicular (calçada/praça livre)
+    expect(agent.isRoadAsphalt(agent.evasionTarget!.x, agent.evasionTarget!.z)).toBe(false);
+    // Agente emite balão de alerta
+    expect(agent.speechBubble).toBeDefined();
+    expect(agent.speechBubble?.innerHTML).toMatch(/saindo|veículo|calçada|pista|buzina/i);
+
+    // Simula corrida de evasão até o local seguro
+    for (let i = 0; i < 40 && agent.isEvadingVehicle; i++) {
+      agent.update(0.1, [], 'green');
+    }
+
+    // Após completar a evasão ou aproximar-se do local livre, o agente desobstruiu a pista
+    expect(agent.isRoadAsphalt(agent.position.x, agent.position.z)).toBe(false);
   });
 });

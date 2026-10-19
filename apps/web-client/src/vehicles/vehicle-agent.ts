@@ -80,42 +80,88 @@ interface Perception {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ÁUDIO SINTETIZADO NATIVO (BUZINA AUTOMOTIVA REALISTA VIA WEB AUDIO API)
+// ÁUDIO SINTETIZADO NATIVO E EVENTOS DE BUZINA AUTOMOTIVA (WEB AUDIO API)
 // ─────────────────────────────────────────────────────────────────────────────
-class VehicleAudioEngine {
+export interface VehicleHornEvent {
+  position: THREE.Vector3;
+  direction: THREE.Vector3;
+  sourceVehicleId?: string;
+  range: number;
+  timestamp: number;
+}
+
+export class VehicleAudioEngine {
   private static ctx: AudioContext | null = null;
+  private static hornListeners: Array<(event: VehicleHornEvent) => void> = [];
 
-  public static playHorn(gainVolume = 0.12): void {
+  public static onHorn(listener: (event: VehicleHornEvent) => void): () => void {
+    this.hornListeners.push(listener);
+    return () => {
+      const idx = this.hornListeners.indexOf(listener);
+      if (idx >= 0) this.hornListeners.splice(idx, 1);
+    };
+  }
+
+  public static emitHorn(event: VehicleHornEvent): void {
+    for (const listener of this.hornListeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        console.warn('Erro ao processar listener de buzina:', err);
+      }
+    }
+  }
+
+  public static playHorn(
+    gainVolume = 0.12,
+    position?: THREE.Vector3,
+    direction?: THREE.Vector3,
+    sourceVehicleId?: string,
+    range = 24.0,
+  ): void {
     try {
-      if (!this.ctx) {
+      if (typeof window !== 'undefined') {
         const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        if (!AudioCtx) return;
-        this.ctx = new AudioCtx();
-      }
-      if (this.ctx.state === 'suspended') {
-        this.ctx.resume();
-      }
+        if (!this.ctx && AudioCtx) {
+          this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
 
-      const now = this.ctx.currentTime;
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(gainVolume, now + 0.03);
-      gainNode.gain.setValueAtTime(gainVolume, now + 0.22);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
-      gainNode.connect(this.ctx.destination);
+        if (this.ctx) {
+          const now = this.ctx.currentTime;
+          const gainNode = this.ctx.createGain();
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(gainVolume, now + 0.03);
+          gainNode.gain.setValueAtTime(gainVolume, now + 0.22);
+          gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+          gainNode.connect(this.ctx.destination);
 
-      // Buzina bitonal típica de automóveis (435 Hz + 540 Hz)
-      const freqs = [435, 540];
-      for (const freq of freqs) {
-        const osc = this.ctx.createOscillator();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(freq, now);
-        osc.connect(gainNode);
-        osc.start(now);
-        osc.stop(now + 0.28);
+          // Buzina bitonal típica de automóveis (435 Hz + 540 Hz)
+          const freqs = [435, 540];
+          for (const freq of freqs) {
+            const osc = this.ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, now);
+            osc.connect(gainNode);
+            osc.start(now);
+            osc.stop(now + 0.28);
+          }
+        }
       }
     } catch {
       // Ignora silenciosamente se o browser restringir áudio antes do primeiro clique
+    }
+
+    if (position) {
+      this.emitHorn({
+        position: position.clone(),
+        direction: direction ? direction.clone() : new THREE.Vector3(0, 0, 1),
+        sourceVehicleId,
+        range,
+        timestamp: Date.now(),
+      });
     }
   }
 }
@@ -488,6 +534,15 @@ export class VehicleAgent {
     return this.colliderCache;
   }
 
+  /**
+   * Aciona a buzina do veículo, emitindo o som sintetizado e o alerta acústico
+   * que orienta pedestres e NPCs próximos a saírem da frente da via.
+   */
+  public honk(): void {
+    const fwd = new THREE.Vector3(Math.sin(this.rotationY), 0, Math.cos(this.rotationY));
+    VehicleAudioEngine.playHorn(0.12, this.position, fwd, this.config.id, 24.0);
+  }
+
   // ──────────────────── LOOP PRINCIPAL ────────────────────
   public update(
     delta: number,
@@ -854,8 +909,11 @@ export class VehicleAgent {
       if (this.blockedTimer === 0) this.honked = false;
     }
 
-    if (this.blockedTimer > 1.4 && !this.honked) {
-      VehicleAudioEngine.playHorn(0.12);
+    const isPedestrianAhead = perception.kind === 'pedestrian' || perception.kind === 'player';
+    const hornThreshold = isPedestrianAhead ? 0.7 : 1.4;
+
+    if (this.blockedTimer > hornThreshold && !this.honked) {
+      this.honk();
       this.honked = true;
     }
 
@@ -933,8 +991,11 @@ export class VehicleAgent {
       if (this.blockedTimer === 0) this.honked = false;
     }
 
-    if (this.blockedTimer > 1.4 && !this.honked) {
-      VehicleAudioEngine.playHorn(0.12);
+    const isPedestrianAhead = perception.kind === 'pedestrian' || perception.kind === 'player';
+    const hornThreshold = isPedestrianAhead ? 0.7 : 1.4;
+
+    if (this.blockedTimer > hornThreshold && !this.honked) {
+      this.honk();
       this.honked = true;
     }
 
@@ -1272,7 +1333,7 @@ export class VehicleAgent {
     this.deadlockReverseRemaining = 4.0; // Recua ~4m para abrir ângulo e vão suficiente
     this.deadlockYieldTimer = 0;
     this.path = null; // Cancela qualquer curva travada para recuar em linha reta pela via
-    VehicleAudioEngine.playHorn(0.12); // Toque breve de buzina alertando a manobra
+    this.honk(); // Toque breve de buzina alertando a manobra
   }
 
   private updateDeadlockEscape(
@@ -1541,7 +1602,7 @@ export class VehicleAgent {
     this.bypassSide = this.chooseBypassSide(others, pedestrians, playerPos);
     this.turnSignalState = this.bypassSide;
     this.bypassReverseRemaining = withReverse ? 1.8 : 0;
-    VehicleAudioEngine.playHorn(0.12);
+    this.honk();
 
     if (!withReverse) {
       this.buildBypassArc(this.bypassSide);

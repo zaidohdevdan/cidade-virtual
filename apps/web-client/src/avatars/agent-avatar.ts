@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { ObstacleCollider } from '../scenes/city-scene';
 import { speechSynth } from '../audio/speech-synth';
+import { VehicleAudioEngine, VehicleHornEvent } from '../vehicles/vehicle-agent';
 
 export interface AgentConfig {
   id: string;
@@ -36,6 +37,11 @@ export class AgentAvatar {
   public emotionState: string = 'calm';
   public isNearPlayer: boolean = false;
   public hasReceivedServerTarget: boolean = false;
+  public isEvadingVehicle: boolean = false;
+  public evasionTarget: THREE.Vector3 | null = null;
+  public evasionTimer: number = 0;
+  public lastColliders: ObstacleCollider[] = [];
+  private unsubscribeHorn?: () => void;
   private proximityGreetingCooldown: number = 0;
 
   private leftLeg!: THREE.Mesh;
@@ -59,6 +65,7 @@ export class AgentAvatar {
     if (typeof document !== 'undefined') {
       this.buildLabel();
     }
+    this.unsubscribeHorn = VehicleAudioEngine.onHorn(this.handleVehicleHorn.bind(this));
   }
 
   private buildModel(): void {
@@ -528,9 +535,9 @@ export class AgentAvatar {
   }
 
   /**
-   * Checa se a posição desejada colide com algum obstáculo da cena ou veículo dinâmico
+   * Checa se a posição desejada colide com algum obstáculo da cena ou veículo dinâmico.
    */
-  private checkCollision(targetX: number, targetZ: number, colliders: ObstacleCollider[]): boolean {
+  public checkCollision(targetX: number, targetZ: number, colliders: ObstacleCollider[]): boolean {
     const r = this.radius;
 
     for (const c of colliders) {
@@ -561,12 +568,250 @@ export class AgentAvatar {
     return false;
   }
 
+  /**
+   * Identifica se uma coordenada (x, z) recai sobre a malha asfáltica destinada a veículos.
+   */
+  public isRoadAsphalt(x: number, z: number): boolean {
+    // Avenida Central (Norte-Sul): pista veicular entre x = -6.8 e x = 6.8
+    if (Math.abs(x) < 6.8 && Math.abs(z) < 55) return true;
+    // Rua Transversal (Leste-Oeste): pista veicular entre z = -6.8 e z = 6.8
+    if (Math.abs(z) < 6.8 && Math.abs(x) < 55) return true;
+    // Anel Viário Perimetral (faixas entre ±62m e ±76m)
+    if ((Math.abs(x) >= 61 && Math.abs(x) <= 76) || (Math.abs(z) >= 61 && Math.abs(z) <= 76)) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Encontra um ponto livre e aleatório fora das faixas veiculares para fuga/desvio seguro (Task-026).
+   * Garante que o local escolhido não colida com nenhum obstáculo, não esteja no asfalto veicular
+   * e mantenha distância segura da fonte da buzina.
+   */
+  public findFreeRandomLocation(
+    vehiclePos?: THREE.Vector3,
+    vehicleDir?: THREE.Vector3,
+    colliders: ObstacleCollider[] = [],
+  ): THREE.Vector3 {
+    const vPos = vehiclePos || this.position;
+    const vDir = vehicleDir ? vehicleDir.clone().normalize() : new THREE.Vector3(0, 0, 1);
+    const sideDir = new THREE.Vector3(-vDir.z, 0, vDir.x);
+
+    // Vetor do veículo até o agente para saber de que lado da pista o agente já está
+    const toAgent = this.position.clone().sub(vPos);
+    const preferredSideSign = toAgent.dot(sideDir) >= 0 ? 1 : -1;
+
+    const candidates: THREE.Vector3[] = [];
+
+    // Testa 24 pontos candidatos no entorno do agente (entre 6m e 16m)
+    for (let i = 0; i < 24; i++) {
+      const sideBias = Math.random() < 0.75 ? preferredSideSign : -preferredSideSign;
+      const angle = (Math.random() * 0.8 - 0.4) + (sideBias > 0 ? Math.PI / 2 : -Math.PI / 2);
+      const dist = 6.0 + Math.random() * 9.0;
+
+      const candX = this.position.x + Math.sin(angle) * dist;
+      const candZ = this.position.z + Math.cos(angle) * dist;
+
+      // 1. Deve estar dentro do perímetro urbano
+      if (Math.abs(candX) > 80 || Math.abs(candZ) > 80) continue;
+
+      // 2. Não deve ser pista asfáltica de circulação veicular
+      if (this.isRoadAsphalt(candX, candZ)) continue;
+
+      // 3. Deve manter distância segura do veículo que buzinou
+      const distToVeh = Math.hypot(candX - vPos.x, candZ - vPos.z);
+      if (distToVeh < 6.5) continue;
+
+      // 4. Não deve colidir com obstáculos físicos (prédios, postes, bancos, etc.)
+      if (this.checkCollision(candX, candZ, colliders)) continue;
+
+      candidates.push(new THREE.Vector3(candX, 0.19, candZ));
+    }
+
+    if (candidates.length > 0) {
+      // Retorna aleatoriamente um dos locais livres e seguros validados
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    // Fallback seguro em calçada lateral desobstruída
+    const fallbackX = this.position.x + sideDir.x * (preferredSideSign * 9.0);
+    const fallbackZ = this.position.z + sideDir.z * (preferredSideSign * 9.0);
+    return new THREE.Vector3(fallbackX, 0.19, fallbackZ);
+  }
+
+  /**
+   * Responde ao alerta acústico de buzina de automóvel.
+   * Se o habitante estiver na trajetória do carro ou em proximidade perigosa na via,
+   * sai da frente imediatamente e busca um ponto livre aleatório fora da pista.
+   */
+  public handleVehicleHorn(event: VehicleHornEvent): void {
+    const dist = this.position.distanceTo(event.position);
+    const maxRange = event.range || 24.0;
+    if (dist > maxRange) return;
+
+    // Vetor do veículo até o NPC
+    const toNPC = this.position.clone().sub(event.position);
+    toNPC.y = 0;
+    const fwd = (event.direction || new THREE.Vector3(0, 0, 1)).clone().normalize();
+    fwd.y = 0;
+    const fwdDist = toNPC.dot(fwd);
+
+    // Distância perpendicular em relação ao eixo de marcha do veículo
+    const sideVector = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    const latDist = Math.abs(toNPC.dot(sideVector));
+
+    // Habitante está à frente do carro (-1.5m a 20m com desvio lateral < 6.5m) ou muito próximo (< 10m)
+    const isInPath = fwdDist > -1.5 && fwdDist < 20.0 && latDist < 6.5;
+    const isVeryClose = dist < 10.0;
+
+    if (isInPath || isVeryClose) {
+      this.evadeVehicle(event);
+    }
+  }
+
+  /**
+   * Executa a manobra de fuga/saída da frente do veículo em direção a um local livre aleatório.
+   */
+  public evadeVehicle(event: VehicleHornEvent): void {
+    const safeSpot = this.findFreeRandomLocation(event.position, event.direction, this.lastColliders);
+    this.evasionTarget = safeSpot;
+    this.isEvadingVehicle = true;
+    this.evasionTimer = 6.0;
+    this.waitTimer = 0;
+    this.isWaitingAtCrosswalk = false;
+    this.speed = this.walkSpeed * 1.65; // Acelera o passo para desobstruir a via rapidamente
+
+    // Exclamação vocal contextualizada
+    const phrases = [
+      'Opa! Buzina de carro, saindo da frente!',
+      'Saindo da pista! Calçada é mais segura.',
+      'Cuidado aí! Indo para um ponto livre.',
+      'Eita! Liberando a passagem para o veículo.',
+      'Indo para a calçada, buzina alta!',
+    ];
+    const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+    this.say(phrase, 3.5, true);
+  }
+
+  /**
+   * Calcula a direção ideal de navegação com desvio ativo e preditivo de obstáculos.
+   * Utiliza sensores em feixe (whiskers) de curto e médio alcance combinados com
+   * campos repulsivos de proximidade para contornar suavemente muros, árvores,
+   * veículos dinâmicos, outros cidadãos e obstáculos da cidade.
+   */
+  public computeAvoidanceSteering(dir: THREE.Vector3, colliders: ObstacleCollider[]): THREE.Vector3 {
+    if (colliders.length === 0) return dir.clone();
+
+    const currX = this.position.x;
+    const currZ = this.position.z;
+    const lookahead = Math.max(1.3, Math.min(2.8, this.speed * 1.25));
+
+    // 1. Checa se o vetor direto à frente ou a meio caminho colide com obstáculo
+    const fwdX = currX + dir.x * lookahead;
+    const fwdZ = currZ + dir.z * lookahead;
+    const midX = currX + dir.x * (lookahead * 0.5);
+    const midZ = currZ + dir.z * (lookahead * 0.5);
+
+    const isDirectBlocked = this.checkCollision(fwdX, fwdZ, colliders) || this.checkCollision(midX, midZ, colliders);
+
+    let chosenDir = dir.clone();
+
+    if (isDirectBlocked) {
+      // 2. Sensores em leque (whiskers): testa ângulos alternativos laterais à esquerda e direita
+      // Prioriza desvios de menor desvio angular (30°, 50°, 75°, 100°, 125°, 150°)
+      const angles = [
+        Math.PI * 0.17, -Math.PI * 0.17,
+        Math.PI * 0.28, -Math.PI * 0.28,
+        Math.PI * 0.42, -Math.PI * 0.42,
+        Math.PI * 0.56, -Math.PI * 0.56,
+        Math.PI * 0.70, -Math.PI * 0.70,
+      ];
+
+      let foundClear = false;
+      for (const ang of angles) {
+        const cosA = Math.cos(ang);
+        const sinA = Math.sin(ang);
+        const testX = dir.x * cosA - dir.z * sinA;
+        const testZ = dir.x * sinA + dir.z * cosA;
+
+        const pFwdX = currX + testX * lookahead;
+        const pFwdZ = currZ + testZ * lookahead;
+        const pMidX = currX + testX * (lookahead * 0.5);
+        const pMidZ = currZ + testZ * (lookahead * 0.5);
+
+        if (!this.checkCollision(pFwdX, pFwdZ, colliders) && !this.checkCollision(pMidX, pMidZ, colliders)) {
+          chosenDir = new THREE.Vector3(testX, 0, testZ);
+          foundClear = true;
+          break;
+        }
+      }
+
+      if (!foundClear) {
+        chosenDir = new THREE.Vector3(-dir.z, 0, dir.x); // desvio perpendicular lateral de emergência
+      }
+    }
+
+    // 3. Força repulsiva contínua de proximidade contra obstáculos que estejam muito perto (<= r + 0.65m)
+    let repelX = 0;
+    let repelZ = 0;
+    const repelMargin = this.radius + 0.65;
+    const repelMarginSq = repelMargin * repelMargin;
+
+    for (const c of colliders) {
+      if (c.type === 'box') {
+        if (c.minX === undefined || c.maxX === undefined || c.minZ === undefined || c.maxZ === undefined) continue;
+        const closestX = Math.max(c.minX, Math.min(currX, c.maxX));
+        const closestZ = Math.max(c.minZ, Math.min(currZ, c.maxZ));
+        const dx = currX - closestX;
+        const dz = currZ - closestZ;
+        const distSq = dx * dx + dz * dz;
+        if (distSq < repelMarginSq && distSq > 1e-4) {
+          const d = Math.sqrt(distSq);
+          const force = (repelMargin - d) / repelMargin;
+          repelX += (dx / d) * force;
+          repelZ += (dz / d) * force;
+        }
+      } else if (c.type === 'cylinder') {
+        if (c.cx === undefined || c.cz === undefined || c.radius === undefined) continue;
+        const dx = currX - c.cx;
+        const dz = currZ - c.cz;
+        const distSq = dx * dx + dz * dz;
+        const combined = this.radius + c.radius + 0.45;
+        if (distSq < combined * combined && distSq > 1e-4) {
+          const d = Math.sqrt(distSq);
+          const force = (combined - d) / combined;
+          repelX += (dx / d) * force;
+          repelZ += (dz / d) * force;
+        }
+      }
+    }
+
+    if (repelX !== 0 || repelZ !== 0) {
+      chosenDir.x += repelX * 1.8;
+      chosenDir.z += repelZ * 1.8;
+      chosenDir.normalize();
+    }
+
+    return chosenDir;
+  }
+
   public update(
     delta: number,
     colliders: ObstacleCollider[] = [],
     trafficLightState: string = 'green',
     playerPos?: THREE.Vector3,
   ): void {
+    this.lastColliders = colliders;
+
+    // Se estiver em fuga ativa de veículo, atualiza cronômetro de evasão
+    if (this.isEvadingVehicle) {
+      this.evasionTimer -= delta;
+      if (this.evasionTimer <= 0) {
+        this.isEvadingVehicle = false;
+        this.evasionTarget = null;
+      }
+    }
+
     // Atualiza temporizador do balão de fala
     if (this.speechTimer > 0) {
       this.speechTimer -= delta;
@@ -585,7 +830,8 @@ export class AgentAvatar {
     }
 
     // Interação e atenção com o avatar do jogador Daniel em proximidade (≤ 3.5m)
-    if (playerPos) {
+    // Se o habitante estiver em evasão de buzina, prioriza salvar-se e desobstruir a via
+    if (playerPos && !this.isEvadingVehicle) {
       const distToPlayer = this.position.distanceTo(playerPos);
       if (distToPlayer <= 3.5) {
         this.isNearPlayer = true;
@@ -618,7 +864,6 @@ export class AgentAvatar {
         }
       } else {
         this.isNearPlayer = false;
-        // Se o avatar Daniel estiver longe (> 3.5m), encerra balão e áudio imediatamente
         if (this.speechBubble && (this.speechTimer > 0 || this.speechBubble.style.display !== 'none')) {
           this.speechTimer = 0;
           this.speechBubble.style.opacity = '0';
@@ -628,7 +873,7 @@ export class AgentAvatar {
       }
     } else {
       this.isNearPlayer = false;
-      if (this.speechBubble && (this.speechTimer > 0 || this.speechBubble.style.display !== 'none')) {
+      if (this.speechBubble && (this.speechTimer > 0 || this.speechBubble.style.display !== 'none') && !this.isEvadingVehicle) {
         this.speechTimer = 0;
         this.speechBubble.style.opacity = '0';
         this.speechBubble.style.display = 'none';
@@ -648,9 +893,9 @@ export class AgentAvatar {
     }
 
     // Respeito ao semáforo nas imediações da faixa de pedestres central (|x| < 4.5 e |z| < 6)
+    // A evasão de buzina possui prioridade vital sobre a espera na faixa
     const isNearCrosswalk = Math.abs(this.position.x) < 4.5 && Math.abs(this.position.z) < 6;
-    if (isNearCrosswalk && trafficLightState === 'green') {
-      // Sinal veicular verde = pedestre aguarda na calçada
+    if (!this.isEvadingVehicle && isNearCrosswalk && trafficLightState === 'green') {
       this.isWaitingAtCrosswalk = true;
       this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
       this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
@@ -661,7 +906,7 @@ export class AgentAvatar {
 
     // Se o agente estiver sob controle autoritativo do servidor e não possuir novo destino ativo,
     // ele permanece no local atual realizando sua atividade em repouso ao invés de ciclar rotas locais.
-    if (!this.targetPosition && this.hasReceivedServerTarget) {
+    if (!this.isEvadingVehicle && !this.targetPosition && this.hasReceivedServerTarget) {
       this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
       this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
       this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, delta * 8);
@@ -671,11 +916,18 @@ export class AgentAvatar {
       return;
     }
 
-    // Prioriza destino de navegação recebido do servidor; caso contrário, segue rota local
+    // Prioridade de destino:
+    // 1. Evasão de buzina (sair da frente e buscar local livre)
+    // 2. Destino recebido do servidor
+    // 3. Rota de patrulha local
     let target: THREE.Vector3;
     let isServerTarget = false;
+    let isEvasion = false;
 
-    if (this.targetPosition) {
+    if (this.isEvadingVehicle && this.evasionTarget) {
+      target = this.evasionTarget;
+      isEvasion = true;
+    } else if (this.targetPosition) {
       target = this.targetPosition;
       isServerTarget = true;
     } else {
@@ -683,10 +935,16 @@ export class AgentAvatar {
     }
 
     const flat = new THREE.Vector3(target.x, this.position.y, target.z);
-    const dir = flat.clone().sub(this.position);
-    const dist = dir.length();
+    const toTarget = flat.clone().sub(this.position);
+    const distToTarget = toTarget.length();
 
-    if (dist < 0.5) {
+    if (distToTarget < (isEvasion ? 0.9 : 0.5)) {
+      if (isEvasion) {
+        this.isEvadingVehicle = false;
+        this.evasionTarget = null;
+        this.waitTimer = 2.0; // Pausa no local livre seguro para respirar e observar
+        return;
+      }
       if (isServerTarget) {
         this.targetPosition = null;
         this.waitTimer = 1.0;
@@ -698,65 +956,83 @@ export class AgentAvatar {
       }
     }
 
-    dir.normalize();
-    const targetAngle = Math.atan2(dir.x, dir.z);
+    const dir = toTarget.clone().normalize();
+
+    // Calcula direção com desvio ativo e preditivo de obstáculos
+    const steerDir = this.computeAvoidanceSteering(dir, colliders);
+
+    const targetAngle = Math.atan2(steerDir.x, steerDir.z);
     const angleDiff = ((targetAngle - this.rotationY + Math.PI) % (Math.PI * 2)) - Math.PI;
-    this.rotationY += angleDiff * Math.min(1, delta * 6);
+    this.rotationY += angleDiff * Math.min(1, delta * 7);
     this.mesh.rotation.y = this.rotationY;
 
-    // Deslocamento desejado
+    // Deslocamento dinâmico: velocidade elevada durante evasão
+    const targetSpeed = isEvasion ? this.walkSpeed * 1.65 : this.walkSpeed;
     const step = this.speed * delta;
-    const desiredDx = dir.x * step;
-    const desiredDz = dir.z * step;
+    const desiredDx = steerDir.x * step;
+    const desiredDz = steerDir.z * step;
 
     // Resolução de colisão com deslizamento de superfície (wall-sliding) contra automóveis e obstáculos
     const currX = this.position.x;
     const currZ = this.position.z;
 
     let nextX = currX + desiredDx;
-    if (this.checkCollision(nextX, currZ, colliders)) {
-      nextX = currX;
-    }
-
     let nextZ = currZ + desiredDz;
+
     if (this.checkCollision(nextX, nextZ, colliders)) {
-      nextZ = currZ;
+      // Tenta deslizar no eixo X
+      if (!this.checkCollision(nextX, currZ, colliders)) {
+        nextZ = currZ;
+      } else if (!this.checkCollision(currX, nextZ, colliders)) {
+        // Tenta deslizar no eixo Z
+        nextX = currX;
+      } else {
+        // Tenta deslizamento perpendicular tangencial
+        const perpX1 = -steerDir.z * step;
+        const perpZ1 = steerDir.x * step;
+        const perpX2 = steerDir.z * step;
+        const perpZ2 = -steerDir.x * step;
+
+        if (!this.checkCollision(currX + perpX1, currZ + perpZ1, colliders)) {
+          nextX = currX + perpX1;
+          nextZ = currZ + perpZ1;
+        } else if (!this.checkCollision(currX + perpX2, currZ + perpZ2, colliders)) {
+          nextX = currX + perpX2;
+          nextZ = currZ + perpZ2;
+        } else {
+          nextX = currX;
+          nextZ = currZ;
+        }
+      }
     }
 
-    // Se o agente estiver totalmente obstruído por um veículo ou obstáculo à frente
     const isBlocked = nextX === currX && nextZ === currZ && (desiredDx !== 0 || desiredDz !== 0);
     if (isBlocked) {
       this.blockedObstacleTimer += delta;
-      // Se bloqueado por mais de 0.6s por um veículo parado, contorna lateralmente (desvio tangencial)
-      if (this.blockedObstacleTimer > 0.6) {
-        const perpX = -dir.z * step * 0.9;
-        const perpZ = dir.x * step * 0.9;
-        const altX1 = currX + perpX;
-        const altZ1 = currZ + perpZ;
-        const altX2 = currX - perpX;
-        const altZ2 = currZ - perpZ;
-
-        if (!this.checkCollision(altX1, altZ1, colliders)) {
-          this.position.x = altX1;
-          this.position.z = altZ1;
-        } else if (!this.checkCollision(altX2, altZ2, colliders)) {
-          this.position.x = altX2;
-          this.position.z = altZ2;
+      if (this.blockedObstacleTimer > 0.4) {
+        const perpX = -dir.z * step * 1.2;
+        const perpZ = dir.x * step * 1.2;
+        if (!this.checkCollision(currX + perpX, currZ + perpZ, colliders)) {
+          this.position.x = currX + perpX;
+          this.position.z = currZ + perpZ;
+        } else if (!this.checkCollision(currX - perpX, currZ - perpZ, colliders)) {
+          this.position.x = currX - perpX;
+          this.position.z = currZ - perpZ;
         }
       }
-      // Desacelera suavemente enquanto aguarda ou contorna
-      this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
+      this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed * 0.4, delta * 6);
     } else {
       this.blockedObstacleTimer = 0;
-      this.speed = THREE.MathUtils.lerp(this.speed, this.walkSpeed, delta * 6);
+      this.speed = THREE.MathUtils.lerp(this.speed, targetSpeed, delta * 6);
       this.position.x = nextX;
       this.position.z = nextZ;
     }
 
-    // Animação dinâmica de caminhada proporcional à velocidade real
+    // Animação dinâmica de caminhada/corrida proporcional à velocidade real
     if (this.speed > 0.2) {
-      this.walkCycleTime += delta * this.speed * 2;
-      const legAngle = Math.sin(this.walkCycleTime) * 0.55;
+      const freq = isEvasion ? 2.8 : 2.0;
+      this.walkCycleTime += delta * this.speed * freq;
+      const legAngle = Math.sin(this.walkCycleTime) * (isEvasion ? 0.75 : 0.55);
       this.leftLeg.rotation.x = legAngle;
       this.rightLeg.rotation.x = -legAngle;
       this.leftArm.rotation.x = -legAngle * 0.65;
@@ -772,6 +1048,10 @@ export class AgentAvatar {
   }
 
   public dispose(): void {
+    if (this.unsubscribeHorn) {
+      this.unsubscribeHorn();
+      this.unsubscribeHorn = undefined;
+    }
     if (this.label?.parentNode) this.label.parentNode.removeChild(this.label);
     if (this.speechBubble?.parentNode) this.speechBubble.parentNode.removeChild(this.speechBubble);
   }
