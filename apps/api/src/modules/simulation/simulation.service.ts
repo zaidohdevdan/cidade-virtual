@@ -2,14 +2,22 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional, Inject } from '@nestjs/common';
 import { NavigationService, Vector3Like } from '@cidade-virtual/world-engine';
 import { AgentIdentityRepository, ExperienceRepository } from '@cidade-virtual/persistence';
+import {
+  AgentMind,
+  SYNAPSE_WORLD_ENTITIES,
+  distance2D,
+  type Percept,
+  type PerceivedActor,
+} from '@cidade-virtual/agent-planning';
 import { WorldGateway } from '../../gateways/world.gateway';
 import { CognitionService } from '../cognition/cognition.service';
 import { WorldService } from '../world/world.service';
 import { CitizensService } from '../citizens/citizens.service';
-import { SEED_CITIZENS, EXTRA_CITIZENS, ALL_CITIZENS, SeedCitizenConfig } from '../citizens/citizens.seed';
+import { ALL_CITIZENS, SeedCitizenConfig } from '../citizens/citizens.seed';
 
 export interface AutonomousAgentRuntimeState {
   config: SeedCitizenConfig;
+  mind: AgentMind;
   currentPosition: Vector3Like;
   targetDestination: Vector3Like | null;
   waypoints: Vector3Like[];
@@ -19,47 +27,6 @@ export interface AutonomousAgentRuntimeState {
   goalIndex: number;
   isDeliberating: boolean;
 }
-
-/**
- * POIs urbanos canônicos da Rua Central e praça para ancorar destinos deliberativos.
- */
-export const URBAN_DESTINATIONS: Record<string, Vector3Like[]> = {
-  'agent-vega': [
-    { x: -4, y: 0.19, z: -10 },  // Faixa de pedestres oeste
-    { x: 4, y: 0.19, z: -10 },   // Faixa de pedestres leste
-    { x: -4, y: 0.19, z: -25 },  // Calçada sul (posto de vigília)
-  ],
-  'agent-sulafat': [
-    { x: -25, y: 0.19, z: -5 },  // Lixeira municipal e placa ecológica
-    { x: -20, y: 0.19, z: 8 },   // Canteiros e praça central
-    { x: -16, y: 0.19, z: -5 },  // Calçada de pesquisa ambiental
-  ],
-  'agent-sheliak': [
-    { x: 20, y: 0.19, z: -14 },  // Mercado Municipal (inspeção de mobilidade)
-    { x: 8, y: 0.19, z: -10 },   // Totem do semáforo nordeste
-    { x: 22, y: 0.19, z: -6 },   // Circulação viária leste
-  ],
-  'agent-epsilon': [
-    { x: 16, y: 0.19, z: 22 },   // Banco da praça histórica
-    { x: 20, y: 0.19, z: 8 },    // Edifício Norte
-    { x: 8, y: 0.19, z: 12 },    // Alameda de reflexão cívica
-  ],
-  'agent-chason': [
-    { x: 10, y: 0.19, z: 14 },   // Pista de patinação e skate
-    { x: -12, y: 0.19, z: 14 },  // Canteiro central florido
-    { x: 6, y: 0.19, z: 4 },     // Travessia assistida
-  ],
-  'agent-aladfar': [
-    { x: -16, y: 0.19, z: 16 },  // Mural de arte urbana
-    { x: -24, y: 0.19, z: 22 },  // Galeria ao ar livre
-    { x: -18, y: 0.19, z: 8 },   // Pátio da arquitetura
-  ],
-  'agent-xihe': [
-    { x: -10, y: 0.19, z: -20 }, // Corredor botânico oeste
-    { x: -12, y: 0.19, z: -12 }, // Jardins suspensos
-    { x: -8, y: 0.19, z: -28 },  // Canteiro de espécies nativas
-  ],
-};
 
 @Injectable()
 export class AutonomousSimulationService implements OnModuleInit, OnModuleDestroy {
@@ -92,10 +59,27 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       this.logger.warn(`NavMesh Recast operando em modo fallback: ${(err as Error).message}`);
     }
 
-    // 2. Registra e sincroniza estados dos 5 agentes canônicos
-    for (const citizen of SEED_CITIZENS) {
+    // 2. Registra e sincroniza estados dos 7 habitantes autônomos com mentes vivas
+    for (const citizen of ALL_CITIZENS) {
+      const personality = citizen.personality ?? {
+        openness: 0.8,
+        conscientiousness: 0.7,
+        extraversion: 0.7,
+        agreeableness: 0.8,
+        neuroticism: 0.25,
+      };
+
+      const mind = new AgentMind({
+        id: citizen.id,
+        name: citizen.name,
+        role: citizen.role,
+        biography: citizen.backstorySeed,
+        personality,
+      });
+
       this.agentStates.set(citizen.id, {
         config: citizen,
+        mind,
         currentPosition: { ...citizen.initialPosition },
         targetDestination: null,
         waypoints: [],
@@ -132,7 +116,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
    * Executa um passo do ciclo de vida da cidade:
    * 1. Avança tick do mundo
    * 2. Sincroniza semáforo na NavMesh
-   * 3. Delibera cognição para o próximo habitante da fila circular
+   * 3. Delibera cognição autônoma para o próximo habitante da fila circular
    * 4. Despacha locomoção e fala em tempo real para o frontend
    */
   async executeSimulationStep(): Promise<void> {
@@ -168,13 +152,74 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     agent: AutonomousAgentRuntimeState,
     trafficLight: 'green' | 'yellow' | 'red',
   ): Promise<void> {
-    const destinations = URBAN_DESTINATIONS[agent.config.id] ?? [agent.config.initialPosition];
-    
-    // Se o agente não tem destino ou já atingiu o destino atual, define próximo ponto da rota urbana
+    // 1. Atualiza necessidades internas e progresso de atividades físicas
+    agent.mind.update(3.5);
+
+    // 2. Constrói percepção espacial real do mundo físico
+    const closestPlayer = typeof (this.worldGateway as any)?.getClosestPlayer === 'function'
+      ? (this.worldGateway as any).getClosestPlayer(agent.currentPosition)
+      : null;
+    const isPlayerNearby = closestPlayer !== null && closestPlayer.distance <= 3.5;
+
+    const perceivedEntities = SYNAPSE_WORLD_ENTITIES.map((e) => ({
+      entity: e,
+      distance: distance2D(agent.currentPosition, e.approach ?? e.position),
+    }));
+
+    const perceivedActors: PerceivedActor[] = [];
+    if (closestPlayer) {
+      perceivedActors.push({
+        id: closestPlayer.id,
+        name: 'Daniel',
+        kind: 'player',
+        position: { x: closestPlayer.x, y: closestPlayer.y, z: closestPlayer.z },
+        distance: closestPlayer.distance,
+      });
+    }
+
+    for (const other of this.agentStates.values()) {
+      if (other.config.id !== agent.config.id) {
+        perceivedActors.push({
+          id: other.config.id,
+          name: other.config.name,
+          kind: 'agent',
+          position: other.currentPosition,
+          distance: distance2D(agent.currentPosition, other.currentPosition),
+        });
+      }
+    }
+
+    const percept: Percept = {
+      position: agent.currentPosition,
+      entities: perceivedEntities,
+      actors: perceivedActors,
+      trafficLight,
+    };
+
+    // 3. Se o agente não tem destino ou completou o percurso anterior,
+    // delibera por conta própria onde ir e o que fazer a partir de suas necessidades e estímulos
     if (!agent.targetDestination || (agent.waypoints.length > 0 && agent.waypointIndex >= agent.waypoints.length)) {
-      const nextTarget = destinations[agent.goalIndex % destinations.length];
-      agent.goalIndex++;
+      if (agent.mind.currentIntention) {
+        agent.mind.startArrivalActivity(agent.mind.currentIntention.candidate);
+      }
+
+      const llmAdapter = typeof this.cognitionService?.getLLMAdapter === 'function'
+        ? this.cognitionService.getLLMAdapter()
+        : undefined;
+      const intention = await agent.mind.decideNextIntention(
+        agent.currentPosition,
+        percept,
+        llmAdapter,
+      );
+
+      const nextTarget: Vector3Like = {
+        x: intention.candidate.destination.x,
+        y: intention.candidate.destination.y ?? 0.19,
+        z: intention.candidate.destination.z,
+      };
+
       agent.targetDestination = nextTarget;
+      agent.lastAction = `${intention.candidate.affordance}:${intention.candidate.targetLabel}`;
 
       // Calcula caminho inteligente evitando prédios e respeitando faixas/semáforos via Recast Navigation
       const pathResult = this.navService.findPath(agent.currentPosition, nextTarget, {
@@ -183,16 +228,29 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
 
       agent.waypoints = pathResult.waypoints.length > 0 ? pathResult.waypoints : [nextTarget];
       agent.waypointIndex = 0;
+
+      // Se a deliberação gerou fala espontânea e o jogador está próximo
+      if (intention.speech && isPlayerNearby) {
+        agent.lastSpeech = intention.speech;
+        this.worldGateway.broadcastDomainEvent({
+          name: 'agent.speech',
+          payload: {
+            agentId: agent.config.id,
+            message: intention.speech,
+            isProximitySpeech: true,
+          },
+        });
+      }
     }
 
-    // Avança para o próximo waypoint do caminho
+    // 4. Avança para o próximo waypoint do caminho
     let nextPos: Vector3Like = agent.currentPosition;
     if (agent.waypoints.length > 0 && agent.waypointIndex < agent.waypoints.length) {
       nextPos = agent.waypoints[agent.waypointIndex];
       agent.waypointIndex++;
       agent.currentPosition = nextPos;
 
-      // 1. Transmite evento de locomoção autoritativa para o frontend
+      // 4.1 Transmite evento de locomoção autoritativa para o frontend
       this.worldGateway.broadcastDomainEvent({
         name: 'agent.moved',
         payload: {
@@ -201,7 +259,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         },
       });
 
-      // 2. Persiste nova localização no PostgreSQL se o repositório estiver ativo
+      // 4.2 Persiste nova localização no PostgreSQL se o repositório estiver ativo
       if (this.agentRepo) {
         this.agentRepo.updateLocation(agent.config.id, {
           x: nextPos.x,
@@ -213,60 +271,68 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       }
     }
 
-    // 3. Verifica proximidade física com o avatar Daniel do jogador
-    const closestPlayer = typeof (this.worldGateway as any)?.getClosestPlayer === 'function'
-      ? (this.worldGateway as any).getClosestPlayer(nextPos)
-      : null;
-    const isPlayerNearby = closestPlayer !== null && closestPlayer.distance <= 3.5;
-    const nearbyObjects = ['semaforo-1', 'faixa-pedestres', 'calcada-central'];
+    // 5. Interação presencial quando Daniel está por perto
     if (isPlayerNearby) {
-      nearbyObjects.unshift('avatar-daniel');
-    }
-
-    // 4. Executa ciclo cognitivo (GoalPlanner + LangGraph + Memória Vetorial Qdrant)
-    const currentGoal = isPlayerNearby
-      ? 'interagir e orientar amigavelmente o habitante Daniel'
-      : agent.config.activeGoals[agent.goalIndex % agent.config.activeGoals.length];
-
-    try {
-      const observation = isPlayerNearby
-        ? `Localizado em [${nextPos.x.toFixed(1)}, ${nextPos.z.toFixed(1)}] na Rua Central. O avatar Daniel está muito próximo (a ${closestPlayer!.distance.toFixed(1)}m). Semáforo está ${trafficLight}.`
-        : `Localizado em [${nextPos.x.toFixed(1)}, ${nextPos.z.toFixed(1)}] na Rua Central. Semáforo está ${trafficLight}.`;
-
-      const action = await this.cognitionService.processCycle(
-        {
-          citizenId: agent.config.id as any,
-          currentObservation: observation,
-          nearbyObjects,
-          activeGoal: currentGoal,
-        },
-        { forceLLM: isPlayerNearby },
-      );
-
-      agent.lastAction = action.actionType;
-
-      // 5. Formata pensamento ou fala contextual do habitante
-      // Os balões de conversações só devem ser disparados quando o avatar Daniel se aproxima do agente (<= 3.5m)
-      if (isPlayerNearby) {
-        const speechMessage = this.generatePlayerProximityGreeting(agent.config, trafficLight);
-        agent.lastSpeech = speechMessage;
-
-        // 6. Emite fala para o balão flutuante no 3D apenas quando em proximidade do avatar
-        this.worldGateway.broadcastDomainEvent({
-          name: 'agent.speech',
-          payload: {
-            agentId: agent.config.id,
-            message: speechMessage,
-            isProximitySpeech: true,
+      // Dispara ciclo cognitivo registrado
+      try {
+        const observation = `Localizado em [${nextPos.x.toFixed(1)}, ${nextPos.z.toFixed(1)}] na Rua Central. O avatar Daniel está muito próximo (a ${closestPlayer!.distance.toFixed(1)}m). Semáforo está ${trafficLight}. Ação autônoma ativa: ${agent.lastAction}.`;
+        const action = await this.cognitionService.processCycle(
+          {
+            citizenId: agent.config.id as any,
+            currentObservation: observation,
+            nearbyObjects: ['avatar-daniel', 'calcada-central'],
+            activeGoal: `interagir com Daniel ou prosseguir com ${agent.lastAction}`,
           },
-        });
-      } else {
-        // Longe do avatar Daniel: mantém locomoção e rotinas sem balões nem chamadas desnecessárias
-        agent.lastSpeech = '';
+          { forceLLM: true },
+        );
+
+        agent.lastAction = action.actionType;
+
+        // Se ainda não houve fala disparada neste ciclo, emite saudação contextual
+        if (!agent.lastSpeech) {
+          const speechMessage = this.generateDynamicProximityGreeting(agent, trafficLight);
+          agent.lastSpeech = speechMessage;
+
+          this.worldGateway.broadcastDomainEvent({
+            name: 'agent.speech',
+            payload: {
+              agentId: agent.config.id,
+              message: speechMessage,
+              isProximitySpeech: true,
+            },
+          });
+        }
+      } catch (err) {
+        this.logger.warn(`Falha na deliberação de proximidade de ${agent.config.id}: ${(err as Error).message}`);
       }
-    } catch (err) {
-      this.logger.warn(`Falha na deliberação cognitiva de ${agent.config.id}: ${(err as Error).message}`);
+    } else {
+      agent.lastSpeech = '';
     }
+  }
+
+  /**
+   * Gera saudação contextual e dinâmica baseada na intenção atual do agente,
+   * sua personalidade e seu papel na cidade, sem frases pré-fixadas por ID.
+   */
+  private generateDynamicProximityGreeting(
+    agent: AutonomousAgentRuntimeState,
+    trafficLight: 'green' | 'yellow' | 'red',
+  ): string {
+    const intention = agent.mind.currentIntention;
+    const targetLabel = intention?.candidate.targetLabel ?? 'pela Rua Central';
+    const affordance = intention?.candidate.affordance;
+
+    if (affordance === 'eat' || affordance === 'shop') {
+      return `Olá Daniel! Estou a caminho de ${targetLabel} para comer algo e abastecer as energias. Como vai você?`;
+    }
+    if (affordance === 'rest' || affordance === 'contemplate') {
+      return `Olá Daniel! Estava indo até ${targetLabel} para descansar um pouco e apreciar a praça.`;
+    }
+    if (affordance === 'socialize') {
+      return `Olá Daniel! Que bom encontrar você por aqui na Avenida Central! O que está achando da cidade hoje?`;
+    }
+
+    return `Olá Daniel! Estou explorando os arredores de ${targetLabel}. Sinal está ${trafficLight === 'green' ? 'aberto' : 'fechado'} para os veículos!`;
   }
 
   /**
@@ -286,8 +352,24 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
 
     // Registra no mapa de estados se ainda não estiver presente
     if (!agent) {
+      const personality = config.personality ?? {
+        openness: 0.8,
+        conscientiousness: 0.7,
+        extraversion: 0.7,
+        agreeableness: 0.8,
+        neuroticism: 0.25,
+      };
+      const mind = new AgentMind({
+        id: config.id,
+        name: config.name,
+        role: config.role,
+        biography: config.backstorySeed,
+        personality,
+      });
+
       agent = {
         config,
+        mind,
         currentPosition: { ...config.initialPosition },
         targetDestination: null,
         waypoints: [],
@@ -299,6 +381,9 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       };
       this.agentStates.set(targetAgentId, agent);
     }
+
+    // Registra interação social na memória viva do agente
+    agent.mind.recordSocialInteraction(playerId, true);
 
     const trafficLight = this.worldGateway.getTrafficLightState();
     const currentPos = agent.currentPosition || config.initialPosition;

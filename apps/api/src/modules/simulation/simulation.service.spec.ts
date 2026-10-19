@@ -17,6 +17,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
   let mockCognitionService: {
     processCycle: ReturnType<typeof vi.fn>;
     generateConversationalDialogue?: ReturnType<typeof vi.fn>;
+    getLLMAdapter?: ReturnType<typeof vi.fn>;
   };
   let mockWorldService: {
     incrementTick: ReturnType<typeof vi.fn>;
@@ -45,6 +46,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
         reasonCode: 'GOAL_EXECUTION',
       }),
       generateConversationalDialogue: vi.fn().mockResolvedValue(null),
+      getLLMAdapter: vi.fn().mockReturnValue(undefined),
     };
 
     mockWorldService = {
@@ -74,16 +76,18 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     vi.useRealTimers();
   });
 
-  it('deve inicializar todos os 5 agentes canônicos de Lira no runtime', async () => {
+  it('deve inicializar todos os 7 agentes canônicos de Lira no runtime', async () => {
     await service.onModuleInit();
 
     const states = service.getAgentStates();
-    expect(states.size).toBe(5);
+    expect(states.size).toBe(7);
     expect(states.has('agent-vega')).toBe(true);
     expect(states.has('agent-sulafat')).toBe(true);
     expect(states.has('agent-sheliak')).toBe(true);
     expect(states.has('agent-epsilon')).toBe(true);
     expect(states.has('agent-chason')).toBe(true);
+    expect(states.has('agent-aladfar')).toBe(true);
+    expect(states.has('agent-xihe')).toBe(true);
   });
 
   it('deve avançar o tick e emitir agent.moved e agent.speech durante o passo de simulação quando jogador estiver próximo', async () => {

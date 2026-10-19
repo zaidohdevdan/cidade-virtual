@@ -1,5 +1,6 @@
 // apps/api/src/modules/citizens/citizens.seed.ts
 import type { CitizenArchetype, EmotionState } from '@cidade-virtual/types';
+import type { Personality } from '@cidade-virtual/agent-planning';
 
 export interface SeedExperience {
   eventType: string;
@@ -18,6 +19,7 @@ export interface SeedCitizenConfig {
   role: string;
   backstorySeed: string;
   activeGoals: string[];
+  personality?: Personality;
   initialPosition: { x: number; y: number; z: number };
   initialEmotion: EmotionState;
   initialExperiences: SeedExperience[];
@@ -36,6 +38,13 @@ export const SEED_CITIZENS: SeedCitizenConfig[] = [
     role: 'Pioneira & Navegadora de Segurança',
     backstorySeed: 'Responsável pela observação e segurança viária na Avenida Central.',
     activeGoals: ['monitorar semáforo', 'garantir travessia segura', 'prevenir infrações'],
+    personality: {
+      openness: 0.7,
+      conscientiousness: 0.9,
+      extraversion: 0.6,
+      agreeableness: 0.8,
+      neuroticism: 0.25,
+    },
     initialPosition: { x: -4, y: 0.19, z: -25 },
     initialEmotion: 'calm',
     initialExperiences: [
@@ -73,6 +82,13 @@ export const SEED_CITIZENS: SeedCitizenConfig[] = [
     role: 'Cientista & Ecologista Urbana',
     backstorySeed: 'Dedicada à preservação ambiental e à gestão de resíduos sólidos municipais.',
     activeGoals: ['manter calçadas limpas', 'estudar flora da praça', 'descarte sustentável'],
+    personality: {
+      openness: 0.85,
+      conscientiousness: 0.85,
+      extraversion: 0.5,
+      agreeableness: 0.85,
+      neuroticism: 0.2,
+    },
     initialPosition: { x: -25, y: 0.19, z: -5 },
     initialEmotion: 'curious',
     initialExperiences: [
@@ -110,6 +126,13 @@ export const SEED_CITIZENS: SeedCitizenConfig[] = [
     role: 'Engenheiro & Cidadão Ativo',
     backstorySeed: 'Engenheiro mecânico focado na infraestrutura viária e mobilidade urbana.',
     activeGoals: ['otimizar circulação', 'respeitar faixas de travessia', 'mobilidade fluida'],
+    personality: {
+      openness: 0.75,
+      conscientiousness: 0.7,
+      extraversion: 0.85,
+      agreeableness: 0.75,
+      neuroticism: 0.25,
+    },
     initialPosition: { x: 20, y: 0.19, z: -14 },
     initialEmotion: 'joyful',
     initialExperiences: [
@@ -147,6 +170,13 @@ export const SEED_CITIZENS: SeedCitizenConfig[] = [
     role: 'Jovem Mensageiro & Skatista',
     backstorySeed: 'Cidadão jovem e ágil que percorre as calçadas respeitando os pedestres e aprendendo as regras da cidade.',
     activeGoals: ['aprender sinalização viária', 'respeitar pedestres na calçada', 'explorar a praça'],
+    personality: {
+      openness: 0.9,
+      conscientiousness: 0.45,
+      extraversion: 0.9,
+      agreeableness: 0.75,
+      neuroticism: 0.3,
+    },
     initialPosition: { x: 10, y: 0.19, z: 14 },
     initialEmotion: 'curious',
     initialExperiences: [
@@ -184,6 +214,13 @@ export const SEED_CITIZENS: SeedCitizenConfig[] = [
     role: 'Filósofo & Guardião da Memória',
     backstorySeed: 'Ancião da cidade, arquivista da memória coletiva e observador da evolução das leis e costumes sociais.',
     activeGoals: ['transmitir cultura cívica', 'refletir sobre harmonia urbana', 'preservar memória social'],
+    personality: {
+      openness: 0.95,
+      conscientiousness: 0.8,
+      extraversion: 0.45,
+      agreeableness: 0.9,
+      neuroticism: 0.15,
+    },
     initialPosition: { x: 16, y: 0.19, z: 22 },
     initialEmotion: 'calm',
     initialExperiences: [
@@ -227,6 +264,13 @@ export const EXTRA_CITIZENS: SeedCitizenConfig[] = [
     role: 'Artista & Designer',
     backstorySeed: 'Artista e designer apaixonada pela estética urbana, luzes e contrastes de Synapse City.',
     activeGoals: ['explorar arquitetura da praça', 'dialogar com pedestres', 'estudar contrastes de iluminação'],
+    personality: {
+      openness: 0.95,
+      conscientiousness: 0.6,
+      extraversion: 0.8,
+      agreeableness: 0.85,
+      neuroticism: 0.3,
+    },
     initialPosition: { x: -16, y: 0.19, z: 16 },
     initialEmotion: 'joyful',
     initialExperiences: [
@@ -256,6 +300,13 @@ export const EXTRA_CITIZENS: SeedCitizenConfig[] = [
     role: 'Arquiteta & Botânica',
     backstorySeed: 'Especialista em botânica urbana, arborização e arquitetura sustentável de Synapse City.',
     activeGoals: ['catalogar botânica urbana', 'projetar espaços verdes', 'cuidar da arborização'],
+    personality: {
+      openness: 0.9,
+      conscientiousness: 0.85,
+      extraversion: 0.55,
+      agreeableness: 0.85,
+      neuroticism: 0.2,
+    },
     initialPosition: { x: -10, y: 0.19, z: -20 },
     initialEmotion: 'curious',
     initialExperiences: [

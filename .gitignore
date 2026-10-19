@@ -25,3 +25,7 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Media
+*.mp4
+*.webm

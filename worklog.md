@@ -1,5 +1,41 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Motor de Autonomia Real e Emergente dos Agentes (Fase 1: A1 a A6)
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Cognição, Percepção Espacial e Arquitetura de Agentes Autônomos
+
+### 1. Resumo Executivo
+Substituição definitiva de rotas, waypoints e tarefas pré-fixadas por um ecossistema de **autonomia real e emergente**, onde os habitantes decidem para onde ir e o que fazer por conta própria a partir de necessidades internas, personalidade e affordances do ambiente:
+1. **Registro de Affordances do Mundo Físico (`packages/agent-planning/autonomy/world-affordances.ts`)**:
+   - Catálogo canônico de entidades urbanas de Synapse City com coordenadas físicas 3D reais (fonte monumental, bancos de descanso da praça, mercado central, mesas do café bistro, ponto de ônibus, canteiros floridos, árvores e placas).
+   - Cada entidade expõe suas *affordances* naturais (`rest`, `eat`, `socialize`, `observe`, `contemplate`, `shop`, `explore`) sem pertencer a nenhum agente.
+2. **Dinâmica Contínua de Necessidades Internas (`packages/agent-planning/autonomy/needs.ts`)**:
+   - 5 necessidades biológicas e psicológicas fundamentais (`energy`, `hunger`, `social`, `curiosity`, `fun`).
+   - Decaimento contínuo modulado pelos traços de personalidade Big Five (ex.: agentes extrovertidos sentem carência social mais rápido; abertos à experiência demandam mais novidade).
+   - Efeitos físicos universais restauradores ao utilizar as affordances.
+3. **Decisor por Utilidade e Anti-Repetição (`packages/agent-planning/autonomy/utility-decider.ts`)**:
+   - Geração dinâmica de candidatos de ação a partir de entidades e atores percebidos no raio físico.
+   - Pontuação por ganho de utilidade marginal (com urgência exponencial para déficits severos de fome/energia), custo de locomoção atenuado e bônus de novidade / fadiga de repetição (evita ficar preso ao mesmo local).
+4. **Deliberação Estruturada com LLM (`packages/agent-planning/autonomy/llm-deliberator.ts`)**:
+   - LLM recebe contexto de necessidades, personalidade e opções de alto valor, decidindo via JSON estruturado `{ chosenCandidateId, reason, speech }`.
+   - A decisão do LLM ou da utilidade determina diretamente o destino e a ação executada.
+5. **Mente Individual do Habitante (`packages/agent-planning/autonomy/agent-mind.ts`)**:
+   - Encapsula necessidades, histórico de visitas, afinidades sociais e execução temporal de atividades (ex.: sentar no banco por 3 ticks para descansar).
+6. **Integração no Motor de Simulação (`simulation.service.ts`)**:
+   - Remoção de `URBAN_DESTINATIONS` em ciclo fixo.
+   - Percepção espacial real computada a cada tick (entidades próximas, avatar Daniel, outros agentes, semáforo).
+   - Inclusão dos 7 cidadãos canônicos (`ALL_CITIZENS`) no runtime autoritativo.
+   - Falas espontâneas contextuais geradas pela intenção ativa, sem tabelas estáticas de switch por ID.
+7. **Validação de Testes e Tipos**:
+   - Novos testes unitários (`autonomy.spec.ts`): 7/7 aprovados.
+   - Suíte de simulação (`simulation.service.spec.ts`): 4/4 aprovados.
+   - Suíte completa do monorepo: 25/25 projetos aprovados (100%).
+   - `npm run typecheck`: 0 erros.
+
+---
+
 ## Task: Manobras Ativas de Desvio e Contorno de Obstáculos (OBSTACLE_BYPASS)
 - **Data:** 2026-10-19
 - **Status:** Concluído

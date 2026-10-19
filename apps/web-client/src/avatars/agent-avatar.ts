@@ -638,19 +638,12 @@ export class AgentAvatar {
         // Desacelera para permitir diálogo presencial
         this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
 
-        // Saudação espontânea com cooldown de 25s
+        // Saudação espontânea de presença caso ainda não tenha recebido fala autoritativa do servidor
         if (this.proximityGreetingCooldown <= 0) {
           this.proximityGreetingCooldown = 25.0;
-          const greetings: Record<string, string> = {
-            'agent-vega': 'Olá Daniel! Mantenha a atenção na sinalização viária.',
-            'agent-sulafat': 'Olá Daniel! Cuidando da praça hoje? Vamos manter nossa cidade limpa!',
-            'agent-sheliak': 'E aí Daniel! O fluxo de tráfego na Avenida Central tá suave hoje.',
-            'agent-epsilon': 'Saudações, jovem Daniel. É sempre revigorante ver cidadãos conscientes.',
-            'agent-chason': 'E aí Daniel! Bora curtir a praça e dar umas voltas de skate com cuidado!',
-            'agent-aladfar': 'Oi Daniel! Reparou nas cores da cidade refletindo nas vitrines?',
-            'agent-xihe': 'Olá Daniel! Estou conferindo as espécies botânicas dos canteiros.',
-          };
-          this.say(greetings[this.config.id] || `Olá Daniel! Bom dia!`, 5.0);
+          if (!this.speechBubble || this.speechTimer <= 0) {
+            this.say(`Olá Daniel! Sou ${this.config.name}. Que bom ver você caminhando pela cidade!`, 5.0);
+          }
         }
 
         // Se estiver muito próximo (≤ 2.2m), para completamente para conversar
