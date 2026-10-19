@@ -744,11 +744,11 @@
 
 ## 4. Resumo por Prioridade
 
-| Prioridade | Tasks | Situação (v3.1) |
+| Prioridade | Tasks | Situação (v3.2) |
 |---|---|---|
-| 🔴 Crítica | ✅ 001, 002, 009, 019, 020, 036 · ⬜ **037, 041** | Pendentes ≈ 1,5 semanas (Épico G, gate MA) |
-| 🟠 Alta | ✅ 003, 004, 005, 006, 013, 021, 022, 025, 026B · ⬜ **038, 039** | Pendentes ≈ 1,5 semanas |
-| 🟡 Média | ✅ 007, 008, 010, 014, 015, 023, 024 · ⬜ **016, 028, 032, 040** | Pendentes ≈ 5-6 semanas |
+| 🔴 Crítica | ✅ 001, 002, 009, 019, 020, 036, 037, 041 | **100% Concluídas** (Épico G, gate MA atingido com evidências) |
+| 🟠 Alta | ✅ 003, 004, 005, 006, 013, 021, 022, 025, 026B, 038, 039 | **100% Concluídas** (Cérebro único e transmissão social operantes) |
+| 🟡 Média | ✅ 007, 008, 010, 014, 015, 016, 023, 024 · ⬜ **040, 028, 032** | Pendentes: Task-040 (mundo→mente) e ondas 4-5 |
 | 🟢 Baixa | ✅ 011, 012, 018 · ⬜ **017, 026, 027, 029, 030, 031, 033, 034, 035** | Pendentes ≈ 8 semanas (evolução, gated por MA e ondas) |
 
 ## 5. Ordem Sugerida de Execução (Critical Path)
