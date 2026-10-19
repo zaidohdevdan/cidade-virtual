@@ -1,5 +1,36 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Voz dos Atores — Síntese TTS no Navegador com Web Speech API (Passo 2)
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Sensorial / Áudio e Imersão Client-Side (Web Speech API)
+
+### 1. Resumo Executivo
+Implementação do sistema client-side de síntese de voz (TTS) audível em Português (`pt-BR`) utilizando a Web Speech API (`window.speechSynthesis`) nativa dos navegadores:
+1. **Perfis Acústicos Distintos por Cidadão (`apps/web-client/src/audio/speech-synth.ts`)**:
+   - Calibração de `pitch`, velocidade (`rate`), gênero e timbres para os 7 cidadãos canônicos:
+     - **Vega:** Pitch 1.15, Rate 1.05, Voz feminina assertiva e firme (Arquiteta Urbana).
+     - **Sulafat:** Pitch 0.88, Rate 0.95, Voz masculina ponderada, calma e zelosa (Zelador Urbano).
+     - **Sheliak:** Pitch 1.05, Rate 1.15, Voz neutra, dinâmica e analítica (Técnico de Mobilidade).
+     - **Chason:** Pitch 1.25, Rate 1.15, Voz jovem, acelerada e animada (Estudante e Skatista).
+     - **Epsilon:** Pitch 0.72, Rate 0.82, Voz madura, grave, pausada e reflexiva (Idoso e Filósofo).
+     - **Aladfar:** Pitch 0.95, Rate 0.95, Voz suave e contemplativa (Artista Urbano).
+     - **Xihe:** Pitch 1.12, Rate 1.08, Voz feminina expressiva, clara e curiosa (Entusiasta Botânica).
+2. **Higienização Acústica (`cleanText`)**:
+   - Remoção de emojis, símbolos Unicode, seletores de variação (`\uFE0F`), zero-width joiners (`\u200D`) e marcações Markdown para evitar leitura indesejada de códigos ou descrições como "emoji de carro".
+3. **Integração com Movimentação e Diálogos**:
+   - Conectado diretamente a `AgentAvatar.say(message)`: qualquer mensagem de fala espontânea por proximidade física ou resposta deliberada por LLM no `DialogueModal` e eventos de rede (`agent.speech`) é pronunciada audivelmente.
+4. **Controles de Áudio no HUD e Teclado**:
+   - Botão interativo no HUD (`id="btn-audio-mute"`): `🔊 Voz: Ativa` / `🔇 Voz: Mudo` com feedback visual dinâmico.
+   - Tecla de atalho `[M]` para silenciar/reativar imediatamente o áudio durante a exploração.
+   - Cancelamento imediato de falas ativas ao silenciar.
+5. **Validação de Aceite**:
+   - `npm run typecheck`: **0 erros de tipagem** em todos os projetos.
+   - `npx vitest run --fileParallelism=false`: **27 arquivos de teste, 141 testes executados e 100% aprovados** (0 falhas).
+
+---
+
 ## Task: Conectar LLM Real no Cérebro dos Agentes (Autonomia 65% ➔ 95%)
 - **Data:** 2026-10-19
 - **Status:** Concluído
