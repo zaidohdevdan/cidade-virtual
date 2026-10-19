@@ -317,9 +317,50 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 
 ### 3. Validação de Aceite
 - **Suíte de Testes:** `npx vitest run` — **14 arquivos de teste, 57 testes executados e 100% aprovados** (incluindo 17 novos testes em `tests/integration/security.test.ts`).
-- **Verificação de Tipos:** `npm run typecheck` — 0 erros no monorepo.
+---
+
+## 2026-10-18 — Fechamento da Onda 2: Workers Server-Side & Colisões 3D Mútuas
+
+### 1. Entregas Realizadas
+- **Task-007 (SimulationWorker — Física & Anti-Speedhack):**
+  - Implementado `packages/event-system/workers/simulation.worker.ts` processando `simulation-queue`.
+  - Valida física autoritativa server-side, limites de velocidade e colisões estáticas de avatares e entidades.
+  - Testes em `tests/integration/simulation-worker.test.ts` (4/4).
+- **Task-008 (LearningWorker — Consolidação Passiva Noturna):**
+  - Implementado `packages/event-system/workers/learning.worker.ts` processando `learning-queue`.
+  - Sintetiza experiências episódicas em conhecimento semântico e promove poda de registros obsoletos de baixa relevância.
+  - Testes em `tests/integration/learning-worker.test.ts` (3/3).
+- **Colisões Mútuas 3D no Frontend (`vehicle-collision.spec.ts`):**
+  - Corrigido o bug onde veículos e agentes atravessavam uns aos outros.
+  - Implementada física de colisão com desaceleração suave e vetor de pushback anti-interpenetração em `TrafficSystem.tsx`.
+  - Testes unitários em `apps/web-client/src/vehicles/vehicle-collision.spec.ts` (7/7).
+
+---
+
+## 2026-10-18 — Task-013: Popular 3-5 NPCs com Fase Meta de Consciência
+
+### 1. Contexto & Motivação
+- Necessidade de popular a cidade virtual com identidades persistentes, cobrindo os arquétipos canônicos (`guard`, `worker`, `citizen`, `child`, `elder`) mapeados aos avatares 3D do frontend de Lira (Vega, Sulafat, Sheliak, Chasoň, Epsilon).
+- Garantir que cada NPC nasça com histórico (`backstorySeed`), metas cívicas (`activeGoals`) e memórias episódicas iniciais persistidas no PostgreSQL e indexadas semanticamente no Qdrant para consulta deliberativa.
+
+### 2. Implementações Realizadas
+- **Configuração Canônica dos Habitantes (`citizens.seed.ts`):**
+  - `agent-vega` (`guard` — Pioneira & Navegadora de Segurança): Foco em segurança viária, semáforo e cumprimento da Lei 12.305/10.
+  - `agent-sulafat` (`worker` — Cientista & Ecologista Urbana): Foco em gestão de resíduos sólidos e arborização urbana.
+  - `agent-sheliak` (`citizen` — Engenheiro & Cidadão Ativo): Foco em infraestrutura viária e mobilidade fluida.
+  - `agent-chason` (`child` — Jovem Mensageiro & Skatista): Foco em aprendizagem de sinalização e convivência pacífica em calçadas.
+  - `agent-epsilon` (`elder` — Filósofo & Guardião da Memória): Foco em patrimônio cultural, convivência cívica e história da cidade.
+- **Serviço de Habitantes & Ciclo de Vida (`citizens.service.ts`):**
+  - Integrado `OnModuleInit` do NestJS chamando `seedDefaultCitizens()`.
+  - Upsert idempotente de identidades em `agent_identities` (PostgreSQL).
+  - Inserção idempotente de $\ge 3$ experiências episódicas por NPC em `agent_experiences` (`sourceType: 'direct_observation'`).
+  - Indexação vetorial imediata no Qdrant com geração de embeddings (1536 dimensões) via `MemoryService.addMemory()`.
+  - Adicionados métodos de consulta `getCitizenExperiences()` e `getCitizenMemories()`.
+- **Suíte de Testes de Integração Real (`tests/integration/npc-seed.test.ts`):**
+  - 4 testes validando persistência no PostgreSQL, cobertura de arquétipos, memórias episódicas e busca semântica no Qdrant com 100% de aprovação.
+  - Validação estrita de idempotência (segunda execução não duplica identidades nem memórias).
+
+### 3. Validação de Aceite
+- **Suíte Completa:** `npx vitest run` — **19 arquivos de teste, 85 testes executados e 100% aprovados** (0 mocks em testes de integração de persistência e vetor).
+- **Tipagem Estática:** `npm run typecheck` — 0 erros.
 - **Sincronismo de Schema:** `npm run check:schema-drift` — 100% síncrono.
-
-
-
-

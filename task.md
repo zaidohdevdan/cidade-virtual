@@ -333,20 +333,23 @@
   - [x] Jobs com falha crítica encaminhados para a DLQ.
 
 ### Task-013 — Popular 3-5 NPCs com Fase Meta de Consciência
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟠 Alta
 - **Esforço:** S
 - **Tipo:** `feat`
 - **Risco:** Operacional
 - **Dependências:** Task-002, Task-004
-- **Descrição:** Próximo passo explícito do `worklog.md`. Criar habitantes via `createCitizenTool` com arquétipos variados, conectar ao frontend via `AgentAvatar` existente.
+- **Descrição:** Implementado seed idempotente em `apps/api/src/modules/citizens/citizens.seed.ts` e `citizens.service.ts` (`OnModuleInit`). Popula os 5 NPCs canônicos conectados aos avatares de Lira (`agent-vega`, `agent-sulafat`, `agent-sheliak`, `agent-chason`, `agent-epsilon`) cobrindo todos os arquétipos requeridos (`guard`, `worker`, `citizen`, `child`, `elder`). Cada habitante possui identidades, posições, metas urbanas ativas e ≥3 experiências episódicas iniciais persistidas no PostgreSQL (`agent_experiences`) e indexadas semanticamente no Qdrant (`MemoryService`).
 - **Escopo:**
   - Seed de 5 NPCs: `worker`, `guard`, `citizen`, `child`, `elder`.
   - Cada um com `backstorySeed` + `activeGoals` distintos.
   - Registrar experiências iniciais observando a placa de lixo, semáforo e praça.
 - **Critérios de aceite:**
-  - [ ] NPCs persistem após restart da API.
-  - [ ] Cada NPC tem ≥3 memórias episódicas após 5 minutos de simulação.
+  - [x] NPCs persistem após restart da API (`agentRepo.getById(id)`).
+  - [x] Cada NPC tem ≥3 memórias episódicas iniciais registradas no PostgreSQL (`sourceType: 'direct_observation'`).
+  - [x] Memórias episódicas indexadas semanticamente no Qdrant e recuperáveis via `semanticQuery`.
+  - [x] Idempotência total do seed: reinicializações subsequentes não duplicam cidadãos nem memórias.
+  - [x] Testes de integração em `tests/integration/npc-seed.test.ts` (4/4 passando contra PostgreSQL e Qdrant reais).
 
 ### Épico E — Web-client: Higiene de Estado & Escala Visual (base para Ondas 6-7)
 

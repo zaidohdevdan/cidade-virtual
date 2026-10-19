@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional, OnModuleInit } from '@nestjs/common';
 import type {
   CitizenId,
   CitizenArchetype,
@@ -15,16 +15,136 @@ import {
   ExperienceRepository,
 } from '@cidade-virtual/persistence';
 import { WorldGateway } from '../../gateways/world.gateway';
+import { MemoryService } from '../memory/memory.service';
+import { SEED_CITIZENS, SeedCitizenConfig } from './citizens.seed';
 
 @Injectable()
-export class CitizensService {
+export class CitizensService implements OnModuleInit {
   private readonly logger = new Logger(CitizensService.name);
 
   constructor(
     private readonly agentRepo: AgentIdentityRepository,
     private readonly expRepo: ExperienceRepository,
     @Optional() private readonly worldGateway?: WorldGateway,
+    @Optional() private readonly memoryService?: MemoryService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.seedDefaultCitizens();
+  }
+
+  /**
+   * Popula idempotentemente os 5 habitantes canônicos (Task-013) com arquétipos variados,
+   * posições urbanas, objetivos e memórias episódicas iniciais persistidas no PostgreSQL e Qdrant.
+   */
+  async seedDefaultCitizens(): Promise<{ seededCount: number; experiencesCount: number }> {
+    this.logger.log('Iniciando seed de habitantes canônicos e fase meta de consciência...');
+    let seededCount = 0;
+    let experiencesCount = 0;
+
+    if (this.memoryService) {
+      try {
+        await this.memoryService.ensureCollection();
+      } catch (err) {
+        this.logger.warn(`Não foi possível inicializar a coleção no Qdrant: ${err}`);
+      }
+    }
+
+    for (const citizenConfig of SEED_CITIZENS) {
+      try {
+        // 1. Upsert da identidade no PostgreSQL
+        await this.agentRepo.upsert({
+          id: citizenConfig.id,
+          name: citizenConfig.name,
+          archetype: citizenConfig.archetype,
+          profileData: {
+            starDesignation: citizenConfig.starDesignation,
+            role: citizenConfig.role,
+            backstorySeed: citizenConfig.backstorySeed,
+          },
+          activeGoals: citizenConfig.activeGoals,
+          preferences: {},
+          currentLocation: citizenConfig.initialPosition,
+          emotionState: citizenConfig.initialEmotion,
+        });
+        seededCount++;
+
+        // 2. Persistência de Experiências Episódicas Iniciais (Idempotente)
+        const existingExperiences = await this.expRepo.getByAgentId(citizenConfig.id, 100);
+        const existingDescriptions = new Set(existingExperiences.map((e) => e.description));
+
+        for (const exp of citizenConfig.initialExperiences) {
+          if (!existingDescriptions.has(exp.description)) {
+            // Grava no PostgreSQL
+            await this.expRepo.record({
+              agentId: citizenConfig.id,
+              eventType: exp.eventType,
+              description: exp.description,
+              locationId: exp.locationId,
+              sourceType: exp.sourceType,
+              confidence: exp.confidence,
+              importance: exp.importance,
+              relatedEntityIds: exp.locationId ? [exp.locationId] : [],
+              metadata: { canonicalSeed: true, starDesignation: citizenConfig.starDesignation },
+            });
+            experiencesCount++;
+
+            // Indexa semanticamente no Qdrant (Memória Episódica)
+            if (this.memoryService) {
+              try {
+                await this.memoryService.addMemory({
+                  citizenId: citizenConfig.id as CitizenId,
+                  content: exp.description,
+                  timestamp: new Date(),
+                  sensoryTags: ['visual', 'social'],
+                  emotionalWeight: parseFloat(exp.importance),
+                  origin: 'observation',
+                  memoryType: 'episodic',
+                  sourceType: exp.sourceType,
+                  confidence: parseFloat(exp.confidence),
+                });
+              } catch (qdrantErr) {
+                this.logger.warn(
+                  `Falha ao indexar memória episódica no Qdrant para ${citizenConfig.id}: ${qdrantErr}`
+                );
+              }
+            }
+          }
+        }
+      } catch (err) {
+        this.logger.error(`Erro ao semear habitante ${citizenConfig.name} (${citizenConfig.id}): ${err}`);
+      }
+    }
+
+    this.logger.log(
+      `Seed de habitantes concluído: ${seededCount} identidades verificadas/sincronizadas, ${experiencesCount} novas experiências registradas.`
+    );
+
+    return { seededCount, experiencesCount };
+  }
+
+  /**
+   * Obtém as experiências registradas de um habitante.
+   */
+  async getCitizenExperiences(citizenId: string, limit: number = 50) {
+    return this.expRepo.getByAgentId(citizenId, limit);
+  }
+
+  /**
+   * Consulta memórias episódicas indexadas semanticamente no Qdrant.
+   */
+  async getCitizenMemories(
+    citizenId: string,
+    query: string = 'observação regras convivência',
+    limit: number = 10
+  ) {
+    if (!this.memoryService) return [];
+    return this.memoryService.semanticQuery({
+      citizenId: citizenId as CitizenId,
+      queryText: query,
+      topK: limit,
+    });
+  }
 
   /**
    * Cria um novo cidadão na cidade virtual com identidade persistida no PostgreSQL.
