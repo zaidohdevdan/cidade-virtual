@@ -52,6 +52,11 @@ export class CognitiveCycleManager {
                           obsLower.includes('aguarda') ||
                           obsLower.includes('patrulha') ||
                           obsLower.includes('verde') ||
+                          obsLower.includes('vermelho') ||
+                          obsLower.includes('amarelo') ||
+                          obsLower.includes('semáforo') ||
+                          obsLower.includes('rua') ||
+                          obsLower.includes('localizado') ||
                           obsLower.includes('trabalho') ||
                           obsLower.includes('rotina');
 

@@ -16,9 +16,18 @@ export class OpenAILLMAdapter implements LLMProviderAdapter {
 
   constructor(options?: OpenAIAdapterOptions) {
     this.apiKey = options?.apiKey ?? process.env['OPENAI_API_KEY'] ?? '';
-    this.model = options?.model ?? process.env['OPENAI_MODEL'] ?? 'gpt-4o-mini';
-    this.timeoutMs = options?.timeoutMs ?? 10_000;
     this.baseUrl = options?.baseUrl ?? process.env['OPENAI_BASE_URL'] ?? 'https://api.openai.com/v1';
+
+    let model = options?.model ?? process.env['OPENAI_MODEL'];
+    if (this.baseUrl.includes('openrouter.ai')) {
+      if (!model || model === 'qwen/qwen2.5-coder:free' || model === 'nvidia/nemotron-3.5-lightning:free') {
+        model = 'liquid/lfm-2.5-2.6b:free';
+      }
+    } else if (!model) {
+      model = 'gpt-4o-mini';
+    }
+    this.model = model;
+    this.timeoutMs = options?.timeoutMs ?? 15_000;
   }
 
   isConfigured(): boolean {
