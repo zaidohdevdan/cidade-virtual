@@ -82,6 +82,7 @@ export class WorldGateway
 
     // Middleware de Autenticação no Handshake do Socket.IO (Task-022)
     server.use((socket, next) => {
+      const authHeader = socket.handshake.headers['authorization'];
       const queryToken =
         typeof socket.handshake.query?.['token'] === 'string'
           ? socket.handshake.query['token']
