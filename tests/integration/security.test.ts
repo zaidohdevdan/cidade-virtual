@@ -13,6 +13,8 @@ import {
   OPERATIONAL_LIMITS,
 } from '@cidade-virtual/config';
 import { WorldGateway } from '../../apps/api/src/gateways/world.gateway';
+import { AuthService } from '../../apps/api/src/auth/auth.service';
+import { AuthController } from '../../apps/api/src/auth/auth.controller';
 import type { Socket } from 'socket.io';
 import type { AuthPrincipal } from '../../apps/api/src/auth/auth.types';
 
@@ -64,6 +66,42 @@ describe('Task-022 — Endurecimento de Segurança e Validações Autoritativas'
       const tamperedToken = token.slice(0, -6) + 'abcdef';
 
       expect(() => verifyJwtToken(tamperedToken)).toThrow();
+    });
+
+    it('deve emitir token de convidado com AuthService.createGuestToken com ID seguro e claims válidas', () => {
+      const authService = new AuthService();
+      const guestSession = authService.createGuestToken();
+
+      expect(guestSession.token).toBeDefined();
+      expect(typeof guestSession.token).toBe('string');
+      expect(guestSession.user.userId).toMatch(/^guest_[0-9a-f]{16}$/);
+      expect(guestSession.user.role).toBe('guest');
+      expect(guestSession.user.scenarioId).toBe('rua-central-main');
+
+      // Validação criptográfica do token emitido pelo serviço
+      const decoded = verifyJwtToken(guestSession.token);
+      expect(decoded.userId).toBe(guestSession.user.userId);
+      expect(decoded.role).toBe('guest');
+      expect(decoded.scenarioId).toBe('rua-central-main');
+    });
+
+    it('deve gerar IDs e tokens únicos e não-previsíveis para chamadas sucessivas de createGuestToken', () => {
+      const authService = new AuthService();
+      const session1 = authService.createGuestToken();
+      const session2 = authService.createGuestToken();
+
+      expect(session1.user.userId).not.toBe(session2.user.userId);
+      expect(session1.token).not.toBe(session2.token);
+    });
+
+    it('deve permitir que AuthController.createGuestToken retorne o token e dados do usuário', () => {
+      const authService = new AuthService();
+      const authController = new AuthController(authService);
+      const response = authController.createGuestToken();
+
+      expect(response.token).toBeDefined();
+      expect(response.user.role).toBe('guest');
+      expect(response.user.userId).toMatch(/^guest_/);
     });
 
     it('deve rejeitar token expirado (exp claim)', () => {
@@ -238,6 +276,28 @@ describe('Task-022 — Endurecimento de Segurança e Validações Autoritativas'
       expect((validSocket.data as any).user).toBeDefined();
       expect((validSocket.data as any).user.userId).toBe('citizen-42');
       expect((validSocket.data as any).user.role).toBe('citizen');
+    });
+
+    it('deve autenticar o handshake do WebSocket utilizando token gerado por createGuestToken', () => {
+      const authService = new AuthService();
+      const guestSession = authService.createGuestToken();
+
+      const guestSocket = {
+        id: 'guest-socket-live-1',
+        handshake: {
+          headers: {},
+          auth: { token: guestSession.token },
+        },
+        data: {},
+      };
+
+      const next = vi.fn();
+      handshakeMiddleware(guestSocket, next);
+
+      expect(next).toHaveBeenCalledWith(); // sucesso sem erro
+      expect((guestSocket.data as any).user).toBeDefined();
+      expect((guestSocket.data as any).user.userId).toBe(guestSession.user.userId);
+      expect((guestSocket.data as any).user.role).toBe('guest');
     });
 
     it('deve rejeitar God Mode de semáforo quando acionado por papel não-admin', () => {
