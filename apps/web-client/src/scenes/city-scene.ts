@@ -1563,7 +1563,8 @@ export class CityScene {
 
       const pLight = new THREE.PointLight(0xffecc4, 1.4, 20);
       pLight.position.set(lx + 1.6 * dir, 5.3, lz);
-      pLight.castShadow = true;
+      // castShadow desativado para postes: apenas a luz solar projeta sombras direcionais,
+      // evitando exceder o limite de unidades de textura (MAX_TEXTURE_IMAGE_UNITS = 16) no WebGL.
       this.scene.add(pLight);
       this.streetLights.push(pLight);
 
