@@ -45,21 +45,32 @@ export const App: React.FC = () => {
         const apiBase = `http://${host}:3001`;
         const serverUrl = `${apiBase}/world`;
 
-        // 1. Obtém token JWT de convidado (Guest Principal) via HTTP seguro
-        let token: string | undefined = undefined;
-        try {
-          const res = await fetch(`${apiBase}/auth/guest-token`, { method: 'POST' });
-          if (res.ok) {
-            const data = await res.json();
-            token = data.token;
+        // 1. Obtém token JWT de convidado (Guest Principal) via HTTP seguro com retentativas
+        async function fetchGuestToken(): Promise<string | null> {
+          for (let attempt = 1; attempt <= 10 && isMounted; attempt++) {
+            try {
+              const res = await fetch(`${apiBase}/auth/guest-token`, { method: 'POST' });
+              if (res.ok) {
+                const data = await res.json();
+                if (data?.token) return data.token;
+              }
+            } catch {
+              // Servidor HTTP ainda subindo, aguarda breve intervalo antes de tentar novamente
+            }
+            if (attempt < 10 && isMounted) {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
           }
-        } catch {
-          console.warn('[Socket.IO] Não foi possível obter guest token via HTTP. Tentando handshake direto...');
+          return null;
         }
 
-        if (!isMounted) return;
+        const token = await fetchGuestToken();
+        if (!isMounted || !token) {
+          console.warn('[Socket.IO] Servidor da API indisponível ou token não obtido. Conexão WS suspensa.');
+          return;
+        }
 
-        // 2. Conecta ao WebSocket enviando token no auth do handshake
+        // 2. Conecta ao WebSocket enviando token garantido no auth do handshake
         socket = io(serverUrl, {
           autoConnect: true,
           transports: ['websocket', 'polling'],
