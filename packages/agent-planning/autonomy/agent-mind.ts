@@ -66,15 +66,27 @@ export class AgentMind {
       lastVisitedAt: {},
       visitCounts: {},
       actorAffinity: {},
+      placePreferences: {},
+      suggestedTargets: {},
     };
   }
 
   /**
-   * Atualiza as necessidades internas pelo decaimento temporal
-   * e processa ticks de atividades em andamento (ex.: sentar no banco, tomar café).
+   * Atualiza as necessidades internas pelo decaimento temporal,
+   * arrefece sugestões recebidas e processa ticks de atividades em andamento.
    */
   public update(dtSeconds: number): { activityFinished?: ActivityState } {
     this.needs = decayNeeds(this.needs, this.personality, dtSeconds);
+
+    // Arrefecimento temporal de sugestões do jogador ou de pares
+    if (this.memory.suggestedTargets) {
+      for (const k of Object.keys(this.memory.suggestedTargets)) {
+        const val = this.memory.suggestedTargets[k];
+        if (val > 0) {
+          this.memory.suggestedTargets[k] = Math.max(0, val - (dtSeconds / 60) * 0.15);
+        }
+      }
+    }
 
     if (this.currentActivity) {
       this.currentActivity.remainingTicks--;
@@ -184,8 +196,8 @@ export class AgentMind {
   }
 
   /**
-   * Conclui a atividade, aplica os efeitos físicos nas necessidades
-   * e registra a experiência na memória pessoal.
+   * Conclui a atividade, aplica os efeitos físicos nas necessidades,
+   * atualiza preferências aprendidas pelo local (A10) e registra a visita.
    */
   private completeActivity(activity: ActivityState): void {
     const effect = AFFORDANCE_EFFECTS[activity.candidate.affordance];
@@ -193,9 +205,19 @@ export class AgentMind {
       this.needs = applyEffect(this.needs, effect);
     }
 
+    // Aprendizado hedônico de preferência do local (A10):
+    // Se a atividade aumentou substancialmente o bem-estar do agente,
+    // ele aprende que "gosta" deste local e o buscará com maior probabilidade futura
+    const wellbeingAfter = wellbeing(this.needs, this.personality);
+    const deltaWellbeing = wellbeingAfter - activity.wellbeingBefore;
+
+    const targetId = activity.candidate.targetId;
+    this.memory.placePreferences = this.memory.placePreferences || {};
+    const currPref = this.memory.placePreferences[targetId] ?? 0;
+    this.memory.placePreferences[targetId] = Math.max(-1, Math.min(1, currPref + deltaWellbeing * 0.5));
+
     // Registra visita para anti-repetição
     const candId = activity.candidate.id;
-    const targetId = activity.candidate.targetId;
     this.memory.lastVisitedAt = this.memory.lastVisitedAt || {};
     this.memory.lastVisitedAt[candId] = Date.now();
 
@@ -204,12 +226,62 @@ export class AgentMind {
   }
 
   /**
-   * Ajusta o nível de afinidade com outro habitante ou com o avatar Daniel.
+   * Ajusta o nível de afinidade interpessoal e satisfaz necessidades sociais.
    */
   public recordSocialInteraction(actorId: string, positive: boolean): void {
     this.memory.actorAffinity = this.memory.actorAffinity || {};
     const curr = this.memory.actorAffinity[actorId] ?? 0.5;
     const delta = positive ? 0.08 : -0.15;
     this.memory.actorAffinity[actorId] = Math.max(0, Math.min(1, curr + delta));
+
+    if (positive) {
+      this.needs = applyEffect(this.needs, { social: 0.2, fun: 0.05 });
+    }
+  }
+
+  /**
+   * Processa interação recebida do avatar Daniel (A8):
+   * Constrói memória afetiva, satisfaz carência social e extrai possíveis
+   * estímulos de locais sugeridos na mensagem de Daniel (ex: "vai ao café").
+   */
+  public receivePlayerInteraction(playerMessage: string): { suggestedEntityId?: string } {
+    this.recordSocialInteraction('avatar-daniel', true);
+
+    const lower = playerMessage.toLowerCase();
+    this.memory.suggestedTargets = this.memory.suggestedTargets || {};
+
+    let suggestedEntityId: string | undefined;
+
+    if (lower.includes('café') || lower.includes('bistro') || lower.includes('comer') || lower.includes('lanche')) {
+      suggestedEntityId = 'cafe-bistro';
+    } else if (lower.includes('mercado') || lower.includes('compras') || lower.includes('comprar')) {
+      suggestedEntityId = 'market-central';
+    } else if (lower.includes('praça') || lower.includes('fonte')) {
+      suggestedEntityId = 'fountain-monumental';
+    } else if (lower.includes('banco') || lower.includes('descansar') || lower.includes('sentar')) {
+      suggestedEntityId = 'bench-praca-west';
+    } else if (lower.includes('árvore') || lower.includes('verde') || lower.includes('sombra')) {
+      suggestedEntityId = 'tree-boulevard-nw';
+    }
+
+    if (suggestedEntityId) {
+      this.memory.suggestedTargets[suggestedEntityId] = 0.85;
+    }
+
+    return { suggestedEntityId };
+  }
+
+  /**
+   * Executa interação social direta e espontânea entre dois agentes autônomos (A9):
+   * Ambos atualizam afinidade mútua, restauram convívio e trocam saudação.
+   */
+  public interactWithAgentPeer(peer: AgentMind): { greetingFromSelf: string; replyFromPeer: string } {
+    this.recordSocialInteraction(peer.id, true);
+    peer.recordSocialInteraction(this.id, true);
+
+    const greetingFromSelf = `Olá ${peer.name}! Tudo bem contigo?`;
+    const replyFromPeer = `Oi ${this.name}! Tudo tranquilo por aqui na praça.`;
+
+    return { greetingFromSelf, replyFromPeer };
   }
 }

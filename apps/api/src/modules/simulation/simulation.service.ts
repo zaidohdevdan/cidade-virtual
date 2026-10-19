@@ -308,6 +308,17 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     } else {
       agent.lastSpeech = '';
     }
+
+    // 6. Interação social espontânea entre agentes autônomos quando se encontram (A9)
+    for (const other of this.agentStates.values()) {
+      if (other.config.id !== agent.config.id) {
+        const dist = distance2D(agent.currentPosition, other.currentPosition);
+        if (dist <= 2.8) {
+          agent.mind.interactWithAgentPeer(other.mind);
+          break;
+        }
+      }
+    }
   }
 
   /**
@@ -382,8 +393,11 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       this.agentStates.set(targetAgentId, agent);
     }
 
-    // Registra interação social na memória viva do agente
-    agent.mind.recordSocialInteraction(playerId, true);
+    // Registra interação social com Daniel e processa estímulos contextuais da mensagem (A8)
+    const { suggestedEntityId } = agent.mind.receivePlayerInteraction(playerMessage);
+    if (suggestedEntityId) {
+      this.logger.log(`[AUTONOMY] Daniel estimulou ${agent.config.id} em direção a ${suggestedEntityId}.`);
+    }
 
     const trafficLight = this.worldGateway.getTrafficLightState();
     const currentPos = agent.currentPosition || config.initialPosition;

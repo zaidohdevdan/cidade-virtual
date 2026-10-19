@@ -231,4 +231,116 @@ describe('Autonomia Real dos Agentes — Sem Roteiros Pré-fixados', () => {
     expect(intention.source).toBe('llm');
     expect(intention.speech).toBe('Vou até o Café Bistro tomar um café expresso!');
   });
+
+  it('A8: deve reagir a sugestões contextuais do Avatar Daniel aumentando atratividade do local', async () => {
+    const mind = new AgentMind({
+      id: 'agent-vega',
+      name: 'Vega',
+      role: 'Pioneira',
+      biography: 'Exploradora da cidade',
+      personality: basePersonality,
+    });
+
+    const initialSocial = mind.needs.social;
+
+    // Daniel fala com Vega sugerindo ir ao café
+    const result = mind.receivePlayerInteraction('Olá Vega! Que tal irmos ao café tomar algo?');
+    expect(result.suggestedEntityId).toBe('cafe-bistro');
+
+    // A interação social com o avatar Daniel restaura carência social
+    expect(mind.needs.social).toBeGreaterThan(initialSocial);
+
+    // O alvo sugerido fica registrado na memória de curto prazo
+    const agentPos = { x: 5, y: 0.19, z: -10 };
+    const percept: Percept = {
+      position: agentPos,
+      entities: SYNAPSE_WORLD_ENTITIES.map((e) => ({
+        entity: e,
+        distance: distance2D(agentPos, e.approach ?? e.position),
+      })),
+      actors: [],
+      trafficLight: 'green',
+    };
+
+    const intention = await mind.decideNextIntention(agentPos, percept);
+    // Como cafe-bistro recebeu estímulo da sugestão de Daniel, ele deve ser escolhido ou ter prioridade
+    expect(intention.candidate.targetId).toBe('cafe-bistro');
+  });
+
+  it('A9: deve realizar interação mútua espontânea entre agentes autônomos em proximidade', () => {
+    const mindVega = new AgentMind({
+      id: 'agent-vega',
+      name: 'Vega',
+      role: 'Pioneira',
+      biography: 'Exploradora',
+      personality: basePersonality,
+    });
+
+    const mindSulafat = new AgentMind({
+      id: 'agent-sulafat',
+      name: 'Sulafat',
+      role: 'Cientista',
+      biography: 'Pesquisador',
+      personality: basePersonality,
+    });
+
+    // Simula carência social em ambos
+    mindVega.needs = { ...fullNeeds, social: 0.3 };
+    mindSulafat.needs = { ...fullNeeds, social: 0.3 };
+
+    const dialogue = mindVega.interactWithAgentPeer(mindSulafat);
+
+    expect(dialogue.greetingFromSelf).toContain('Sulafat');
+    expect(dialogue.replyFromPeer).toContain('Vega');
+
+    // Ambos tiveram sua necessidade social restaurada mutuamente
+    expect(mindVega.needs.social).toBeGreaterThan(0.3);
+    expect(mindSulafat.needs.social).toBeGreaterThan(0.3);
+  });
+
+  it('A10: deve aprender preferências hedônicas orgânicas por locais visitados', async () => {
+    const mind = new AgentMind({
+      id: 'agent-vega',
+      name: 'Vega',
+      role: 'Pioneira',
+      biography: 'Exploradora',
+      personality: basePersonality,
+    });
+
+    // Estado com fome moderada
+    mind.needs = { ...fullNeeds, hunger: 0.3 };
+
+    const marketEntity = SYNAPSE_WORLD_ENTITIES.find((e) => e.id === 'market-central')!;
+
+    // Executa e completa atividade de compras/alimentação no mercado central
+    const candidate = {
+      id: 'shop:market-central',
+      affordance: 'shop' as const,
+      targetId: 'market-central',
+      targetLabel: marketEntity.label,
+      targetKind: 'entity' as const,
+      destination: marketEntity.approach ?? marketEntity.position,
+      distance: 2.0,
+      quality: 1.0,
+      score: 0.8,
+    };
+
+    mind.startArrivalActivity(candidate);
+
+    // Processa os ticks necessários para concluir a atividade
+    let finishedActivity;
+    for (let i = 0; i < 5; i++) {
+      const res = mind.update(1);
+      if (res.activityFinished) {
+        finishedActivity = res.activityFinished;
+        break;
+      }
+    }
+
+    expect(finishedActivity).toBeDefined();
+    expect(mind.needs.hunger).toBeGreaterThan(0.3);
+
+    // O local que proporcionou bem-estar passa a ter preferência hedônica positiva na memória
+    expect(mind.memory.placePreferences?.['market-central']).toBeGreaterThan(0);
+  });
 });

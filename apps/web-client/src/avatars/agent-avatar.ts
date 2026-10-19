@@ -35,6 +35,7 @@ export class AgentAvatar {
   public isWaitingAtCrosswalk: boolean = false;
   public emotionState: string = 'calm';
   public isNearPlayer: boolean = false;
+  public hasReceivedServerTarget: boolean = false;
   private proximityGreetingCooldown: number = 0;
 
   private leftLeg!: THREE.Mesh;
@@ -513,6 +514,7 @@ export class AgentAvatar {
    */
   public setTargetPosition(pos: { x: number; y?: number; z: number }): void {
     this.targetPosition = new THREE.Vector3(pos.x, pos.y ?? this.position.y, pos.z);
+    this.hasReceivedServerTarget = true;
     this.waitTimer = 0; // Acorda de pausas locais para navegar ao destino
   }
 
@@ -521,6 +523,7 @@ export class AgentAvatar {
    */
   public stopMovement(): void {
     this.targetPosition = null;
+    this.hasReceivedServerTarget = true;
     this.waitTimer = 1.0;
     this.speed = 0;
   }
@@ -697,6 +700,18 @@ export class AgentAvatar {
       return;
     }
     this.isWaitingAtCrosswalk = false;
+
+    // Se o agente estiver sob controle autoritativo do servidor e não possuir novo destino ativo,
+    // ele permanece no local atual realizando sua atividade em repouso ao invés de ciclar rotas locais.
+    if (!this.targetPosition && this.hasReceivedServerTarget) {
+      this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
+      this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
+      this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, delta * 8);
+      this.leftArm.rotation.x = THREE.MathUtils.lerp(this.leftArm.rotation.x, 0, delta * 8);
+      this.rightArm.rotation.x = THREE.MathUtils.lerp(this.rightArm.rotation.x, 0, delta * 8);
+      this.mesh.position.y = 0.04;
+      return;
+    }
 
     // Prioriza destino de navegação recebido do servidor; caso contrário, segue rota local
     let target: THREE.Vector3;

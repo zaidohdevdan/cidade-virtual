@@ -21,6 +21,10 @@ export interface MemoryContext {
   visitCounts?: Record<string, number>;
   /** Nível de afeição/afinidade com atores (0..1). */
   actorAffinity?: Record<string, number>;
+  /** Preferências subjetivas aprendidas para entidades físicas (-1..1). */
+  placePreferences?: Record<string, number>;
+  /** Estímulos ou sugestões recebidas do avatar Daniel ou de outros agentes (0..1). */
+  suggestedTargets?: Record<string, number>;
 }
 
 export interface DeciderOptions {
@@ -153,15 +157,25 @@ export function scoreCandidate(
   }
   const novelty = noveltyBonus - repetitionPenalty;
 
-  // 4. Preferência social / afinidade:
+  // 4. Preferência social / afinidade e preferências aprendidas de locais (A10)
   let preference = 0;
   if (cand.targetKind === 'player') {
-    // Interação com o jogador avatar: atrativa para curiosos e extrovertidos
-    preference += 0.25 * (p.extraversion + p.openness);
+    // Interação com o jogador avatar: modulada pela afinidade construída
+    const playerAffinity = memory.actorAffinity?.[cand.targetId] ?? 0.6;
+    preference += playerAffinity * (p.extraversion + p.openness) * 0.4;
   } else if (cand.targetKind === 'agent') {
+    // Afinidade interpessoal com outros habitantes
     const affinity = memory.actorAffinity?.[cand.targetId] ?? 0.5;
-    preference += (affinity - 0.5) * 0.4;
+    preference += (affinity - 0.5) * 0.5;
+  } else {
+    // Preferência aprendida por experiência prévia em entidades físicas (A10)
+    const learnedPref = memory.placePreferences?.[cand.targetId] ?? 0;
+    preference += learnedPref * 0.35;
   }
+
+  // Estímulo / sugestão direta recente do jogador Daniel (A8)
+  const suggestionBonus = memory.suggestedTargets?.[cand.targetId] ?? 0;
+  preference += suggestionBonus * 0.65;
 
   // 5. Salência do estímulo (proximidade imediata):
   const salience = cand.distance < 4.0 ? 0.08 : 0;

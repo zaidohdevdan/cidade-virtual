@@ -95,7 +95,15 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     // Interrompe movimento
     agent.stopMovement();
     expect(agent.targetPosition).toBeNull();
+    expect(agent.hasReceivedServerTarget).toBe(true);
     expect(agent.speed).toBe(0);
+
+    // No update subsequente com targetPosition nulo, deve permanecer repousando no local sem voltar a patrulhar
+    const xBefore = agent.position.x;
+    const zBefore = agent.position.z;
+    agent.update(0.1, [], 'green');
+    expect(agent.position.x).toBe(xBefore);
+    expect(agent.position.z).toBe(zBefore);
   });
 
   it('deve aguardar na calçada quando estiver próximo à faixa central e o semáforo veicular estiver verde', () => {
