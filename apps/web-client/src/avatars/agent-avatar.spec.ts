@@ -172,4 +172,20 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
 
     stopSpy.mockRestore();
   });
+
+  it('updateLabel não deve exibir speechBubble se o jogador não estiver próximo', () => {
+    const mockCamera = new THREE.PerspectiveCamera();
+    const mockRenderer = {
+      domElement: { clientWidth: 1920, clientHeight: 1080 },
+    } as THREE.WebGLRenderer;
+
+    agent.isNearPlayer = false;
+    agent.speechTimer = 3.0; // Mesmo se timer tiver valor residual
+    if (!agent.speechBubble) {
+      agent.speechBubble = document.createElement('div');
+    }
+
+    agent.updateLabel(mockCamera, mockRenderer);
+    expect(agent.speechBubble.style.display).toBe('none');
+  });
 });

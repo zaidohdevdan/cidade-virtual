@@ -539,16 +539,20 @@ export class AgentAvatar {
       this.label.style.left = `${x}px`;
       this.label.style.top = `${y}px`;
 
-      // Atualiza posição do balão de fala se estiver ativo
-      if (this.speechBubble && this.speechTimer > 0) {
-        const bubblePos = this.position.clone().add(new THREE.Vector3(0, 2.95, 0));
-        bubblePos.project(camera);
-        const bx = (bubblePos.x * 0.5 + 0.5) * w;
-        const by = (-bubblePos.y * 0.5 + 0.5) * h;
-        if (bubblePos.z < 1) {
-          this.speechBubble.style.display = 'block';
-          this.speechBubble.style.left = `${bx}px`;
-          this.speechBubble.style.top = `${by}px`;
+      // Atualiza posição do balão de fala se estiver ativo e o avatar Daniel estiver próximo
+      if (this.speechBubble) {
+        if (this.speechTimer > 0 && this.isNearPlayer) {
+          const bubblePos = this.position.clone().add(new THREE.Vector3(0, 2.95, 0));
+          bubblePos.project(camera);
+          const bx = (bubblePos.x * 0.5 + 0.5) * w;
+          const by = (-bubblePos.y * 0.5 + 0.5) * h;
+          if (bubblePos.z < 1) {
+            this.speechBubble.style.display = 'block';
+            this.speechBubble.style.left = `${bx}px`;
+            this.speechBubble.style.top = `${by}px`;
+          } else {
+            this.speechBubble.style.display = 'none';
+          }
         } else {
           this.speechBubble.style.display = 'none';
         }
@@ -658,19 +662,23 @@ export class AgentAvatar {
           return;
         }
       } else {
-        if (this.isNearPlayer) {
-          this.isNearPlayer = false;
-          // Se o jogador se afastar da proximidade (> 3.5m), encerra balão e áudio imediatamente
-          if (this.speechBubble && this.speechTimer > 0) {
-            this.speechTimer = 0;
-            this.speechBubble.style.opacity = '0';
-            this.speechBubble.style.display = 'none';
-            speechSynth.stop();
-          }
+        this.isNearPlayer = false;
+        // Se o avatar Daniel estiver longe (> 3.5m), encerra balão e áudio imediatamente
+        if (this.speechBubble && (this.speechTimer > 0 || this.speechBubble.style.display !== 'none')) {
+          this.speechTimer = 0;
+          this.speechBubble.style.opacity = '0';
+          this.speechBubble.style.display = 'none';
+          speechSynth.stop();
         }
       }
     } else {
       this.isNearPlayer = false;
+      if (this.speechBubble && (this.speechTimer > 0 || this.speechBubble.style.display !== 'none')) {
+        this.speechTimer = 0;
+        this.speechBubble.style.opacity = '0';
+        this.speechBubble.style.display = 'none';
+        speechSynth.stop();
+      }
     }
 
     if (this.waitTimer > 0) {

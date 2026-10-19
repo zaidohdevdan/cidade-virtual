@@ -86,7 +86,8 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     expect(states.has('agent-chason')).toBe(true);
   });
 
-  it('deve avançar o tick e emitir agent.moved e agent.speech durante o passo de simulação', async () => {
+  it('deve avançar o tick e emitir agent.moved e agent.speech durante o passo de simulação quando jogador estiver próximo', async () => {
+    mockWorldGateway.getClosestPlayer?.mockReturnValue({ distance: 2.1 });
     await service.onModuleInit();
 
     await service.executeSimulationStep();
@@ -115,9 +116,29 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
         payload: expect.objectContaining({
           agentId: expect.any(String),
           message: expect.any(String),
+          isProximitySpeech: true,
         }),
       }),
     );
+  });
+
+  it('não deve emitir agent.speech quando o avatar Daniel estiver distante (> 3.5m)', async () => {
+    mockWorldGateway.getClosestPlayer?.mockReturnValue({ distance: 12.0 });
+    await service.onModuleInit();
+
+    await service.executeSimulationStep();
+
+    expect(mockWorldGateway.broadcastDomainEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'agent.moved',
+      }),
+    );
+
+    // Não deve disparar agent.speech se o jogador estiver longe
+    const speechCalls = mockWorldGateway.broadcastDomainEvent.mock.calls.filter(
+      (call: any[]) => call[0]?.name === 'agent.speech',
+    );
+    expect(speechCalls.length).toBe(0);
   });
 
   it('deve encerrar o timer de heartbeat no onModuleDestroy', async () => {

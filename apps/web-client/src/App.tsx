@@ -198,7 +198,7 @@ export const App: React.FC = () => {
             }
           }
           if (event.name === 'agent.speech' && event.payload) {
-            const { agentId, principalId, message, isProximitySpeech } = event.payload as {
+            const { agentId, principalId, message } = event.payload as {
               agentId?: string;
               principalId?: string;
               message?: string;
@@ -207,10 +207,11 @@ export const App: React.FC = () => {
             const id = agentId || (principalId?.startsWith('principal_') ? principalId.replace('principal_', '') : principalId);
             const agent = agents.find((a) => a.config.id === id);
             if (agent && message) {
-              const isNearby = isProximitySpeech !== undefined
-                ? isProximitySpeech
-                : (agent.position.distanceTo(player.position) <= 3.5);
-              agent.say(message, 4.0, isNearby);
+              // Os balões de conversa só devem ser emitidos quando o avatar Daniel estiver próximo (<= 3.5m)
+              const distToPlayer = agent.position.distanceTo(player.position);
+              if (distToPlayer <= 3.5) {
+                agent.say(message, 4.0);
+              }
             }
           }
           if (event.name === 'npc.alert' && event.payload) {
@@ -219,7 +220,12 @@ export const App: React.FC = () => {
               const targets = citizenIds && citizenIds.length > 0
                 ? agents.filter((a) => citizenIds.includes(a.config.id))
                 : agents;
-              targets.forEach((a) => a.say(`⚠️ ${message}`, 5));
+              targets.forEach((a) => {
+                // Apenas emite balão para agentes próximos ao avatar Daniel (<= 3.5m)
+                if (a.position.distanceTo(player.position) <= 3.5) {
+                  a.say(`⚠️ ${message}`, 5);
+                }
+              });
             }
           }
         });

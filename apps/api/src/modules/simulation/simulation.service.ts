@@ -15,7 +15,7 @@ export interface AutonomousAgentRuntimeState {
   waypoints: Vector3Like[];
   waypointIndex: number;
   lastAction: string;
-  lastSpeech: string;
+  lastSpeech?: string;
   goalIndex: number;
   isDeliberating: boolean;
 }
@@ -246,21 +246,24 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       agent.lastAction = action.actionType;
 
       // 5. Formata pensamento ou fala contextual do habitante
-      const speechMessage = isPlayerNearby
-        ? this.generatePlayerProximityGreeting(agent.config, trafficLight)
-        : this.generateAgentSpeech(agent.config, action, trafficLight);
+      // Os balões de conversações só devem ser disparados quando o avatar Daniel se aproxima do agente (<= 3.5m)
+      if (isPlayerNearby) {
+        const speechMessage = this.generatePlayerProximityGreeting(agent.config, trafficLight);
+        agent.lastSpeech = speechMessage;
 
-      agent.lastSpeech = speechMessage;
-
-      // 6. Emite fala/pensamento para o balão flutuante no 3D
-      this.worldGateway.broadcastDomainEvent({
-        name: 'agent.speech',
-        payload: {
-          agentId: agent.config.id,
-          message: speechMessage,
-          isProximitySpeech: isPlayerNearby,
-        },
-      });
+        // 6. Emite fala para o balão flutuante no 3D apenas quando em proximidade do avatar
+        this.worldGateway.broadcastDomainEvent({
+          name: 'agent.speech',
+          payload: {
+            agentId: agent.config.id,
+            message: speechMessage,
+            isProximitySpeech: true,
+          },
+        });
+      } else {
+        // Longe do avatar Daniel: mantém locomoção e rotinas sem balões nem chamadas desnecessárias
+        agent.lastSpeech = '';
+      }
     } catch (err) {
       this.logger.warn(`Falha na deliberação cognitiva de ${agent.config.id}: ${(err as Error).message}`);
     }
