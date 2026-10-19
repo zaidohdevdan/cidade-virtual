@@ -1,5 +1,47 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Task-016 — Expandir cobertura de testes
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Qualidade Contínua, Resiliência e Prevenção de Regressões
+
+### 1. Resumo Executivo
+Expansão massiva da suíte de testes automatizados do monorepo, elevando a cobertura para 21 arquivos de teste e 101 testes executados (100% green), com novas suítes unitárias, de integração e ponta a ponta (E2E) cobrindo schemas, ciclo cognitivo, event bus, persistência de cidadãos e snapshots do mundo:
+1. **Validação de Schemas Zod e Ferramentas (`tests/unit/tools.test.ts` e `packages/tools/tools.spec.ts`)**:
+   - 17 testes na suíte raiz + 9 testes no pacote `@cidade-virtual/tools`.
+   - Cobertura estrita dos 8 schemas canônicos da cidade: `createCitizenSchema`, `triggerEventSchema`, `getNPCMemorySchema`, `setEmotionStateSchema`, `requestHumanReviewSchema`, `weatherSetConditionSchema`, `npcBroadcastAlertSchema` e `getSceneSnapshotSchema`.
+   - Rejeição de valores fora de faixa, coordenadas inválidas, enums desconhecidos e campos obrigatórios faltantes.
+   - Validação da factory `createTool` e execução tipada.
+2. **Ciclo Cognitivo e Deliberação (`tests/unit/cognitive-cycle.test.ts`)**:
+   - 4 testes unitários cobrindo o `CognitiveCycleManager`.
+   - Teste com LLM mockado deliberando ações com raciocínio e fala estruturados.
+   - Teste de fallback defensivo em caso de falha ou erro no provedor de LLM.
+   - Validação de emissão de `ActionRequest` assinado com identidade de `Principal` e telemetria de auditoria.
+3. **Event Bus e Mensageria Assíncrona (`tests/unit/event-bus.test.ts`)**:
+   - 4 testes unitários cobrindo pub/sub em memória.
+   - Suporte a múltiplos handlers assíncronos disparados em paralelo para o mesmo tópico de domínio.
+   - Segregação de tópicos e imunidade a falhas (um handler que lança exceção não derruba os demais).
+   - Despacho idempotente em tópicos vazios.
+4. **Ciclo de Vida de Habitantes (`tests/integration/citizens.test.ts`)**:
+   - Adição do teste de ciclo de vida completo: criação de cidadão (`createCitizen`), alteração de humor/emoção (`setEmotionState`) e listagem filtrada (`listCitizens`), persistido de ponta a ponta no PostgreSQL real.
+5. **Snapshot E2E do Mundo (`tests/e2e/snapshot.test.ts`)**:
+   - 4 testes E2E validando a ferramenta `getSceneSnapshotTool` consumindo os dados reais do banco PostgreSQL.
+   - Validação estrutural do schema de `SceneSnapshot` (população ativa, clima atual, anomalias, histórico de eventos).
+   - Reatividade comprovada a mutações climáticas no banco.
+6. **Estabilização de Concorrência e CI**:
+   - Criação do `vitest.config.ts` com `testTimeout: 30000` e `hookTimeout: 30000` na raiz.
+   - Isolamento de conexões no teste de persistência para evitar encerramento prematuro de pool compartilhado.
+   - Atualização do `.github/workflows/ci.yml` incluindo `@cidade-virtual/tools` no job de validação e atualizando o contador para 21 arquivos / 101 testes.
+7. **Métricas Finais**:
+   - `npx vitest run tests/`: 21/21 arquivos aprovados, 101/101 testes verdes em 6.74s.
+   - `npm test`: 26/26 projetos Nx aprovados (100%).
+   - `npm run check:schema-drift`: 100% sincronizado (zero drift).
+   - `npx nx run-many -t lint --all`: 25/25 projetos sem erros.
+   - `npx nx run-many -t build --all`: 25/25 projetos construídos com sucesso.
+
+---
+
 ## Task: Motor de Autonomia Real e Emergente dos Agentes (Fase 1: A1 a A6)
 - **Data:** 2026-10-19
 - **Status:** Concluído

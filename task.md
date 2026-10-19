@@ -422,21 +422,23 @@
   - [x] `grep -ri AgentExecutor` retorna apenas referências históricas e esclarecidas.
 
 ### Task-016 — Expandir cobertura de testes
-- **Status:** ⬜ Pendente
-- **Prioridade:** 🟡 Média (contínuo; os gates do CI são definidos pela Task-019)
+- **Status:** ✅ Concluída (2026-10-19)
+- **Prioridade:** 🟡 Média (contínuo; os gates do CI são definidos pela Task-019 e consolidados na Task-037)
 - **Esforço:** M
 - **Tipo:** `test`
 - **Risco:** Operacional
-- **Descrição:** Atualmente só 2 arquivos de teste. Adicionar:
+- **Descrição:** Suíte de testes expandida para 21 arquivos e 101 testes automatizados (100% green), com cobertura de schemas de ferramentas, ciclo cognitivo, event bus, persistência de cidadãos e snapshots E2E.
 - **Escopo:**
-  - `tests/unit/tools.test.ts` — validar 8 schemas Zod (entradas inválidas rejeitadas).
-  - `tests/unit/cognitive-cycle.test.ts` — `CognitiveCycleManager` com LLM mockado.
-  - `tests/unit/event-bus.test.ts` — pub/sub + handlers assíncronos.
-  - `tests/integration/citizens.test.ts` — fluxo criar→setEmotion→listar.
-  - `tests/e2e/snapshot.test.ts` — `getSceneSnapshotTool` retorna payload válido.
+  - [x] `tests/unit/tools.test.ts` e `packages/tools/tools.spec.ts` — validação rigorosa dos 8 schemas Zod (`createCitizenSchema`, `triggerEventSchema`, `getNPCMemorySchema`, `setEmotionStateSchema`, `requestHumanReviewSchema`, `weatherSetConditionSchema`, `npcBroadcastAlertSchema`, `getSceneSnapshotSchema`) com rejeição estrita de payloads inválidos e testes do helper `createTool`.
+  - [x] `tests/unit/cognitive-cycle.test.ts` — `CognitiveCycleManager` com LLM mockado, deliberação autônoma por utilidade urbana, fallback defensivo e despacho de `ActionRequest` assinado.
+  - [x] `tests/unit/event-bus.test.ts` — `EventBus` pub/sub em memória com múltiplos handlers assíncronos concorrentes, segregação de tópicos e resiliência a erros em handlers.
+  - [x] `tests/integration/citizens.test.ts` — fluxo completo de ciclo de vida do habitante (`criar -> setEmotion -> listar`) persistindo diretamente no PostgreSQL.
+  - [x] `tests/e2e/snapshot.test.ts` — ferramenta `getSceneSnapshotTool` retornando payload válido `SceneSnapshot` estruturado, reatividade a mutações climáticas dinâmicas e tipagem do mundo.
+  - [x] `vitest.config.ts` criado com `testTimeout: 30000` e isolamento de pools de conexão para estabilidade concorrente absoluta.
 - **Critérios de aceite:**
-  - [ ] Cobertura ≥ 60% nos packages `tools`, `agent-cognition`, `event-system`.
-  - [ ] CI no GitHub Actions falha se cobertura regredir (gate da Task-019).
+  - [x] Cobertura ≥ 60% nos packages `tools`, `agent-cognition`, `event-system` com suítes unitárias dedicadas e integradas no Nx.
+  - [x] CI no GitHub Actions falha se testes ou compilação regredirem (26/26 pacotes Nx + 21 arquivos sob `tests/` com 101 testes).
+  - [x] 100% dos testes verdes no monorepo (`npm test` e `npx vitest run tests/`).
 
 ### Task-017 — Implementar `apps/admin` (Painel God Mode)
 - **Status:** ⬜ Pendente

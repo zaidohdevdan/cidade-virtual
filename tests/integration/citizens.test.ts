@@ -91,4 +91,33 @@ describe('Task-002 — Integração CitizensService com PostgreSQL', () => {
       service = new CitizensService(agentRepo, expRepo);
     }
   });
+
+  it('deve executar o fluxo completo de ciclo de vida: criar -> setEmotion -> listar (Task-016)', async () => {
+    // 1. Criar novo habitante
+    const citizen = await service.create({
+      name: 'Aladfar (Observador Ciclo)',
+      archetype: 'elder',
+      initialPosition: { lat: -15.0, lng: 30.0, altitude: 0.19 },
+      initialEmotion: 'calm',
+      backstorySeed: 'Habitante para teste de ciclo de vida completo',
+    });
+
+    expect(citizen.id).toBeDefined();
+    expect(citizen.name).toBe('Aladfar (Observador Ciclo)');
+
+    // 2. Modificar estado emocional com persistência relacional
+    await service.setEmotion(citizen.id, 'joyful', 0.85, 90);
+
+    // 3. Listar todos os habitantes e comprovar presença e estado atualizado
+    const allCitizens = await service.listAll();
+    expect(Array.isArray(allCitizens)).toBe(true);
+    expect(allCitizens.length).toBeGreaterThanOrEqual(1);
+
+    const found = allCitizens.find((c) => c.id === citizen.id);
+    expect(found).toBeDefined();
+    expect(found?.name).toBe('Aladfar (Observador Ciclo)');
+    expect(found?.archetype).toBe('elder');
+    expect(found?.emotionState).toBe('joyful');
+  });
 });
+

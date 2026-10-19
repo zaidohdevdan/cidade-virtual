@@ -26,7 +26,7 @@ jobs:
       - name: Lint and typecheck packages
         run: npx nx run-many -t lint --all
       - name: Run motor & client unit tests
-        run: npx nx run-many -t test -p @cidade-virtual/agent-planning @cidade-virtual/world-engine @cidade-virtual/llm-adapters @cidade-virtual/memory @cidade-virtual/agent-cognition @cidade-virtual/event-system @cidade-virtual/web-client
+        run: npx nx run-many -t test -p @cidade-virtual/agent-planning @cidade-virtual/world-engine @cidade-virtual/llm-adapters @cidade-virtual/memory @cidade-virtual/agent-cognition @cidade-virtual/event-system @cidade-virtual/tools @cidade-virtual/web-client
 
   integration-and-e2e:
     runs-on: ubuntu-latest
@@ -58,7 +58,7 @@ jobs:
       - name: Verify Schema Drift in environment
         run: npm run check:schema-drift
 
-      - name: Run Root Integration & E2E Test Suite (17 files / 71 tests)
+      - name: Run Root Integration & E2E Test Suite (21 files / 101 tests)
         run: npx vitest run tests/
 
       - name: Run Full Monorepo Tests (All 26 Projects)

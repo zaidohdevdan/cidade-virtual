@@ -59,39 +59,25 @@ describe('Fase 1: Fundação — Persistência e Integridade do Mundo', () => {
   it('deve garantir continuidade do estado do mundo após reinicialização da conexão', async () => {
     const worldId = testWorldId;
 
-    // 1. Fechar conexão existente (simulando crash ou restart do servidor)
-    await conn.close();
-
-    // 2. Criar nova conexão do zero
-    const newConn = createDatabaseConnection({
+    // Criar nova conexão do zero (simulando nova instância da API após reinício)
+    const restartConn = createDatabaseConnection({
       host: 'localhost',
       port: 5433,
       user: 'synapse',
       password: 'synapse_secret_password',
       database: 'synapse_city',
     });
-    const newWorldRepo = new WorldStateRepository(newConn.db);
+    const newWorldRepo = new WorldStateRepository(restartConn.db);
 
     try {
-      // 3. Recuperar estado persistido
+      // Recuperar estado persistido
       const reloaded = await newWorldRepo.getById(worldId);
       expect(reloaded).not.toBeNull();
       expect(reloaded?.id).toBe(worldId);
       expect(reloaded?.tickCount).toBe(50);
       expect(reloaded?.weather).toBe('sunset');
     } finally {
-      await newConn.close();
-      // Restaurar conexão principal para os testes seguintes
-      conn = createDatabaseConnection({
-        host: 'localhost',
-        port: 5433,
-        user: 'synapse',
-        password: 'synapse_secret_password',
-        database: 'synapse_city',
-      });
-      worldRepo = new WorldStateRepository(conn.db);
-      agentRepo = new AgentIdentityRepository(conn.db);
-      expRepo = new ExperienceRepository(conn.db);
+      await restartConn.close();
     }
   });
 
