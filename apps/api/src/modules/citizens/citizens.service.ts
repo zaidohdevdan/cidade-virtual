@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, Optional, OnModuleInit, Inject } from '@nestjs/common';
 import type {
   CitizenId,
   CitizenArchetype,
@@ -23,10 +23,10 @@ export class CitizensService implements OnModuleInit {
   private readonly logger = new Logger(CitizensService.name);
 
   constructor(
-    private readonly agentRepo: AgentIdentityRepository,
-    private readonly expRepo: ExperienceRepository,
-    @Optional() private readonly worldGateway?: WorldGateway,
-    @Optional() private readonly memoryService?: MemoryService,
+    @Inject(AgentIdentityRepository) private readonly agentRepo: AgentIdentityRepository,
+    @Inject(ExperienceRepository) private readonly expRepo: ExperienceRepository,
+    @Optional() @Inject(WorldGateway) private readonly worldGateway?: WorldGateway,
+    @Optional() @Inject(MemoryService) private readonly memoryService?: MemoryService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -38,6 +38,11 @@ export class CitizensService implements OnModuleInit {
    * posições urbanas, objetivos e memórias episódicas iniciais persistidas no PostgreSQL e Qdrant.
    */
   async seedDefaultCitizens(): Promise<{ seededCount: number; experiencesCount: number }> {
+    if (!this.agentRepo || !this.expRepo) {
+      this.logger.warn('Repositórios relacionais não injetados. Seed ignorado (modo offline/resiliente).');
+      return { seededCount: 0, experiencesCount: 0 };
+    }
+
     this.logger.log('Iniciando seed de habitantes canônicos e fase meta de consciência...');
     let seededCount = 0;
     let experiencesCount = 0;

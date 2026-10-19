@@ -1,5 +1,5 @@
 // apps/api/src/modules/world/world.service.ts
-import { Injectable, OnModuleInit, Logger, Optional } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger, Optional, Inject } from '@nestjs/common';
 import type {
   EventLog,
   EventId,
@@ -31,11 +31,16 @@ export class WorldService implements OnModuleInit {
   public static readonly DEFAULT_WORLD_ID = 'rua-central-main';
 
   constructor(
-    private readonly worldStateRepo: WorldStateRepository,
-    @Optional() private readonly worldGateway?: WorldGateway,
+    @Inject(WorldStateRepository) private readonly worldStateRepo: WorldStateRepository,
+    @Optional() @Inject(WorldGateway) private readonly worldGateway?: WorldGateway,
   ) {}
 
   async onModuleInit() {
+    if (!this.worldStateRepo) {
+      this.logger.warn('WorldStateRepository não injetado. Operando em modo de memória volátil.');
+      return;
+    }
+
     try {
       let state = await this.worldStateRepo.getById(WorldService.DEFAULT_WORLD_ID);
       if (!state) {

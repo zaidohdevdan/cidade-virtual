@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
 import type { ActionRequest, ActionResult, Principal } from '@cidade-virtual/types';
 import { ActionsService } from './actions.service';
@@ -16,7 +17,7 @@ import { CurrentPrincipal } from '../../common/decorators/rbac.decorator';
 @Controller('actions')
 @UseGuards(RbacGuard)
 export class ActionsController {
-  constructor(private readonly actionsService: ActionsService) {}
+  constructor(@Inject(ActionsService) private readonly actionsService: ActionsService) {}
 
   /**
    * Endpoint canônico da AgentAction API (Task-025).

@@ -1,5 +1,5 @@
 // apps/api/src/modules/actions/actions.service.ts
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import type {
   ActionRequest,
   ActionResult,
@@ -13,7 +13,11 @@ export class ActionsService {
   private readonly logger = new Logger(ActionsService.name);
   private readonly lastKnownPositions = new Map<string, PositionPoint>();
 
-  constructor(@Optional() private readonly worldGateway?: WorldGateway) {}
+  constructor(@Optional() @Inject(WorldGateway) private readonly worldGateway?: WorldGateway) {
+    if (this.worldGateway) {
+      this.worldGateway.setActionsService(this);
+    }
+  }
 
   /**
    * Executa uma ação de acordo com o contrato unificado AgentAction API (Task-025).

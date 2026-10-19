@@ -1,5 +1,5 @@
 // apps/api/src/modules/cognition/cognition.service.ts
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import type { AgentAction, CitizenId, MemorySnippet } from '@cidade-virtual/types';
 import { CognitiveCycleManager } from '@cidade-virtual/agent-cognition';
 import type { LLMProviderAdapter } from '@cidade-virtual/llm-adapters';
@@ -24,8 +24,8 @@ export class CognitionService {
   private cognitiveManager: CognitiveCycleManager;
 
   constructor(
-    private readonly memoryService: MemoryService,
-    @Optional() private readonly expRepo?: ExperienceRepository,
+    @Inject(MemoryService) private readonly memoryService: MemoryService,
+    @Optional() @Inject(ExperienceRepository) private readonly expRepo?: ExperienceRepository,
     @Optional() llmAdapter?: LLMProviderAdapter,
   ) {
     this.cognitiveManager = new CognitiveCycleManager(llmAdapter);
