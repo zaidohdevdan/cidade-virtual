@@ -1,5 +1,31 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Conectar LLM Real no Cérebro dos Agentes (Autonomia 65% ➔ 95%)
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Cognitivo / Inteligência Generativa e Diálogos em Tempo Real
+
+### 1. Resumo Executivo
+Implementação completa e integração da camada de adaptadores de Large Language Models (`@cidade-virtual/llm-adapters`) conectada aos cérebros cognitivos dos habitantes da Cidade Virtual:
+1. **Arquitetura Desacoplada (`packages/llm-adapters/`)**:
+   - `GeminiLLMAdapter`: Integração nativa com a API do Google Gemini (`gemini-2.0-flash` padrão, controle de temperatura por arquétipo, timeout com AbortController).
+   - `OpenAILLMAdapter`: Suporte a endpoints OpenAI e OpenRouter (`https://openrouter.ai/api/v1`). Integração com modelos ultra-rápidos e gratuitos (`liquid/lfm-2.5-2.6b:free`) com fallback automático de modelos descontinuados (`qwen/qwen2.5-coder:free` e `nemotron`).
+   - `OllamaLLMAdapter`: Suporte a modelos locais para execução offline.
+   - `createDefaultLLMAdapter()`: Factory inteligente com priorização automática de variáveis de ambiente (`GEMINI_API_KEY` -> `OPENAI_API_KEY` -> `OLLAMA_BASE_URL` -> fallback heurístico gracioso).
+2. **Integração no Ciclo Cognitivo (`CognitionModule` e `CognitionService`)**:
+   - Injeção do token `'LLM_ADAPTER'` no NestJS.
+   - Método `generateConversationalDialogue()` que recupera memórias semânticas no Qdrant, injeta a persona/biografia do habitante, o estado urbano (semáforo, horário) e a fala do usuário para sintetizar respostas ricas e contextualizadas.
+   - Validação da política de rotina: ações rotineiras de deslocamento na calçada executam em tempo ultrarrápido (~100ms via política de rotina), reservando o processamento do LLM para deliberações genuínas e conversações interativas com o jogador.
+3. **Resolução de Erros e Sincronização dos 7 Cidadãos**:
+   - Adicionados os 2 cidadãos adicionais (`Aladfar` e `Xihe`) em `citizens.seed.ts`, sanando o erro "Habitante não encontrado. Aladfar".
+   - Todos os 7 habitantes agora possuem identificação, arquétipo, rotas e capacidade de deliberação cognitiva ativa.
+4. **Validação de Aceite**:
+   - `npm run typecheck`: **0 erros de tipagem** em todos os projetos.
+   - `npx vitest run --fileParallelism=false`: **26 arquivos de teste, 133 testes executados e 100% aprovados** (0 falhas).
+
+---
+
 ## Task: Motor de Autonomia Urbana — AutonomousSimulationService e Sincronização em Tempo Real
 - **Data:** 2026-10-19
 - **Status:** Concluído
