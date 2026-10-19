@@ -6,6 +6,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { OPERATIONAL_LIMITS } from '@cidade-virtual/config';
 import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 export async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -13,6 +14,9 @@ export async function bootstrap() {
     new FastifyAdapter(),
     { logger: ['log', 'error', 'warn', 'debug'] },
   );
+
+  // Filtro global de exceções seguro (NestJS ExceptionsHandler)
+  app.useGlobalFilters(new HttpExceptionFilter());
 
   // CORS Whitelist rigorosa (Task-022 / mandatory-secure-web-skills)
   // Rejeita explicitamente wildcard '*'
