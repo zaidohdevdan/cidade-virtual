@@ -13,7 +13,8 @@ export type VehicleBehaviorState =
   | 'U_TURN_MANEUVER'
   | 'PARKING_MANEUVER'
   | 'PARKED'
-  | 'UNPARKING_MANEUVER';
+  | 'UNPARKING_MANEUVER'
+  | 'DEADLOCK_ESCAPE';
 
 export interface VehicleConfig {
   id: string;
@@ -190,6 +191,11 @@ export class VehicleAgent {
   private honked = false;
   private parkTimer = 0;
   private parkDuration = 12;
+
+  // Desengavetamento autônomo cooperativo
+  private deadlockTimer = 0;
+  private deadlockReverseRemaining = 0;
+  private deadlockYieldTimer = 0;
 
   // Sinalização
   private turnSignalState: SignalLamp = 'OFF';
@@ -487,6 +493,7 @@ export class VehicleAgent {
     this.parkCooldown = Math.max(0, this.parkCooldown - delta);
 
     const perception = this.perceive(playerPos, pedestrianPositions, otherVehicles);
+    this.checkDeadlock(delta, perception, otherVehicles, pedestrianPositions, playerPos);
 
     switch (this.state) {
       case 'CRUISING':
@@ -500,6 +507,9 @@ export class VehicleAgent {
       case 'UNPARKING_MANEUVER':
       case 'U_TURN_MANEUVER':
         this.updateManeuver(delta, perception);
+        break;
+      case 'DEADLOCK_ESCAPE':
+        this.updateDeadlockEscape(delta, perception, otherVehicles, pedestrianPositions, playerPos);
         break;
       case 'PARKED':
         this.updateParked(delta, otherVehicles);
@@ -586,6 +596,13 @@ export class VehicleAgent {
       const otherFwd = new THREE.Vector3(Math.sin(other.rotationY), 0, Math.cos(other.rotationY));
       const alignment = fwd.dot(otherFwd);
 
+      // Se o outro veículo está realizando manobra cooperativa de escape (DEADLOCK_ESCAPE) e cedendo passagem,
+      // permite que o veículo que estava encurralado passe e libere o cruzamento.
+      if (other.state === 'DEADLOCK_ESCAPE' && other.speed <= 0.05) {
+        const distToOther = this.position.distanceTo(other.position);
+        if (distToOther > 2.8) continue;
+      }
+
       // Prioridade no cruzamento para fluxos perpendiculares (evita travamento mútuo):
       // quem já está dentro da caixa tem preferência; empate resolvido por id determinístico.
       if (Math.abs(alignment) < 0.5) {
@@ -650,14 +667,18 @@ export class VehicleAgent {
               other.position.x -= nx * (overlap * 0.5);
               other.position.z -= nz * (overlap * 0.5);
               other.mesh.position.copy(other.position);
-              other.speed = Math.min(other.speed, 0);
-              other.targetSpeed = 0;
+              if (other.state !== 'DEADLOCK_ESCAPE') {
+                other.speed = Math.min(other.speed, 0);
+                other.targetSpeed = 0;
+              }
             }
 
             this.mesh.position.copy(this.position);
-            this.speed = Math.min(this.speed, 0);
-            this.targetSpeed = 0;
-            this.state = 'OBSTACLE_BRAKING';
+            if (this.state !== 'DEADLOCK_ESCAPE') {
+              this.speed = Math.min(this.speed, 0);
+              this.targetSpeed = 0;
+              this.state = 'OBSTACLE_BRAKING';
+            }
             this.getColliders();
             return;
           }
@@ -884,6 +905,198 @@ export class VehicleAgent {
     return others.every((o) => o === this || o.position.distanceTo(target) > 6);
   }
 
+  // ──────────────────── DESENGAVETAMENTO AUTÔNOMO COOPERATIVO ────────────────────
+  /**
+   * Avalia a liberdade de manobra para desengavetamento (metros livres para recuo seguro).
+   * Carros em curva fechada no cruzamento têm penalidade severa, pois dar ré atravessado agrava o engavetamento.
+   * Carros alinhados com a via de aproximação com traseira desimpedida têm alta pontuação.
+   */
+  public evaluateManeuverFreedom(
+    others: VehicleAgent[],
+    pedestrians: THREE.Vector3[] = [],
+    playerPos?: THREE.Vector3
+  ): number {
+    if (this.state === 'PARKED') return 0;
+
+    // Se estiver no meio de uma curva acentuada, a manobrabilidade de ré é muito baixa
+    let curvePenalty = 1.0;
+    if (this.state === 'TURNING' && this.path) {
+      const progress = this.pathS / this.path.length;
+      if (progress > 0.05 && progress < 0.95) {
+        curvePenalty = 0.15;
+      }
+    }
+
+    const rearVec = this.forward().negate(); // direção da marcha à ré (-forward)
+    let maxSafeReverse = 15.0; // alcance máximo de checagem
+
+    // 1. Limite físico do final da via (para não dar ré para fora do asfalto)
+    const along = this.along();
+    if (this.currentAxis === 'NS') {
+      if (this.currentDirection === -1) {
+        // Indo para o Norte (-Z), ré vai para o Sul (+Z). Limite sul: ROAD_END.NS_SOUTH (44)
+        maxSafeReverse = Math.min(maxSafeReverse, Math.max(0, ROAD_END.NS_SOUTH - 4 - along));
+      } else {
+        // Indo para o Sul (+Z), ré vai para o Norte (-Z). Limite norte: ROAD_END.NS_NORTH (-30)
+        maxSafeReverse = Math.min(maxSafeReverse, Math.max(0, along - (ROAD_END.NS_NORTH + 4)));
+      }
+    } else {
+      if (this.currentDirection === -1) {
+        // Indo para Oeste (-X), ré vai para Leste (+X). Limite: ROAD_END.EW (44)
+        maxSafeReverse = Math.min(maxSafeReverse, Math.max(0, ROAD_END.EW - 4 - along));
+      } else {
+        maxSafeReverse = Math.min(maxSafeReverse, Math.max(0, along - (-ROAD_END.EW + 4)));
+      }
+    }
+
+    // 2. Obstáculos traseiros (outros veículos)
+    for (const other of others) {
+      if (other === this) continue;
+      for (const c of other.getColliders()) {
+        const cx = c.cx ?? other.position.x;
+        const cz = c.cz ?? other.position.z;
+        const dx = cx - this.position.x;
+        const dz = cz - this.position.z;
+        const rearDist = dx * rearVec.x + dz * rearVec.z;
+        // Se estiver atrás do centro do veículo
+        if (rearDist > 0 && rearDist < maxSafeReverse + CAR_HALF_LENGTH) {
+          const latDist = Math.abs(dx * rearVec.z - dz * rearVec.x);
+          if (latDist < 2.2) {
+            const gap = Math.max(0, rearDist - CAR_HALF_LENGTH - (c.radius ?? 1.05));
+            maxSafeReverse = Math.min(maxSafeReverse, gap);
+          }
+        }
+      }
+    }
+
+    // 3. Pedestres ou avatar atrás
+    const people = [...pedestrians];
+    if (playerPos) people.push(playerPos);
+    for (const p of people) {
+      const dx = p.x - this.position.x;
+      const dz = p.z - this.position.z;
+      const rearDist = dx * rearVec.x + dz * rearVec.z;
+      if (rearDist > 0 && rearDist < maxSafeReverse + 2.0) {
+        const latDist = Math.abs(dx * rearVec.z - dz * rearVec.x);
+        if (latDist < 1.6) {
+          const gap = Math.max(0, rearDist - CAR_HALF_LENGTH - 0.45);
+          maxSafeReverse = Math.min(maxSafeReverse, gap);
+        }
+      }
+    }
+
+    return maxSafeReverse * curvePenalty;
+  }
+
+  private checkDeadlock(
+    delta: number,
+    perception: Perception,
+    others: VehicleAgent[],
+    pedestrians: THREE.Vector3[],
+    playerPos: THREE.Vector3
+  ): void {
+    if (this.state === 'DEADLOCK_ESCAPE' || this.state === 'PARKED') return;
+
+    const distToCenter = Math.hypot(this.position.x, this.position.z);
+    const inIntersectionZone = distToCenter < 22; // Cruzamento e vias de aproximação imediata
+    const isStopped = Math.abs(this.speed) < 0.25;
+    const isBlockedByVehicle =
+      (this.state === 'OBSTACLE_BRAKING' || this.state === 'TURNING' || this.state === 'APPROACHING_INTERSECTION') &&
+      perception.kind === 'vehicle' &&
+      perception.gap < 3.5;
+
+    if (inIntersectionZone && isStopped && isBlockedByVehicle) {
+      this.deadlockTimer += delta;
+    } else {
+      this.deadlockTimer = Math.max(0, this.deadlockTimer - delta * 1.5);
+      return;
+    }
+
+    // Se o engavetamento persistir por mais de 2.0s:
+    if (this.deadlockTimer > 2.0) {
+      // Identifica o grupo de veículos engavetados (conflito mútuo)
+      const cluster = others.filter((o) => {
+        const d = o.position.distanceTo(this.position);
+        return d < 14 && Math.hypot(o.position.x, o.position.z) < 24;
+      });
+      cluster.push(this);
+
+      // Se já houver algum carro do cluster realizando a manobra de desengavetamento, aguarda
+      if (cluster.some((o) => o.state === 'DEADLOCK_ESCAPE')) {
+        return;
+      }
+
+      // Avalia quem é o "carro mais livre" (maior espaço livre na traseira e capacidade de manobra)
+      let bestVehicle: VehicleAgent = this;
+      let bestFreedom = -1;
+
+      for (const v of cluster) {
+        const freedom = v.evaluateManeuverFreedom(others, pedestrians, playerPos);
+        if (freedom > bestFreedom) {
+          bestFreedom = freedom;
+          bestVehicle = v;
+        } else if (Math.abs(freedom - bestFreedom) < 0.2 && v.config.id < bestVehicle.config.id) {
+          bestVehicle = v;
+        }
+      }
+
+      // O carro mais livre assume a responsabilidade de manobrar para livrar os demais!
+      if (bestVehicle === this && bestFreedom >= 2.8) {
+        this.startDeadlockEscape();
+      }
+    }
+  }
+
+  public startDeadlockEscape(): void {
+    this.state = 'DEADLOCK_ESCAPE';
+    this.turnSignalState = 'HAZARD'; // Liga pisca-alerta
+    this.deadlockReverseRemaining = 4.0; // Recua ~4m para abrir ângulo e vão suficiente
+    this.deadlockYieldTimer = 0;
+    this.path = null; // Cancela qualquer curva travada para recuar em linha reta pela via
+    VehicleAudioEngine.playHorn(0.12); // Toque breve de buzina alertando a manobra
+  }
+
+  private updateDeadlockEscape(
+    delta: number,
+    perception: Perception,
+    others: VehicleAgent[],
+    pedestrians: THREE.Vector3[],
+    playerPos: THREE.Vector3
+  ): void {
+    this.turnSignalState = 'HAZARD';
+
+    // Fase 1: Marcha à ré cooperativa
+    if (this.deadlockReverseRemaining > 0) {
+      const freedom = this.evaluateManeuverFreedom(others, pedestrians, playerPos);
+      if (freedom < 0.6) {
+        // Obstáculo traseiro detectado: para a marcha à ré imediatamente por segurança
+        this.deadlockReverseRemaining = 0;
+        this.targetSpeed = 0;
+      } else {
+        // Recuo suave com velocidade negativa de ~1.3 m/s (acende luzes brancas de ré)
+        this.targetSpeed = -Math.min(1.4, Math.sqrt(2 * COMFORT_DECEL * this.deadlockReverseRemaining));
+        return;
+      }
+    }
+
+    // Fase 2: Veículo recuou e abriu espaço. Aguarda o carro antes bloqueado passar (Yielding)
+    this.targetSpeed = 0;
+    this.deadlockYieldTimer += delta;
+
+    // Observa se a frente foi desimpedida pelo outro carro
+    const isClearAhead = perception.gap > 5.5 || perception.kind === 'none';
+    const isTimedOut = this.deadlockYieldTimer > 5.5;
+
+    if (isClearAhead || isTimedOut) {
+      this.turnSignalState = 'OFF';
+      this.deadlockTimer = 0;
+      this.deadlockReverseRemaining = 0;
+      this.deadlockYieldTimer = 0;
+      this.state = 'APPROACHING_INTERSECTION';
+      this.targetSpeed = Math.min(this.config.cruiseSpeed * 0.5, 3.5);
+    }
+  }
+
   // ──────────────────── CONSTRUÇÃO DE MANOBRAS ────────────────────
   private buildPath(p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3, reverse: boolean): BezierPath {
     let length = 0;
@@ -1093,6 +1306,27 @@ export class VehicleAgent {
         this.speed = 0;
         this.buildUTurnArc();
       }
+      return;
+    }
+
+    // Desengavetamento autônomo cooperativo (marcha à ré do carro mais livre)
+    if (this.state === 'DEADLOCK_ESCAPE') {
+      if (this.deadlockReverseRemaining > 0) {
+        const ds = this.speed * delta; // negativo durante ré
+        this.position.addScaledVector(this.forward(), ds);
+        this.deadlockReverseRemaining = Math.max(0, this.deadlockReverseRemaining - Math.abs(ds));
+        this.targetSteeringAngle = 0;
+      }
+      // Mantém alinhamento da faixa de aproximação durante a ré
+      const lat = laneLateral(this.currentAxis, this.currentDirection);
+      if (this.currentAxis === 'NS') {
+        this.position.x = lat;
+      } else {
+        this.position.z = lat;
+      }
+      this.rotationY = laneAngle(this.currentAxis, this.currentDirection);
+      this.mesh.rotation.y = this.rotationY;
+      this.mesh.position.copy(this.position);
       return;
     }
 

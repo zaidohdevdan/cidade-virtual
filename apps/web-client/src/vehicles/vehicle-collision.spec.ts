@@ -125,4 +125,54 @@ describe('Vehicle & Agent Collision Physics (Unit Tests — Web Client)', () => 
     // O jogador não deve ter ultrapassado z = 0.6 (o avatar é bloqueado)
     expect(player.position.z).toBeLessThan(0.6);
   });
+
+  it('evaluateManeuverFreedom deve calcular corretamente folga de ré em via livre vs via bloqueada', () => {
+    // Carro A em x=3.5, z=14.0 (Avenida Central, sentido Norte: dir = -1)
+    const carA = createTestCar('car-A', 3.5, 14.0, 'NS', -1);
+    // Traseira de carA é no sentido +Z (Sul). Sem ninguém atrás, liberdade deve ser ampla (>= 10m)
+    const freedomFree = carA.evaluateManeuverFreedom([]);
+    expect(freedomFree).toBeGreaterThanOrEqual(10.0);
+
+    // Coloca um Carro B atrás de Carro A (em z = 18.0)
+    const carB = createTestCar('car-B', 3.5, 18.0, 'NS', -1);
+    const freedomBlocked = carA.evaluateManeuverFreedom([carB]);
+
+    // A liberdade de ré agora deve estar restrita pela presença de carB atrás
+    expect(freedomBlocked).toBeLessThan(4.0);
+    expect(freedomBlocked).toBeLessThan(freedomFree);
+  });
+
+  it('Em situação de engavetamento no cruzamento, o carro mais livre deve assumir DEADLOCK_ESCAPE e dar ré', () => {
+    // Cenário:
+    // Carro A (Sedan) em x=3.5, z=13.0 (sentido Norte, dir = -1) - Traseira desimpedida
+    // Carro B (Hatch) em x=3.5, z=9.5 (sentido Norte, dir = -1) parado com Carro C bloqueando sua frente
+    // Carro C em x=3.5, z=5.5 parado perpendicularmente
+    const carA = createTestCar('car-A', 3.5, 13.0, 'NS', -1);
+    const carB = createTestCar('car-B', 3.5, 9.5, 'NS', -1);
+    const carC = createTestCar('car-C', 3.5, 5.5, 'NS', -1);
+
+    // Carro C e B estão bloqueados com velocidade zero
+    carB.speed = 0;
+    carC.speed = 0;
+    const vehicles = [carA, carB, carC];
+
+    // Simula tempo de bloqueio contínuo no cruzamento (> 2.5 segundos)
+    for (let i = 0; i < 70; i++) {
+      carA.update(0.04, [], [], new THREE.Vector3(100, 0, 100), vehicles);
+      carB.update(0.04, [], [], new THREE.Vector3(100, 0, 100), vehicles);
+      carC.update(0.04, [], [], new THREE.Vector3(100, 0, 100), vehicles);
+    }
+
+    // O Carro A (mais livre, com traseira vazia) deve ter assumido DEADLOCK_ESCAPE
+    expect(carA.state).toBe('DEADLOCK_ESCAPE');
+
+    // Ao executar a manobra de desengavetamento, Carro A deve recuar (dar ré para +Z)
+    // Coordenada Z inicial era 13.0, após a ré deve ser maior que 13.0 (mais ao sul, abrindo espaço)
+    expect(carA.position.z).toBeGreaterThan(13.2);
+
+    // A distância entre o Carro A e o Carro B deve ter aumentado em relação ao contato inicial
+    const initialDist = 13.0 - 9.5; // 3.5m
+    const currentDist = carA.position.distanceTo(carB.position);
+    expect(currentDist).toBeGreaterThan(initialDist);
+  });
 });
