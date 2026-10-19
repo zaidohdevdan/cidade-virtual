@@ -224,9 +224,15 @@ export const App: React.FC = () => {
               cameraAngleY={cameraAngleY}
               colliders={city.colliders}
               vehicles={vehicles}
+              agents={agents}
               interactiveObjects={city.interactiveObjects}
             />
-            <Agents agents={agents} vehicles={vehicles} colliders={city.colliders} />
+            <Agents
+              agents={agents}
+              vehicles={vehicles}
+              colliders={city.colliders}
+              playerPos={player.position}
+            />
             <CameraController
               playerPosition={player.position}
               isFirstPerson={isFirstPerson}

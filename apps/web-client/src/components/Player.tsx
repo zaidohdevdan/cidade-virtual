@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { DanielAvatar, MovementInput } from '../avatars/daniel-avatar';
+import { AgentAvatar } from '../avatars/agent-avatar';
 import { InteractiveObject, ObstacleCollider } from '../scenes/city-scene';
 import { VehicleAgent } from '../vehicles/vehicle-agent';
 import { cityStore } from '../store/city-store';
@@ -10,6 +11,7 @@ interface PlayerProps {
   cameraAngleY: number;
   colliders: ObstacleCollider[];
   vehicles?: VehicleAgent[];
+  agents?: AgentAvatar[];
   interactiveObjects: InteractiveObject[];
   onTelemetryUpdate?: (x: number, z: number, speedKmH: number) => void;
   onObservationUpdate?: (obs: InteractiveObject | null) => void;
@@ -20,6 +22,7 @@ export const Player: React.FC<PlayerProps> = ({
   cameraAngleY,
   colliders,
   vehicles,
+  agents,
   interactiveObjects,
   onTelemetryUpdate,
   onObservationUpdate,
@@ -94,7 +97,7 @@ export const Player: React.FC<PlayerProps> = ({
   useFrame((_, delta) => {
     const clampedDelta = Math.min(delta, 0.1);
 
-    // Reúne colisores estáticos da cidade e dinâmicos dos veículos em movimento
+    // Reúne colisores estáticos da cidade e dinâmicos dos veículos e pedestres
     const dynamicColliders = colliders.slice();
     if (vehicles && vehicles.length > 0) {
       for (const v of vehicles) {
@@ -103,9 +106,40 @@ export const Player: React.FC<PlayerProps> = ({
         }
       }
     }
+    if (agents && agents.length > 0) {
+      for (const a of agents) {
+        dynamicColliders.push({
+          type: 'cylinder',
+          cx: a.position.x,
+          cz: a.position.z,
+          radius: a.radius || 0.4,
+          name: a.config.name,
+        });
+      }
+    }
 
     // Atualiza avatar com resposta de colisão e animação de marcha
     player.update(clampedDelta, inputRef.current, cameraAngleY, dynamicColliders);
+
+    // Resolução física mútua anti-penetração (impede que o jogador atravesse pedestres)
+    if (agents && agents.length > 0) {
+      for (const a of agents) {
+        const dx = player.position.x - a.position.x;
+        const dz = player.position.z - a.position.z;
+        const distSq = dx * dx + dz * dz;
+        const minDist = player.radius + (a.radius || 0.4);
+        if (distSq < minDist * minDist && distSq > 1e-6) {
+          const dist = Math.sqrt(distSq);
+          const overlap = minDist - dist;
+          const nx = dx / dist;
+          const nz = dz / dist;
+          player.position.x += nx * (overlap * 0.5);
+          player.position.z += nz * (overlap * 0.5);
+          a.position.x -= nx * (overlap * 0.5);
+          a.position.z -= nz * (overlap * 0.5);
+        }
+      }
+    }
 
     // Atualiza telemetria diretamente no store externo a 60 Hz sem disparar re-render do React
     const speedKmH = player.speed * 3.6;

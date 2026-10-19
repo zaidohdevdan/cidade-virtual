@@ -1,5 +1,39 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Correção e Blindagem de Colisões (Veículos, Agentes e Player)
+- **Data:** 2026-10-18
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Físico / Renderização 3D (Anti-penetração e evasão de obstáculos)
+
+### 1. Resumo Executivo
+Identificação e resolução da transposição física de objetos que estavam passando uns por dentro dos outros (carros ↔ carros, agentes ↔ agentes, player ↔ agentes, carros ↔ pedestres).
+
+### 2. Causas Raiz & Soluções Aplicadas
+1. **Agentes ↔ Agentes e Player ↔ Agentes:**
+   - `Agents.tsx` apenas agregava colisores estáticos e de veículos em `activeColliders`, omitindo os outros agentes e o player protagonista. Cada agente ignorava a existência dos demais ao caminhar.
+   - `Player.tsx` não recebia a lista de `agents` e portanto omitia seus cilindros corporais em `dynamicColliders`.
+   - **Correção:**
+     - Adicionado suporte a `playerPos` em `AgentsProps` e geração dinâmica de colisores para todos os $N-1$ agentes no ciclo de cada agente.
+     - Adicionado suporte a `agents` em `PlayerProps` e inclusão no `dynamicColliders` do player.
+     - Adicionada camada de resolução mútua elástica anti-penetração em `Agents.tsx` e `Player.tsx` para repelir sobreposições instantaneamente ao longo da normal de colisão.
+2. **Carros ↔ Carros e Carros ↔ Pedestres/Player:**
+   - Em `VehicleAgent.perceive()`, a verificação longitudinal possuía a cláusula `if (lon <= 0.5 || lon > range) return null;`. Como `lon` é medido a partir do centro do carro (`CAR_HALF_LENGTH = 2.3m`), qualquer obstáculo tocando ou sobreposto ao veículo retornava `null`, desativando a percepção de perigo e fazendo o carro acelerar através do objeto.
+   - Veículos testavam apenas o centro do outro veículo (`other.position`, raio 1.0) em vez de considerar os 3 cilindros de 1.05m ao longo do chassi, perdendo veículos que estivessem fazendo conversões perpendiculares.
+   - Não havia passo de separação geométrica (anti-penetração) pós-movimento entre veículos.
+   - **Correção:**
+     - Corrigido `test()` em `VehicleAgent.perceive()` para cobrir o intervalo `[-CAR_HALF_LENGTH, range]`. Obstáculos em contato/sobreposição retornam `gap = 0`, disparando imediatamente frenagem máxima (`MAX_DECEL`, `OBSTACLE_BRAKING`).
+     - Teste de outros veículos agora itera sobre todos os 3 cilindros de colisão de cada veículo.
+     - Implementado `resolveVehicleCollisions()` com pushback simétrico em ambos os veículos caso ocorra sobreposição geométrica, zerando velocidades relativas.
+     - Implementado `resolvePedestrianCollisions()` para empurrar pedestres/avatar para fora da lataria e estancar o veículo.
+     - Protegido `buildContactShadow()` contra ambientes headless/Node/Vitest onde `document` não está disponível.
+
+### 3. Validação de Aceite
+- Criado arquivo de testes `apps/web-client/src/vehicles/vehicle-collision.spec.ts` com 7 testes unitários abrangendo todos os cenários de colisão e anti-penetração (100% aprovados).
+- `npx vitest run`: **16 arquivos de teste, 74 testes executados e 100% aprovados**.
+- `npm run typecheck`: **0 erros de tipo** em todo o monorepo Nx.
+
+
 ## Task ID: 0-indexacao
 - **Data:** 2026-10-13
 - **Status:** Concluído

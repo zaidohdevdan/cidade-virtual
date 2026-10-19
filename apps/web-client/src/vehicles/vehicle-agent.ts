@@ -433,6 +433,7 @@ export class VehicleAgent {
 
   // ──────────────────── PLANO DE SOMBRA DE CONTATO SUAVE (AO BLOB) ────────────────────
   private buildContactShadow(): void {
+    if (typeof document === 'undefined') return;
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 128;
@@ -507,6 +508,8 @@ export class VehicleAgent {
 
     this.integrateSpeed(delta, perception);
     this.applyMotion(delta);
+    this.resolveVehicleCollisions(otherVehicles);
+    this.resolvePedestrianCollisions(pedestrianPositions, playerPos);
     this.updateSuspensionPhysics(delta);
 
     const wheelCircumference = Math.PI * 2 * 0.36;
@@ -548,14 +551,17 @@ export class VehicleAgent {
 
     const result: Perception = { kind: 'none', gap: Infinity, leaderSpeed: 0 };
     const tmp = new THREE.Vector3();
+    const tmpPoint = new THREE.Vector3();
 
     const test = (p: THREE.Vector3, radius: number, range: number): number | null => {
       tmp.set(p.x - this.position.x, 0, p.z - this.position.z);
       const lon = tmp.dot(fwd);
-      if (lon <= 0.5 || lon > range) return null;
+      // Ignora apenas o que está totalmente atrás do veículo (atrás do para-choque traseiro) ou além do alcance
+      if (lon < -CAR_HALF_LENGTH || lon > range) return null;
       const lat = Math.abs(tmp.x * fwd.z - tmp.z * fwd.x);
-      if (lat > 1.1 + radius) return null;
-      return lon - CAR_HALF_LENGTH - radius;
+      if (lat > 1.15 + radius) return null;
+      // Retorna distância livre até o para-choque dianteiro (se já estiver em contato/sobreposto, retorna 0)
+      return Math.max(0, lon - CAR_HALF_LENGTH - radius);
     };
 
     const gp = test(playerPos, 0.45, 14);
@@ -584,23 +590,115 @@ export class VehicleAgent {
       // quem já está dentro da caixa tem preferência; empate resolvido por id determinístico.
       if (Math.abs(alignment) < 0.5) {
         const otherInBox = VehicleAgent.inIntersection(other.position);
-        if (meInBox && !otherInBox) continue;
-        if (meInBox && otherInBox && this.config.id < other.config.id) continue;
+        const distToOther = this.position.distanceTo(other.position);
+        if (distToOther > 4.5) {
+          if (meInBox && !otherInBox) continue;
+          if (meInBox && otherInBox && this.config.id < other.config.id) continue;
+        }
       }
 
-      const g = test(other.position, 1.0, 18);
-      if (g !== null) {
-        // gap entre para-choques: desconta metade do comprimento do outro carro (radius=1.0 já descontado)
-        const bumperGap = g - (CAR_HALF_LENGTH - 1.0) * Math.abs(alignment);
-        if (bumperGap < result.gap) {
+      // Testa os 3 círculos de colisão do outro veículo (cobre toda a extensão de 4.6m da carroceria)
+      for (const c of other.getColliders()) {
+        tmpPoint.set(c.cx ?? other.position.x, this.position.y, c.cz ?? other.position.z);
+        const g = test(tmpPoint, c.radius ?? 1.05, 18);
+        if (g !== null && g < result.gap) {
           result.kind = 'vehicle';
-          result.gap = bumperGap;
-          result.leaderSpeed = Math.max(0, other.speed * alignment);
+          result.gap = g;
+          result.leaderSpeed = Math.max(0, other.speed * Math.max(0, alignment));
         }
       }
     }
 
     return result;
+  }
+
+  /**
+   * Resolução física anti-penetração entre veículos.
+   * Impede fisicamente que veículos se sobreponham ou atravessem um ao outro.
+   */
+  private resolveVehicleCollisions(otherVehicles: VehicleAgent[]): void {
+    if (this.state === 'PARKED') return;
+    const myColliders = this.getColliders();
+
+    for (const other of otherVehicles) {
+      if (other === this) continue;
+      const otherColliders = other.getColliders();
+
+      for (let i = 0; i < myColliders.length; i++) {
+        const c1 = myColliders[i];
+        for (let j = 0; j < otherColliders.length; j++) {
+          const c2 = otherColliders[j];
+          const dx = (c1.cx ?? this.position.x) - (c2.cx ?? other.position.x);
+          const dz = (c1.cz ?? this.position.z) - (c2.cz ?? other.position.z);
+          const distSq = dx * dx + dz * dz;
+          const r1 = c1.radius ?? 1.05;
+          const r2 = c2.radius ?? 1.05;
+          const minDist = r1 + r2;
+
+          if (distSq < minDist * minDist) {
+            const dist = Math.sqrt(distSq);
+            const overlap = minDist - dist;
+            const nx = dist > 1e-4 ? dx / dist : Math.sin(this.rotationY + Math.PI / 2);
+            const nz = dist > 1e-4 ? dz / dist : Math.cos(this.rotationY + Math.PI / 2);
+
+            if (other.state === 'PARKED') {
+              this.position.x += nx * overlap;
+              this.position.z += nz * overlap;
+            } else {
+              this.position.x += nx * (overlap * 0.5);
+              this.position.z += nz * (overlap * 0.5);
+              other.position.x -= nx * (overlap * 0.5);
+              other.position.z -= nz * (overlap * 0.5);
+              other.mesh.position.copy(other.position);
+              other.speed = Math.min(other.speed, 0);
+              other.targetSpeed = 0;
+            }
+
+            this.mesh.position.copy(this.position);
+            this.speed = Math.min(this.speed, 0);
+            this.targetSpeed = 0;
+            this.state = 'OBSTACLE_BRAKING';
+            this.getColliders();
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Empurra pedestres ou o avatar para fora da carroceria do veículo se houver contato físico.
+   */
+  private resolvePedestrianCollisions(pedestrians: THREE.Vector3[], playerPos: THREE.Vector3): void {
+    const colliders = this.getColliders();
+    const targets = [...pedestrians, playerPos];
+
+    for (const target of targets) {
+      for (const c of colliders) {
+        const cx = c.cx ?? this.position.x;
+        const cz = c.cz ?? this.position.z;
+        const dx = target.x - cx;
+        const dz = target.z - cz;
+        const distSq = dx * dx + dz * dz;
+        const rVeh = c.radius ?? 1.05;
+        const rPed = 0.45;
+        const minDist = rVeh + rPed;
+
+        if (distSq < minDist * minDist) {
+          const dist = Math.sqrt(distSq);
+          const overlap = minDist - dist;
+          const nx = dist > 1e-4 ? dx / dist : Math.sin(this.rotationY + Math.PI / 2);
+          const nz = dist > 1e-4 ? dz / dist : Math.cos(this.rotationY + Math.PI / 2);
+
+          target.x += nx * overlap;
+          target.z += nz * overlap;
+
+          this.speed = Math.min(this.speed, 0);
+          this.targetSpeed = 0;
+          this.state = 'OBSTACLE_BRAKING';
+        }
+      }
+    }
   }
 
   /** Velocidade máxima segura para não colidir com o obstáculo percebido. */
