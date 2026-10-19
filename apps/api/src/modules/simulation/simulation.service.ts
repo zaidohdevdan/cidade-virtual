@@ -233,12 +233,15 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         ? `Localizado em [${nextPos.x.toFixed(1)}, ${nextPos.z.toFixed(1)}] na Rua Central. O avatar Daniel está muito próximo (a ${closestPlayer!.distance.toFixed(1)}m). Semáforo está ${trafficLight}.`
         : `Localizado em [${nextPos.x.toFixed(1)}, ${nextPos.z.toFixed(1)}] na Rua Central. Semáforo está ${trafficLight}.`;
 
-      const action = await this.cognitionService.processCycle({
-        citizenId: agent.config.id as any,
-        currentObservation: observation,
-        nearbyObjects,
-        activeGoal: currentGoal,
-      });
+      const action = await this.cognitionService.processCycle(
+        {
+          citizenId: agent.config.id as any,
+          currentObservation: observation,
+          nearbyObjects,
+          activeGoal: currentGoal,
+        },
+        { forceLLM: isPlayerNearby },
+      );
 
       agent.lastAction = action.actionType;
 
@@ -255,6 +258,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         payload: {
           agentId: agent.config.id,
           message: speechMessage,
+          isProximitySpeech: isPlayerNearby,
         },
       });
     } catch (err) {

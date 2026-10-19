@@ -198,15 +198,19 @@ export const App: React.FC = () => {
             }
           }
           if (event.name === 'agent.speech' && event.payload) {
-            const { agentId, principalId, message } = event.payload as {
+            const { agentId, principalId, message, isProximitySpeech } = event.payload as {
               agentId?: string;
               principalId?: string;
               message?: string;
+              isProximitySpeech?: boolean;
             };
             const id = agentId || (principalId?.startsWith('principal_') ? principalId.replace('principal_', '') : principalId);
             const agent = agents.find((a) => a.config.id === id);
             if (agent && message) {
-              agent.say(message);
+              const isNearby = isProximitySpeech !== undefined
+                ? isProximitySpeech
+                : (agent.position.distanceTo(player.position) <= 3.5);
+              agent.say(message, 4.0, isNearby);
             }
           }
           if (event.name === 'npc.alert' && event.payload) {
@@ -380,7 +384,7 @@ export const App: React.FC = () => {
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               };
               setDialogueMessages((prev) => [...prev, agentMsg]);
-              activeDialogueAgent.say(ack.response, 6);
+              activeDialogueAgent.say(ack.response, 6, true);
             } else {
               const fallbackResponse = `Entendido, Daniel. Registrei sua observação e sigo monitorando o fluxo urbano.`;
               const agentMsg: DialogueMessage = {
@@ -391,7 +395,7 @@ export const App: React.FC = () => {
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               };
               setDialogueMessages((prev) => [...prev, agentMsg]);
-              activeDialogueAgent.say(fallbackResponse, 6);
+              activeDialogueAgent.say(fallbackResponse, 6, true);
             }
           },
         );
@@ -407,7 +411,7 @@ export const App: React.FC = () => {
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
           setDialogueMessages((prev) => [...prev, agentMsg]);
-          activeDialogueAgent.say(fallback, 6);
+          activeDialogueAgent.say(fallback, 6, true);
         }, 800);
       }
     },

@@ -454,7 +454,7 @@ export class AgentAvatar {
   /**
    * Emite uma fala ou pensamento visível em balão estilizado sobre o avatar (Task-026).
    */
-  public say(message: string, durationSeconds: number = 4.0): void {
+  public say(message: string, durationSeconds: number = 4.0, playAudio?: boolean): void {
     this.speechTimer = durationSeconds;
     this.speechText = message;
     if (!this.speechBubble) {
@@ -492,11 +492,15 @@ export class AgentAvatar {
     this.speechBubble.style.opacity = '1';
     this.speechBubble.style.display = 'block';
 
-    // Dispara síntese de voz (TTS) audível com calibração acústica do habitante
-    try {
-      speechSynth.speak(this.config.id, message).catch(() => {});
-    } catch {
-      // Ignora silenciosamente se o navegador bloquear autoplay
+    // O áudio TTS só é reproduzido quando o avatar do jogador está próximo (<= 3.5m)
+    // ou quando playAudio for explicitamente solicitado (ex: resposta direta no modal de diálogo)
+    const shouldSpeak = playAudio !== undefined ? playAudio : this.isNearPlayer;
+    if (shouldSpeak) {
+      try {
+        speechSynth.speak(this.config.id, message).catch(() => {});
+      } catch {
+        // Ignora silenciosamente se o navegador bloquear autoplay
+      }
     }
   }
 

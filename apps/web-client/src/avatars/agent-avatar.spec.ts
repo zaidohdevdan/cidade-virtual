@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as THREE from 'three';
 import { AgentAvatar, CITY_AGENTS } from './agent-avatar';
+import { speechSynth } from '../audio/speech-synth';
 
 describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
   let agent: AgentAvatar;
@@ -117,5 +118,28 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     agent.dispose();
     expect(document.body.contains(agent.label)).toBe(false);
     expect(document.body.contains(agent.speechBubble!)).toBe(false);
+  });
+
+  it('só deve disparar áudio TTS quando o jogador estiver próximo ou playAudio for true', () => {
+    const speakSpy = vi.spyOn(speechSynth, 'speak').mockResolvedValue(true);
+
+    // 1. Agente longe do jogador e playAudio não especificado -> Não fala áudio
+    agent.isNearPlayer = false;
+    agent.say('Pensamento distante...');
+    expect(speakSpy).not.toHaveBeenCalled();
+
+    // 2. Agente próximo do jogador (isNearPlayer = true) -> Dispara áudio TTS
+    agent.isNearPlayer = true;
+    agent.say('Olá Daniel, bem-vindo!');
+    expect(speakSpy).toHaveBeenCalledWith('agent-vega', 'Olá Daniel, bem-vindo!');
+
+    speakSpy.mockClear();
+
+    // 3. playAudio = true explícito (ex: diálogo interativo) -> Dispara áudio mesmo se isNearPlayer for falso
+    agent.isNearPlayer = false;
+    agent.say('Resposta no chat', 5, true);
+    expect(speakSpy).toHaveBeenCalledWith('agent-vega', 'Resposta no chat');
+
+    speakSpy.mockRestore();
   });
 });
