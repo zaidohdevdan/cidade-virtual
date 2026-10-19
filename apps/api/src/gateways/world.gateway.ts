@@ -15,7 +15,12 @@ import type {
   TrafficLightSignal,
   WorldStateEventPayload,
   AvatarPositionPayload,
+  PrincipalRole,
+  Principal,
+  ActionRequest,
+  ActionResult,
 } from '@cidade-virtual/types';
+import { createPrincipal } from '@cidade-virtual/types';
 import {
   OPERATIONAL_LIMITS,
   validateAvatarMovement,
@@ -259,6 +264,77 @@ export class WorldGateway
         payload: { state: data.state },
       });
     }
+  }
+
+  private actionsService?: {
+    executeAction(request: ActionRequest): Promise<ActionResult>;
+  };
+
+  /**
+   * Conecta a instância do ActionsService ao gateway de forma desacoplada.
+   */
+  setActionsService(service: { executeAction(request: ActionRequest): Promise<ActionResult> }): void {
+    this.actionsService = service;
+  }
+
+  /**
+   * Executa uma ação de acordo com o contrato AgentAction API (Task-025) via WebSocket.
+   * Converte o cliente autenticado em Principal e despacha para o ActionsService.
+   */
+  @SubscribeMessage('agent:action')
+  async handleAgentAction(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: {
+      actionType: string;
+      parameters?: Record<string, unknown>;
+      targetId?: string;
+      reasonCode?: string;
+    },
+  ): Promise<ActionResult> {
+    if (!this.checkSocketRateLimit(client)) {
+      return {
+        success: false,
+        actionType: data?.actionType ?? 'unknown',
+        principalId: client.id,
+        reasonCode: 'RATE_LIMIT_EXCEEDED',
+        error: 'Limite de mensagens por segundo excedido',
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    const user = client.data?.user;
+    const principalRole: PrincipalRole = (user?.role as PrincipalRole) ?? 'guest';
+    const principal = createPrincipal({
+      id: user?.userId ?? client.id,
+      type: principalRole === 'admin' ? 'human' : 'human',
+      roles: [principalRole],
+      displayName: user?.userId ?? client.id,
+    });
+
+    const request: ActionRequest = {
+      principal,
+      actionType: data.actionType,
+      targetId: data.targetId,
+      parameters: data.parameters ?? {},
+      reasonCode: data.reasonCode ?? 'SOCKET_ACTION',
+      correlationId: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+    };
+
+    if (this.actionsService) {
+      const result = await this.actionsService.executeAction(request);
+      client.emit('agent:action:result', result);
+      return result;
+    }
+
+    return {
+      success: true,
+      actionType: data.actionType,
+      principalId: principal.id,
+      outcome: 'Ação despachada via gateway',
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**

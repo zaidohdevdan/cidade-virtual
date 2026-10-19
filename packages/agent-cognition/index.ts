@@ -4,7 +4,8 @@
  * Alinhado com SKILL.md v2.0.0 Seção 3.4 e Seção 4 (Orquestração Cognitiva).
  */
 import { StateGraph, Annotation, START, END } from '@langchain/langgraph';
-import type { AgentAction, CitizenId } from '@cidade-virtual/types';
+import type { AgentAction, CitizenId, ActionRequest, Principal } from '@cidade-virtual/types';
+import { createPrincipal } from '@cidade-virtual/types';
 import type { LLMProviderAdapter } from '@cidade-virtual/llm-adapters';
 import { metrics, cognitiveAudit } from '@cidade-virtual/observability';
 
@@ -157,5 +158,34 @@ export class CognitiveCycleManager {
     });
 
     return finalState.chosenAction;
+  }
+
+  /**
+   * Avalia a observação e emite um ActionRequest canônico assinado pelo Principal do NPC (Task-025).
+   */
+  async evaluateActionRequest(
+    agentId: CitizenId,
+    observation: string,
+    targetId?: string,
+    options?: EvaluateActionOptions,
+  ): Promise<ActionRequest> {
+    const action = await this.evaluateAction(agentId, observation, targetId, options);
+    const principal = createPrincipal({
+      id: `principal_${agentId}`,
+      type: 'npc',
+      roles: ['citizen'],
+      agentId,
+      displayName: `NPC ${agentId}`,
+    });
+
+    return {
+      principal,
+      actionType: action.actionType,
+      targetId: action.targetId,
+      parameters: action.parameters,
+      reasonCode: action.reasonCode,
+      correlationId: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+    };
   }
 }

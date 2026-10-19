@@ -254,20 +254,24 @@
   - [ ] Rota recalculada quando semáforo fecha a faixa.
 
 ### Task-025 — Contrato `Principal` + `AgentAction API` (identidade e ação unificadas)
-- **Status:** ⬜ Pendente
+- **Status:** ✅ Concluída (2026-10-18)
 - **Prioridade:** 🟡 Média (decisão de roadmap out/2026; executa junto com a Onda 2)
 - **Esforço:** S
 - **Tipo:** `feat`
 - **Risco:** Estrutural
 - **Dependências:** Task-002, Task-004; destrava a Task-035 (Onda 8)
-- **Descrição:** Decisão arquitetural central: todo ator da cidade (usuário, avatar, NPC, agente externo) é um `Principal` com permissões; toda ação passa pela mesma `AgentAction API` (`perceive / decide / act / remember`). NPC interno (Onda 2), voz (Onda 3) e agente MCP da web (Onda 8) compartilham o mesmo contrato — o agente de fora é "o mesmo animal" com permissões diferentes.
+- **Descrição:** Decisão arquitetural central implementada: todo ator da cidade (usuário humano, avatar, NPC, agente externo MCP) é um `Principal` com permissões tipadas e papéis (`admin`, `citizen`, `guest`, `moderator`). Toda ação passa pela mesma `AgentAction API` unificada (`ActionRequest` -> `ActionResult`). Integrado ao `RbacGuard` e decorators do NestJS, exposto via HTTP REST (`ActionsController`) e Socket.IO (`WorldGateway.handleAgentAction`), com adapter direto no `CognitiveCycleManager`.
 - **Escopo:**
-  - Tipos `Principal`, `ActionRequest`, `ActionResult` em `@cidade-virtual/types`.
-  - Guard de autorização NestJS (RBAC por papel do `Principal`).
-  - Adapter: `CognitiveCycleManager` emite ações pelo contrato (facilita plugar agente MCP depois).
+  - Tipos `Principal`, `ActionRequest`, `ActionResult`, `PrincipalRole`, `PrincipalType` e factory `createPrincipal` em `@cidade-virtual/types`.
+  - Guard de autorização NestJS (`RbacGuard`) com decorators `@RequireRoles`, `@RequirePermissions` e `@CurrentPrincipal`.
+  - Módulo `ActionsModule` com `ActionsService` e `ActionsController` (`POST /actions/execute`, `POST /actions/move`).
+  - Handler WebSocket `@SubscribeMessage('agent:action')` no `WorldGateway`.
+  - Adapter `evaluateActionRequest` no `CognitiveCycleManager` (`packages/agent-cognition`).
 - **Critérios de aceite:**
-  - [ ] Ação de NPC em recurso não autorizado é rejeitada com motivo auditável.
-  - [ ] A mesma action `move` funciona via HTTP REST e via gateway Socket.IO.
+  - [x] Ação de NPC em recurso não autorizado é rejeitada com motivo auditável (ex: `agent-vega` tentando `traffic_control` rejeitada com `PERMISSION_DENIED`).
+  - [x] A mesma action `move` funciona identicamente via HTTP REST (`ActionsController`) e via gateway Socket.IO (`WorldGateway`).
+  - [x] Movimentos físicos com colisão e extrapolação de fronteira rejeitados autoritativamente com `PHYSICAL_CONSTRAINT_VIOLATION`.
+  - [x] Suíte de testes de integração e contrato em `tests/integration/principal-actions.test.ts` (10/10 passando).
 
 ### Épico D — Workers & Mensageria (P2 da auditoria)
 

@@ -7,6 +7,7 @@ import { CognitionModule } from './modules/cognition/cognition.module';
 import { MemoryModule } from './modules/memory/memory.module';
 import { PersistenceModule } from './modules/persistence/persistence.module';
 import { GatewayModule } from './gateways/gateway.module';
+import { ActionsModule } from './modules/actions/actions.module';
 import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -21,6 +22,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     CitizensModule,
     CognitionModule,
     MemoryModule,
+    ActionsModule,
   ],
   providers: [
     {

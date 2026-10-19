@@ -150,3 +150,79 @@ export interface AvatarPositionPayload {
   z: number;
   rotationY?: number;
 }
+
+// ── Contrato Canônico Principal + AgentAction API (Task-025) ──
+export type PrincipalType = 'human' | 'npc' | 'system' | 'external_agent';
+export type PrincipalRole = 'admin' | 'citizen' | 'guest' | 'moderator';
+
+export interface Principal {
+  id: string;
+  type: PrincipalType;
+  roles: PrincipalRole[];
+  permissions: string[];
+  agentId?: string;
+  displayName?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ActionRequest {
+  principal: Principal;
+  actionType: string; // ex: 'move', 'observe', 'speak', 'interact', 'traffic_control'
+  targetId?: string;
+  parameters: Record<string, unknown>;
+  reasonCode?: string;
+  correlationId?: string;
+  timestamp?: string;
+}
+
+export interface ActionResult {
+  success: boolean;
+  actionType: string;
+  principalId: string;
+  reasonCode?: string;
+  outcome?: string;
+  data?: Record<string, unknown>;
+  error?: string;
+  timestamp: string;
+}
+
+/**
+ * Mapeamento padrão de permissões por papel do Principal.
+ */
+export const DEFAULT_ROLE_PERMISSIONS: Record<PrincipalRole, string[]> = {
+  admin: ['*'],
+  citizen: ['action:move', 'action:observe', 'action:speak', 'action:interact'],
+  guest: ['action:move', 'action:observe'],
+  moderator: ['action:move', 'action:observe', 'action:speak', 'action:interact', 'world:moderate'],
+};
+
+/**
+ * Cria uma instância de Principal com permissões padrão inferidas de seus papéis.
+ */
+export function createPrincipal(params: {
+  id: string;
+  type: PrincipalType;
+  roles: PrincipalRole[];
+  agentId?: string;
+  displayName?: string;
+  customPermissions?: string[];
+  metadata?: Record<string, unknown>;
+}): Principal {
+  const permissionsSet = new Set<string>(params.customPermissions ?? []);
+  for (const role of params.roles) {
+    const rolePerms = DEFAULT_ROLE_PERMISSIONS[role] ?? [];
+    for (const p of rolePerms) {
+      permissionsSet.add(p);
+    }
+  }
+
+  return {
+    id: params.id,
+    type: params.type,
+    roles: params.roles,
+    permissions: Array.from(permissionsSet),
+    agentId: params.agentId,
+    displayName: params.displayName,
+    metadata: params.metadata,
+  };
+}

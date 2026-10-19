@@ -364,3 +364,44 @@ Execução completa da **Opção B (Épico E — Higiene de Estado & Escala Visu
 - **Suíte Completa:** `npx vitest run` — **19 arquivos de teste, 85 testes executados e 100% aprovados** (0 mocks em testes de integração de persistência e vetor).
 - **Tipagem Estática:** `npm run typecheck` — 0 erros.
 - **Sincronismo de Schema:** `npm run check:schema-drift` — 100% síncrono.
+
+---
+
+## 2026-10-18 — Task-025: Contrato Canônico Principal + AgentAction API e RBAC
+
+### 1. Contexto & Motivação
+- Decisão arquitetural central do roadmap: unificar todas as identidades que atuam na cidade (usuário humano, avatar, NPC autônomo, agente cognitivo e agente externo MCP) sob a abstração canônica de um `Principal`.
+- Toda e qualquer ação no mundo deve transitar pelo mesmo contrato `AgentAction API` (`ActionRequest` -> `ActionResult`), permitindo que a mesma ação (`move`, `observe`, `speak`, `interact`, `traffic_control`) seja executada indistintamente via HTTP REST ou WebSocket, sob controle de acesso rigoroso por papéis (`RBAC`) e permissões.
+
+### 2. Implementações Realizadas
+- **Contratos e Tipos em `@cidade-virtual/types`:**
+  - Definidos `PrincipalType` (`'human' | 'npc' | 'system' | 'external_agent'`) e `PrincipalRole` (`'admin' | 'citizen' | 'guest' | 'moderator'`).
+  - Definidas interfaces `Principal`, `ActionRequest`, `ActionResult` e tabela `DEFAULT_ROLE_PERMISSIONS`.
+  - Função auxiliar `createPrincipal(...)` para instanciação consistente com permissões herdadas de papéis e suporte a wildcard `*`.
+- **RBAC Guard e Decorators no NestJS (`apps/api`):**
+  - Implementado `RbacGuard` em `apps/api/src/common/guards/rbac.guard.ts` integrando com o `Reflector`.
+  - Decorators `@RequireRoles(...)`, `@RequirePermissions(...)` e `@CurrentPrincipal()` em `apps/api/src/common/decorators/rbac.decorator.ts`.
+  - Resolução transparente de `Principal` via token Bearer JWT ou corpo da requisição autenticada, disparando logs de segurança auditáveis `[SECURITY] [AUDIT] [RBAC]` e `ForbiddenException` / `UnauthorizedException` em caso de violação.
+- **Módulo de Ações Unificadas (`ActionsModule`):**
+  - Implementado `ActionsService` (`apps/api/src/modules/actions/actions.service.ts`):
+    - Executa ações espaciais (`move`), perceptuais (`observe`), dialógicas (`speak`), interativas (`interact`), semafóricas (`traffic_control`) e cognitivas (`routine_navigation`, `llm_deliberated_action`).
+    - Validação de física server-side, anti-colisão e limites territoriais via `validateAvatarMovement`.
+    - Broadcast de eventos de domínio em tempo real no `WorldGateway`.
+  - Implementado `ActionsController` (`apps/api/src/modules/actions/actions.controller.ts`) expondo `POST /actions/execute` e `POST /actions/move`.
+- **Integração com WebSocket (`WorldGateway`):**
+  - Implementado listener `@SubscribeMessage('agent:action')` que constrói o `Principal` autenticado do socket e delega diretamente ao `ActionsService.executeAction()`, garantindo paridade total entre REST e WebSocket.
+- **Adapter do Grafo Cognitivo (`CognitiveCycleManager`):**
+  - Implementado método `evaluateActionRequest()` em `packages/agent-cognition/index.ts` que converte deliberações do LangGraph diretamente em um `ActionRequest` canônico assinado pelo Principal do NPC.
+- **Suíte de Testes de Integração e Contrato (`tests/integration/principal-actions.test.ts`):**
+  - 10 testes cobrindo:
+    1. Criação e herança de permissões de Principals (admin, citizen, guest).
+    2. Rejeição de ações restritas (ex: `agent-vega` tentando `traffic_control`) com motivo auditável.
+    3. Execução idêntica da ação `move` via REST API e Socket.IO Gateway.
+    4. Rejeição física de colisão em ambos os canais.
+    5. Integração com o grafo cognitivo do `CognitiveCycleManager`.
+
+### 3. Validação de Aceite
+- **Suíte Completa:** `npx vitest run` — **20 arquivos de teste, 95 testes executados e 100% aprovados**.
+- **Tipagem Estática:** `npm run typecheck` — 0 erros em todos os projetos.
+- **Sincronismo de Schema:** `npm run check:schema-drift` — 100% síncrono.
+
