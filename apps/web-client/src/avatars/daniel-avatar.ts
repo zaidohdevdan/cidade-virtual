@@ -39,65 +39,318 @@ export class DanielAvatar {
   }
 
   private buildCharacterModel(): void {
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.6 });
-    const jacketMat = new THREE.MeshStandardMaterial({ color: 0x1565c0, roughness: 0.4, metalness: 0.2 });
-    const pantsMat = new THREE.MeshStandardMaterial({ color: 0x263238, roughness: 0.7 });
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-    const visorMat = new THREE.MeshStandardMaterial({ color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 0.6 });
+    // ── MATERIAIS PBR REALISTAS DE ALTA FIDELIDADE ──
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: 0xf5cfb3,
+      roughness: 0.55,
+      metalness: 0.05,
+    });
+    const jacketMat = new THREE.MeshStandardMaterial({
+      color: 0x16325c, // Azul marinho técnico / safira nobre
+      roughness: 0.42,
+      metalness: 0.18,
+    });
+    const jacketTrimMat = new THREE.MeshStandardMaterial({
+      color: 0x0284c7, // Detalhes e debruns ciano
+      roughness: 0.35,
+      metalness: 0.25,
+    });
+    const shirtMat = new THREE.MeshStandardMaterial({
+      color: 0xe2e8f0, // Camiseta interna cinza claro / off-white
+      roughness: 0.82,
+    });
+    const pantsMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b, // Calça jogger techwear grafite escuro
+      roughness: 0.75,
+    });
+    const hairMat = new THREE.MeshStandardMaterial({
+      color: 0x241c18, // Cabelo castanho escuro natural texturizado
+      roughness: 0.85,
+    });
+    const shoeUpperMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a, // Cabedal do tênis em couro escuro
+      roughness: 0.38,
+    });
+    const shoeMidsoleMat = new THREE.MeshStandardMaterial({
+      color: 0xf8fafc, // Entressola em espuma branca de alta densidade
+      roughness: 0.32,
+    });
+    const shoeAccentMat = new THREE.MeshStandardMaterial({
+      color: 0x2563eb, // Detalhes esportivos azul elétrico
+      roughness: 0.35,
+    });
+    const shoeSoleMat = new THREE.MeshStandardMaterial({
+      color: 0x020617, // Solado de borracha aderente
+      roughness: 0.92,
+    });
+    const metalMat = new THREE.MeshStandardMaterial({
+      color: 0xd1d5db, // Titânio escovado para fivela, zíperes e relógio
+      metalness: 0.95,
+      roughness: 0.12,
+    });
+    const glassesFrameMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a, // Armação de óculos preto fosco
+      metalness: 0.85,
+      roughness: 0.20,
+    });
+    const glassesLensMat = new THREE.MeshStandardMaterial({
+      color: 0x0284c7, // Lentes com tratamento anti-reflexo azulado
+      transparent: true,
+      opacity: 0.65,
+      roughness: 0.05,
+      metalness: 0.95,
+    });
+    const cyberGlowMat = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      emissive: 0x0284c7,
+      emissiveIntensity: 1.2,
+      roughness: 0.1,
+    });
+    const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25 });
+    const eyePupilMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.1 });
 
-    // 1. Tronco / Jaqueta
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.3), jacketMat);
-    torso.position.y = 1.15;
-    torso.castShadow = true;
-    this.mesh.add(torso);
+    // ──────────────────── 1. TRONCO, JAQUETA & VESTUÁRIO ────────────────────
+    // Camiseta interna
+    const innerShirt = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.62, 0.25), shirtMat);
+    innerShirt.position.set(0, 1.16, 0.03);
+    this.mesh.add(innerShirt);
 
-    // 2. Cabeça
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), skinMat);
-    head.position.y = 1.7;
+    // Corpo principal da jaqueta com silhueta atlética ajustada
+    const jacketBody = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.66, 0.30), jacketMat);
+    jacketBody.position.set(0, 1.18, 0);
+    jacketBody.castShadow = true;
+    jacketBody.receiveShadow = true;
+    this.mesh.add(jacketBody);
+
+    // Gola alta estilosa da jaqueta
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.20, 0.12, 14, 1, true), jacketMat);
+    collar.position.set(0, 1.50, 0.01);
+    this.mesh.add(collar);
+
+    const collarLining = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.11, 14, 1, true), jacketTrimMat);
+    collarLining.position.set(0, 1.50, 0.01);
+    this.mesh.add(collarLining);
+
+    // Linha frontal do zíper da jaqueta
+    const zipperLine = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.58, 0.02), jacketTrimMat);
+    zipperLine.position.set(0, 1.18, 0.155);
+    this.mesh.add(zipperLine);
+
+    // Cursor metálico do zíper
+    const zipperPull = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.03), metalMat);
+    zipperPull.position.set(0, 1.35, 0.165);
+    this.mesh.add(zipperPull);
+
+    // Barra elástica inferior da jaqueta
+    const jacketHem = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.08, 0.29), jacketMat);
+    jacketHem.position.set(0, 0.88, 0);
+    this.mesh.add(jacketHem);
+
+    // Cinto tático com fivela de metal
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.06, 0.26), pantsMat);
+    belt.position.set(0, 0.83, 0);
+    this.mesh.add(belt);
+
+    const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, 0.03), metalMat);
+    buckle.position.set(0, 0.83, 0.135);
+    this.mesh.add(buckle);
+
+    // ──────────────────── 2. CABEÇA, ROSTO & ÓCULOS ────────────────────
+    // Pescoço
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.16, 12), skinMat);
+    neck.position.set(0, 1.50, 0);
+    neck.castShadow = true;
+    this.mesh.add(neck);
+
+    // Cabeça com queixo proporcional
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.20, 20, 20), skinMat);
+    head.position.set(0, 1.68, 0);
     head.castShadow = true;
     this.mesh.add(head);
 
-    // Visor futurista / AR Glasses
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.12), visorMat);
-    visor.position.set(0, 1.72, 0.18);
-    this.mesh.add(visor);
+    // Orelhas anatômicas
+    for (const side of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.08, 0.06), skinMat);
+      ear.position.set(side * 0.20, 1.68, -0.01);
+      this.mesh.add(ear);
 
-    // 3. Braços
-    const armGeom = new THREE.BoxGeometry(0.14, 0.55, 0.14);
-    armGeom.translate(0, -0.25, 0); // Pivô no ombro
+      const earInner = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.03), hairMat);
+      earInner.position.set(side * 0.21, 1.68, 0);
+      this.mesh.add(earInner);
+    }
+
+    // Olhos Expressivos com brilho especular
+    for (const side of [-1, 1]) {
+      const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.036, 10, 10), eyeWhiteMat);
+      eyeWhite.position.set(side * 0.068, 1.70, 0.18);
+      this.mesh.add(eyeWhite);
+
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 8), eyePupilMat);
+      pupil.position.set(side * 0.068, 1.70, 0.208);
+      this.mesh.add(pupil);
+
+      // Sobrancelha esculpida
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.018, 0.03), hairMat);
+      brow.position.set(side * 0.068, 1.745, 0.185);
+      brow.rotation.z = side * -0.08;
+      this.mesh.add(brow);
+    }
+
+    // Nariz 3D sutil
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.06, 0.04), skinMat);
+    nose.position.set(0, 1.67, 0.21);
+    this.mesh.add(nose);
+
+    // Linha dos lábios
+    const lips = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.015, 0.015), hairMat);
+    lips.position.set(0, 1.61, 0.195);
+    this.mesh.add(lips);
+
+    // Cabelo moderno texturizado (Topete e degradê lateral)
+    const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.13, 0.38), hairMat);
+    hairTop.position.set(0, 1.83, 0.01);
+    hairTop.castShadow = true;
+    this.mesh.add(hairTop);
+
+    const hairFringe = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.08, 0.12), hairMat);
+    hairFringe.position.set(0, 1.78, 0.18);
+    this.mesh.add(hairFringe);
+
+    const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.20, 0.34), hairMat);
+    hairBack.position.set(0, 1.70, -0.06);
+    this.mesh.add(hairBack);
+
+    // Óculos de sol esportivos / Cyber Shades sofisticados
+    for (const side of [-1, 1]) {
+      // Aro dos óculos
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.048, 0.007, 8, 16), glassesFrameMat);
+      rim.position.set(side * 0.068, 1.705, 0.198);
+      this.mesh.add(rim);
+
+      // Lente polarizada translúcida
+      const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.01, 14), glassesLensMat);
+      lens.rotation.x = Math.PI / 2;
+      lens.position.set(side * 0.068, 1.705, 0.198);
+      this.mesh.add(lens);
+
+      // Haste lateral estendendo até a orelha
+      const temple = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.01, 0.18), glassesFrameMat);
+      temple.position.set(side * 0.125, 1.705, 0.10);
+      this.mesh.add(temple);
+    }
+    const glassesBridge = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.01, 0.01), glassesFrameMat);
+    glassesBridge.position.set(0, 1.71, 0.205);
+    this.mesh.add(glassesBridge);
+
+    // ──────────────────── 3. BRAÇOS, MÃOS & SMARTWATCH ────────────────────
+    const armGeom = new THREE.BoxGeometry(0.15, 0.55, 0.15);
+    armGeom.translate(0, -0.24, 0); // Pivô no ombro
 
     this.leftArm = new THREE.Mesh(armGeom, jacketMat);
-    this.leftArm.position.set(-0.35, 1.45, 0);
+    this.leftArm.position.set(-0.35, 1.44, 0);
     this.leftArm.castShadow = true;
     this.mesh.add(this.leftArm);
 
     this.rightArm = new THREE.Mesh(armGeom, jacketMat);
-    this.rightArm.position.set(0.35, 1.45, 0);
+    this.rightArm.position.set(0.35, 1.44, 0);
     this.rightArm.castShadow = true;
     this.mesh.add(this.rightArm);
 
-    // 4. Pernas
-    const legGeom = new THREE.BoxGeometry(0.18, 0.75, 0.18);
-    legGeom.translate(0, -0.35, 0); // Pivô no quadril
+    // Ombros acolchoados (deltoides)
+    for (const side of [-1, 1]) {
+      const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.10, 10, 10), jacketMat);
+      shoulder.position.set(side * 0.35, 1.44, 0);
+      this.mesh.add(shoulder);
+    }
+
+    // Punhos das mangas e mãos anatômicas
+    for (const arm of [this.leftArm, this.rightArm]) {
+      const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.16), jacketTrimMat);
+      cuff.position.set(0, -0.42, 0);
+      arm.add(cuff);
+
+      // Palma da mão
+      const palm = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.10, 0.09), skinMat);
+      palm.position.set(0, -0.50, 0);
+      palm.castShadow = true;
+      arm.add(palm);
+
+      // Polegar anatômico
+      const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.06, 0.04), skinMat);
+      thumb.position.set(0.04, -0.48, 0.035);
+      thumb.rotation.z = -0.25;
+      arm.add(thumb);
+
+      // Dedos juntos em pose natural de caminhada
+      const fingers = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.07), skinMat);
+      fingers.position.set(0, -0.57, 0);
+      arm.add(fingers);
+    }
+
+    // Smartwatch holográfico no pulso esquerdo de Daniel
+    const watchBand = new THREE.Mesh(new THREE.BoxGeometry(0.165, 0.04, 0.165), pantsMat);
+    watchBand.position.set(0, -0.40, 0);
+    this.leftArm.add(watchBand);
+
+    const watchBezel = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.04), metalMat);
+    watchBezel.position.set(0.08, -0.40, 0);
+    this.leftArm.add(watchBezel);
+
+    const watchScreen = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.045, 0.045), cyberGlowMat);
+    watchScreen.position.set(0.105, -0.40, 0);
+    this.leftArm.add(watchScreen);
+
+    // ──────────────────── 4. PERNAS & TÊNIS STREETWEAR ────────────────────
+    const legGeom = new THREE.BoxGeometry(0.18, 0.72, 0.18);
+    legGeom.translate(0, -0.34, 0); // Pivô no quadril
 
     this.leftLeg = new THREE.Mesh(legGeom, pantsMat);
-    this.leftLeg.position.set(-0.16, 0.8, 0);
+    this.leftLeg.position.set(-0.15, 0.80, 0);
     this.leftLeg.castShadow = true;
     this.mesh.add(this.leftLeg);
 
     this.rightLeg = new THREE.Mesh(legGeom, pantsMat);
-    this.rightLeg.position.set(0.16, 0.8, 0);
+    this.rightLeg.position.set(0.15, 0.80, 0);
     this.rightLeg.castShadow = true;
     this.mesh.add(this.rightLeg);
 
-    // Sapatos
-    const leftShoe = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.28), shoeMat);
-    leftShoe.position.set(0, -0.72, 0.05);
-    this.leftLeg.add(leftShoe);
+    for (const leg of [this.leftLeg, this.rightLeg]) {
+      // Joelheira / Recorte estilizado na calça
+      const kneePatch = new THREE.Mesh(new THREE.BoxGeometry(0.185, 0.14, 0.04), jacketTrimMat);
+      kneePatch.position.set(0, -0.32, 0.09);
+      leg.add(kneePatch);
 
-    const rightShoe = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.28), shoeMat);
-    rightShoe.position.set(0, -0.72, 0.05);
-    this.rightLeg.add(rightShoe);
+      // Barra elástica no tornozelo
+      const ankleCuff = new THREE.Mesh(new THREE.BoxGeometry(0.185, 0.05, 0.185), pantsMat);
+      ankleCuff.position.set(0, -0.66, 0);
+      leg.add(ankleCuff);
+
+      // Cabedal do tênis moderno
+      const shoeUpper = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.13, 0.28), shoeUpperMat);
+      shoeUpper.position.set(0, -0.72, 0.05);
+      shoeUpper.castShadow = true;
+      leg.add(shoeUpper);
+
+      // Biqueira e detalhes esportivos
+      const toeCap = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.07, 0.09), shoeAccentMat);
+      toeCap.position.set(0, -0.73, 0.165);
+      leg.add(toeCap);
+
+      // Entressola espessa em EVA branco
+      const midsole = new THREE.Mesh(new THREE.BoxGeometry(0.205, 0.05, 0.31), shoeMidsoleMat);
+      midsole.position.set(0, -0.78, 0.05);
+      leg.add(midsole);
+
+      // Solado de borracha aderente
+      const outsole = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.025, 0.32), shoeSoleMat);
+      outsole.position.set(0, -0.81, 0.05);
+      leg.add(outsole);
+
+      // Faixa de destaque esportivo na lateral do tênis
+      const sideStripe = new THREE.Mesh(new THREE.BoxGeometry(0.208, 0.03, 0.14), shoeAccentMat);
+      sideStripe.position.set(0, -0.72, 0.06);
+      leg.add(sideStripe);
+    }
   }
 
 

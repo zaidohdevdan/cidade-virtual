@@ -278,10 +278,7 @@ export class ActionsService {
     }
 
     if (this.worldGateway) {
-      this.worldGateway.handleSetTrafficLight(
-        { data: { user: { role: 'admin', userId: principal.id } } } as any,
-        { state },
-      );
+      this.worldGateway.setTrafficLightState(state, principal.id);
     }
 
     return {

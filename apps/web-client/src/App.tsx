@@ -4,9 +4,9 @@ import { Physics } from '@react-three/rapier';
 import * as THREE from 'three';
 import { io, Socket } from 'socket.io-client';
 
-import { CityScene, TrafficLightState } from './scenes/city-scene';
+import { CityScene, TrafficLightState, type InteractiveObject } from './scenes/city-scene';
 import { DanielAvatar } from './avatars/daniel-avatar';
-import { AgentAvatar, CITY_AGENTS } from './avatars/agent-avatar';
+import { AgentAvatar, CITY_AGENTS, type LearnedDirectiveClient } from './avatars/agent-avatar';
 import { VehicleAgent, CITY_VEHICLES } from './vehicles/vehicle-agent';
 import { City } from './components/City';
 import { Player } from './components/Player';
@@ -217,7 +217,7 @@ export const App: React.FC = () => {
           if (event.name === 'agent.instruction.learned' && event.payload) {
             const { agentId, directive, playerMessage } = event.payload as {
               agentId?: string;
-              directive?: any;
+              directive?: LearnedDirectiveClient;
               playerMessage?: string;
             };
             const agent = agents.find((a) => a.config.id === agentId);
@@ -229,7 +229,7 @@ export const App: React.FC = () => {
             const { agentId, targetPosition, instruction } = event.payload as {
               agentId?: string;
               targetPosition?: { x: number; y?: number; z: number };
-              instruction?: any;
+              instruction?: LearnedDirectiveClient;
             };
             const agent = agents.find((a) => a.config.id === agentId);
             if (agent) {
@@ -406,7 +406,7 @@ export const App: React.FC = () => {
         socketRef.current.emit(
           'agent:dialogue',
           { targetAgentId, message: text },
-          (ack: { success: boolean; response?: string; error?: string; directive?: any }) => {
+          (ack: { success: boolean; response?: string; error?: string; directive?: LearnedDirectiveClient }) => {
             setIsThinking(false);
             if (ack && ack.success && ack.response) {
               const agentMsg: DialogueMessage = {
@@ -415,12 +415,14 @@ export const App: React.FC = () => {
                 senderName: targetAgentName,
                 text: ack.response,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                directive: ack.directive,
               };
               setDialogueMessages((prev) => [...prev, agentMsg]);
               activeDialogueAgent.say(ack.response, 6, true);
               activeDialogueAgent.learnInstruction(text, ack.directive);
             } else {
               activeDialogueAgent.learnInstruction(text);
+              const latestDirective = activeDialogueAgent.learnedDirectives[activeDialogueAgent.learnedDirectives.length - 1];
               const fallbackResponse = `Instrução gravada, Daniel! Aprendi e executarei: "${text}". Não esquecerei!`;
               const agentMsg: DialogueMessage = {
                 id: `msg-a-${Date.now()}`,
@@ -428,6 +430,7 @@ export const App: React.FC = () => {
                 senderName: targetAgentName,
                 text: fallbackResponse,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                directive: latestDirective,
               };
               setDialogueMessages((prev) => [...prev, agentMsg]);
               activeDialogueAgent.say(fallbackResponse, 6, true);
@@ -438,6 +441,7 @@ export const App: React.FC = () => {
         setTimeout(() => {
           setIsThinking(false);
           activeDialogueAgent.learnInstruction(text);
+          const latestDirective = activeDialogueAgent.learnedDirectives[activeDialogueAgent.learnedDirectives.length - 1];
           const fallback = `Instrução ouvida e gravada, Daniel! Aprendi e cumprirei: "${text}". Jamais esquecerei!`;
           const agentMsg: DialogueMessage = {
             id: `msg-a-${Date.now()}`,
@@ -445,6 +449,7 @@ export const App: React.FC = () => {
             senderName: targetAgentName,
             text: fallback,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            directive: latestDirective,
           };
           setDialogueMessages((prev) => [...prev, agentMsg]);
           activeDialogueAgent.say(fallback, 6, true);

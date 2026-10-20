@@ -131,7 +131,7 @@ export class CognitionService {
     try {
       const persistedExps = await this.expRepo.getByAgentId(citizenId, 50);
       if (persistedExps.length > 0) {
-        mind.integrateExperiences(persistedExps as any);
+        mind.integrateExperiences(persistedExps);
       }
       this.syncedAgentsWithDb.add(citizenId);
     } catch (err) {
@@ -182,13 +182,13 @@ export class CognitionService {
 
     // 3.1 Integração de memórias semânticas e experiências consolidadas na mente (Task-039)
     if (relevantMemories.length > 0) {
-      mind.integrateExperiences(relevantMemories as any);
+      mind.integrateExperiences(relevantMemories);
     }
     if (this.expRepo && !this.syncedAgentsWithDb.has(context.citizenId)) {
       try {
         const persistedExps = await this.expRepo.getByAgentId(context.citizenId, 30);
         if (persistedExps.length > 0) {
-          mind.integrateExperiences(persistedExps as any);
+          mind.integrateExperiences(persistedExps);
         }
         this.syncedAgentsWithDb.add(context.citizenId);
       } catch (err) {

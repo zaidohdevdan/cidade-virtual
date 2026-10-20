@@ -44,6 +44,15 @@ export interface LearnedDirectiveClient {
   description: string;
 }
 
+export interface ActiveDirectiveExecution {
+  type: 'avoid_place' | 'use_crosswalk' | 'go_to_place' | 'wait_stop' | 'custom_rule';
+  targetLabel: string;
+  targetPosition: THREE.Vector3;
+  stage?: number;
+  finalDestination?: THREE.Vector3;
+  elapsedTime: number;
+}
+
 export class AgentAvatar {
   public mesh: THREE.Group;
   public position: THREE.Vector3;
@@ -69,6 +78,8 @@ export class AgentAvatar {
   public stuckAccumulator: number = 0;
   public lastColliders: ObstacleCollider[] = [];
   public learnedDirectives: LearnedDirectiveClient[] = [];
+  public activeDirectiveExecution: ActiveDirectiveExecution | null = null;
+  private forceSpeechShow: boolean = false;
   private unsubscribeHorn?: () => void;
   private proximityGreetingCooldown: number = 0;
   private lastDisplacementPos: THREE.Vector3 = new THREE.Vector3();
@@ -80,7 +91,7 @@ export class AgentAvatar {
   private rightArm!: THREE.Mesh;
   private walkCycleTime: number = 0;
   private patrolIndex: number = 0;
-  private waitTimer: number = 0;
+  public waitTimer: number = 0;
   private blockedObstacleTimer: number = 0;
 
   private readonly walkSpeed = 2.2 + Math.random() * 1.5;
@@ -113,7 +124,15 @@ export class AgentAvatar {
     });
     const skinMat = new THREE.MeshStandardMaterial({
       color: this.config.skinColor,
-      roughness: 0.6,
+      roughness: 0.62,
+    });
+    const innerEarMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(this.config.skinColor).multiplyScalar(0.85),
+      roughness: 0.70,
+    });
+    const lipsMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(this.config.skinColor).lerp(new THREE.Color(0xb25858), 0.35),
+      roughness: 0.55,
     });
     const hairMat = new THREE.MeshStandardMaterial({
       color: this.config.hairColor,
@@ -125,28 +144,36 @@ export class AgentAvatar {
     });
     const shoeMat = new THREE.MeshStandardMaterial({
       color: this.config.shoeColor,
-      roughness: 0.5,
+      roughness: 0.45,
     });
-    const soleMat = new THREE.MeshStandardMaterial({
-      color: 0xf5f5f5,
-      roughness: 0.85,
+    const midsoleMat = new THREE.MeshStandardMaterial({
+      color: 0xf8fafc, // Entressola em EVA branco de alta densidade
+      roughness: 0.35,
+    });
+    const outsoleMat = new THREE.MeshStandardMaterial({
+      color: 0x111111, // Sola exterior de borracha preta de alta aderência
+      roughness: 0.95,
     });
     const metalMat = new THREE.MeshStandardMaterial({
       color: 0xdcdcdc,
-      metalness: 0.85,
-      roughness: 0.2,
+      metalness: 0.90,
+      roughness: 0.15,
     });
     const eyeWhiteMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.25,
+      roughness: 0.20,
     });
     const eyePupilMat = new THREE.MeshStandardMaterial({
       color: 0x111111,
       roughness: 0.1,
     });
+    const eyeGlintMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.05,
+    });
 
     // ──────────────────── 1. TRONCO / VESTUÁRIO ────────────────────
-    // Base da Jaqueta / Casaco estilizado
+    // Base da Jaqueta / Casaco estilizado com caimento estruturado
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.68, 0.32), jacketMat);
     torso.position.y = 1.14;
     torso.castShadow = true;
@@ -154,9 +181,14 @@ export class AgentAvatar {
     this.mesh.add(torso);
 
     // Faixa central com zíper metálico
-    const zipper = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.64, 0.33), metalMat);
+    const zipper = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.64, 0.33), metalMat);
     zipper.position.set(0, 1.14, 0);
     this.mesh.add(zipper);
+
+    // Cursor metálico do zíper
+    const zipperPull = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.02), metalMat);
+    zipperPull.position.set(0, 1.32, 0.17);
+    this.mesh.add(zipperPull);
 
     // Gola / Lapela acolchoada contrastante
     const collar = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.34), accentMat);
@@ -179,20 +211,49 @@ export class AgentAvatar {
     buckle.position.set(0, 0.82, 0);
     this.mesh.add(buckle);
 
-    // ──────────────────── 2. CABEÇA, ROSTO & OLHOS ────────────────────
-    // Pescoço
+    // ──────────────────── 2. CABEÇA, ROSTO & ANATOMIA DETALHADA ────────────────────
+    // Pescoço anatômico
     const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.16, 12), skinMat);
     neck.position.set(0, 1.50, 0);
     neck.castShadow = true;
     this.mesh.add(neck);
 
     // Cabeça
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.20, 16, 16), skinMat);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.20, 18, 18), skinMat);
     head.position.set(0, 1.68, 0);
     head.castShadow = true;
     this.mesh.add(head);
 
-    // Olhos Expressivos
+    // Orelhas anatômicas com lóbulo e cavidade (concha)
+    for (const side of [-1, 1]) {
+      const earHelix = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.02, 10), skinMat);
+      earHelix.rotation.x = Math.PI / 2;
+      earHelix.rotation.z = side * 0.15;
+      earHelix.position.set(side * 0.20, 1.68, 0.01);
+      this.mesh.add(earHelix);
+
+      const earConcha = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.018, 0.022, 8), innerEarMat);
+      earConcha.rotation.x = Math.PI / 2;
+      earConcha.rotation.z = side * 0.15;
+      earConcha.position.set(side * 0.20, 1.68, 0.01);
+      this.mesh.add(earConcha);
+    }
+
+    // Nariz esculpido 3D (ponte nasal e ápice)
+    const noseBridge = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.065, 0.04), skinMat);
+    noseBridge.position.set(0, 1.685, 0.20);
+    this.mesh.add(noseBridge);
+
+    const noseTip = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 8), skinMat);
+    noseTip.position.set(0, 1.655, 0.218);
+    this.mesh.add(noseTip);
+
+    // Linha dos lábios / Boca sutil
+    const lips = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.018, 0.025), lipsMat);
+    lips.position.set(0, 1.605, 0.202);
+    this.mesh.add(lips);
+
+    // Olhos Expressivos com brilho especular (glint)
     for (const side of [-1, 1]) {
       const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), eyeWhiteMat);
       eyeWhite.position.set(side * 0.07, 1.70, 0.18);
@@ -202,15 +263,21 @@ export class AgentAvatar {
       pupil.position.set(side * 0.07, 1.70, 0.21);
       this.mesh.add(pupil);
 
-      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.02, 0.03), hairMat);
+      // Ponto de brilho de luz na córnea (glint) conferindo vivacidade ao olhar
+      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.007, 4, 4), eyeGlintMat);
+      glint.position.set(side * 0.07 + 0.008, 1.708, 0.222);
+      this.mesh.add(glint);
+
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.02, 0.03), hairMat);
       brow.position.set(side * 0.07, 1.75, 0.19);
+      brow.rotation.z = side * -0.08;
       this.mesh.add(brow);
     }
 
     // ──────────────────── 3. CABELO PERSONALIZADO ────────────────────
     this.buildHairstyle(hairMat, accentMat, metalMat);
 
-    // ──────────────────── 4. BRAÇOS & MÃOS ────────────────────
+    // ──────────────────── 4. BRAÇOS & MÃOS ARTICULADAS ────────────────────
     const armGeom = new THREE.BoxGeometry(0.15, 0.55, 0.15);
     armGeom.translate(0, -0.24, 0); // Pivô de rotação no ombro
 
@@ -224,21 +291,34 @@ export class AgentAvatar {
     this.rightArm.castShadow = true;
     this.mesh.add(this.rightArm);
 
-    // Mãos nos braços
+    // Mãos modeladas com palma, polegar e nós dos dedos
     for (const arm of [this.leftArm, this.rightArm]) {
-      // Barra da manga
+      const isLeft = arm === this.leftArm;
+
+      // Barra da manga / Punho
       const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.16), accentMat);
       cuff.position.set(0, -0.42, 0);
       arm.add(cuff);
 
-      // Mão em tom de pele
-      const hand = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.12, 0.11), skinMat);
-      hand.position.set(0, -0.52, 0);
-      hand.castShadow = true;
-      arm.add(hand);
+      // Palma da mão
+      const palm = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.07), skinMat);
+      palm.position.set(0, -0.50, 0);
+      palm.castShadow = true;
+      arm.add(palm);
+
+      // Polegar anatômico articulado apontando levemente para a frente
+      const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.055, 0.035), skinMat);
+      thumb.position.set(isLeft ? 0.045 : -0.045, -0.49, 0.025);
+      thumb.rotation.z = isLeft ? -0.4 : 0.4;
+      arm.add(thumb);
+
+      // Bloco de falanges / Dedos dobrados em pose natural
+      const fingers = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.05, 0.065), skinMat);
+      fingers.position.set(0, -0.56, 0.005);
+      arm.add(fingers);
     }
 
-    // ──────────────────── 5. PERNAS & CALÇADOS ────────────────────
+    // ──────────────────── 5. PERNAS & CALÇADOS STREETWEAR ────────────────────
     const legGeom = new THREE.BoxGeometry(0.18, 0.72, 0.18);
     legGeom.translate(0, -0.34, 0); // Pivô de rotação no quadril
 
@@ -252,27 +332,37 @@ export class AgentAvatar {
     this.rightLeg.castShadow = true;
     this.mesh.add(this.rightLeg);
 
-    // Tênis / Sapatos com solado de borracha
+    // Tênis com solado anatômico duplo (EVA + Borracha)
     for (const leg of [this.leftLeg, this.rightLeg]) {
-      // Dobra da calça
+      // Dobra da calça / Bainha
       const hem = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.05, 0.19), pantsMat);
       hem.position.set(0, -0.66, 0);
       leg.add(hem);
 
-      // Cabedal do sapato
-      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.12, 0.28), shoeMat);
-      shoe.position.set(0, -0.72, 0.05);
-      shoe.castShadow = true;
-      leg.add(shoe);
+      // Cabedal do tênis
+      const shoeUpper = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.10, 0.28), shoeMat);
+      shoeUpper.position.set(0, -0.71, 0.05);
+      shoeUpper.castShadow = true;
+      leg.add(shoeUpper);
 
-      // Solado de borracha branca
-      const sole = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.04, 0.30), soleMat);
-      sole.position.set(0, -0.79, 0.05);
-      leg.add(sole);
+      // Biqueira protetora frontal
+      const toeCap = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.06, 0.08), accentMat);
+      toeCap.position.set(0, -0.73, 0.16);
+      leg.add(toeCap);
 
-      // Faixa decorativa do tênis
-      const shoeStripe = new THREE.Mesh(new THREE.BoxGeometry(0.205, 0.03, 0.12), accentMat);
-      shoeStripe.position.set(0, -0.72, 0.06);
+      // Entressola de amortecimento em EVA branco de alta densidade
+      const midsole = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.04, 0.31), midsoleMat);
+      midsole.position.set(0, -0.77, 0.05);
+      leg.add(midsole);
+
+      // Solado de tração inferior em borracha preta
+      const outsole = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.02, 0.31), outsoleMat);
+      outsole.position.set(0, -0.795, 0.05);
+      leg.add(outsole);
+
+      // Faixa lateral esportiva de contraste
+      const shoeStripe = new THREE.Mesh(new THREE.BoxGeometry(0.205, 0.025, 0.12), accentMat);
+      shoeStripe.position.set(0, -0.71, 0.06);
       leg.add(shoeStripe);
     }
 
@@ -480,6 +570,7 @@ export class AgentAvatar {
       return;
     }
 
+    this.forceSpeechShow = forceShow;
     this.speechTimer = durationSeconds;
     this.speechText = message;
     if (!this.speechBubble) {
@@ -551,6 +642,47 @@ export class AgentAvatar {
   }
 
   /**
+   * Determina ponto de escape seguro e afastado da zona restrita/evitada.
+   */
+  public getSafeLocationAwayFrom(category: string, currentPos: THREE.Vector3): THREE.Vector3 {
+    if (category === 'cafe') {
+      // Café fica em x: 32, z: -20. Fuga segura para a Praça Central no sudoeste.
+      return new THREE.Vector3(-22.0, 0.19, 18.0);
+    }
+    if (category === 'market') {
+      // Mercado fica em z: -48. Fuga para a Praça Central ou calçada sul.
+      return new THREE.Vector3(-22.0, 0.19, 18.0);
+    }
+    if (category === 'praca') {
+      // Praça fica em x: -22, z: 22. Fuga para a calçada leste.
+      return new THREE.Vector3(18.0, 0.19, -5.0);
+    }
+    if (category === 'street') {
+      return new THREE.Vector3(currentPos.x < 0 ? -12.0 : 12.0, 0.19, currentPos.z);
+    }
+    return new THREE.Vector3(-currentPos.x, 0.19, -currentPos.z);
+  }
+
+  /**
+   * Determina ponto de aproximação ao meio-fio da faixa mais próxima e destino oposto.
+   */
+  public getCrosswalkApproachAndCrossing(currentPos: THREE.Vector3): {
+    approachKerb: THREE.Vector3;
+    oppositeKerb: THREE.Vector3;
+  } {
+    // Escolhe Faixa Norte (z: -9.0) ou Faixa Sul (z: 9.0) da Av. Central
+    const crosswalkZ = currentPos.z <= 0 ? -9.0 : 9.0;
+    const isWest = currentPos.x < 0;
+    const approachX = isWest ? -7.5 : 7.5;
+    const oppositeX = isWest ? 7.5 : -7.5;
+
+    return {
+      approachKerb: new THREE.Vector3(approachX, 0.19, crosswalkZ),
+      oppositeKerb: new THREE.Vector3(oppositeX, 0.19, crosswalkZ),
+    };
+  }
+
+  /**
    * Ouve, aprende e executa no cliente uma instrução direta do avatar Daniel.
    * Não esquece a regra, aplica desvio físico e prioriza ações instruídas.
    */
@@ -563,6 +695,10 @@ export class AgentAvatar {
       );
     const isCrosswalk =
       /faixa(\s+de\s+pedestre)?|atravess(ar|e|em)?|cruzar|travessia/i.test(text) && !isAvoid;
+    const isGoTo =
+      /(vá|vai|ir|irmos|vamos|bora|ande|rumo|dirija-se|siga|caminhe)\s+(para|ao|até|na|no|pro|pra)\s+(.+)/i.test(
+        text,
+      ) && !isAvoid;
     const isStop = /(pare|parar|aguard(e|ar)|espere|fique\s+(aí|parado))/i.test(text);
 
     let targetCategory = directive?.targetCategory;
@@ -574,16 +710,34 @@ export class AgentAvatar {
       else if (text.includes('faixa')) targetCategory = 'crosswalk';
     }
 
+    const determinedType = isAvoid
+      ? 'avoid_place'
+      : isCrosswalk
+      ? 'use_crosswalk'
+      : isGoTo
+      ? 'go_to_place'
+      : isStop
+      ? 'wait_stop'
+      : 'custom_rule';
+
     const effectiveDirective: LearnedDirectiveClient = directive || {
       id: `dir-cli-${Date.now()}`,
       instruction,
-      directiveType: isAvoid ? 'avoid_place' : isCrosswalk ? 'use_crosswalk' : isStop ? 'wait_stop' : 'custom_rule',
+      directiveType: determinedType,
       targetCategory,
-      targetEntityId: directive?.targetEntityId,
+      targetEntityId: undefined,
       strength: 1.0,
       learnedAt: Date.now(),
       active: true,
-      description: isAvoid ? `Evitar ${targetCategory}` : isCrosswalk ? 'Atravessar pela faixa' : instruction,
+      description: isAvoid
+        ? `Evitar ${targetCategory || 'o local indicado'}`
+        : isCrosswalk
+        ? 'Atravessar exclusivamente pela faixa de pedestres'
+        : isGoTo
+        ? `Dirigir-se ao local: ${targetCategory || 'destino'}`
+        : isStop
+        ? 'Parar e aguardar com segurança'
+        : instruction,
     };
 
     const existingIdx = this.learnedDirectives.findIndex(
@@ -597,23 +751,84 @@ export class AgentAvatar {
       this.learnedDirectives.push(effectiveDirective);
     }
 
-    // Execução Imediata da Instrução:
-    if (effectiveDirective.directiveType === 'use_crosswalk') {
-      // Direciona imediatamente para a faixa de pedestres central segura
-      const crosswalkTarget = { x: 0, y: 0.19, z: this.position.z >= 0 ? 2.0 : -2.0 };
-      this.setTargetPosition(crosswalkTarget);
-      this.isWaitingAtCrosswalk = false;
-    } else if (effectiveDirective.directiveType === 'avoid_place') {
-      // Se estava a caminho de um ponto dentro do local evitado, cancela o target imediatamente
-      if (this.targetPosition && targetCategory) {
-        if (this.isTargetInAvoidedZone(this.targetPosition.x, this.targetPosition.z, targetCategory)) {
-          this.targetPosition = null;
-          this.speed = 0;
-          this.patrolIndex = (this.patrolIndex + 1) % this.config.patrolPoints.length;
-        }
+    const categoryLabels: Record<string, string> = {
+      cafe: 'Café',
+      market: 'Mercado',
+      praca: 'Praça',
+      street: 'Rua',
+      crosswalk: 'Faixa de Pedestres',
+    };
+    const displayCategory = targetCategory ? (categoryLabels[targetCategory] || targetCategory) : 'o local';
+
+    // Execução Imediata e Visível da Instrução de Daniel:
+    if (effectiveDirective.directiveType === 'avoid_place') {
+      const safeTarget = this.getSafeLocationAwayFrom(targetCategory || 'cafe', this.position);
+      this.activeDirectiveExecution = {
+        type: 'avoid_place',
+        targetLabel: displayCategory,
+        targetPosition: safeTarget.clone(),
+        stage: 1,
+        elapsedTime: 0,
+      };
+      this.targetPosition = safeTarget.clone();
+      this.hasReceivedServerTarget = false;
+      this.waitTimer = 0;
+      this.speed = this.walkSpeed * 1.35;
+
+      // Invalida ponto de patrulha se estiver dentro da área proibida
+      if (this.isTargetInAvoidedZone(this.config.patrolPoints[this.patrolIndex].x, this.config.patrolPoints[this.patrolIndex].z, targetCategory || 'cafe')) {
+        this.patrolIndex = (this.patrolIndex + 1) % this.config.patrolPoints.length;
       }
+
+      this.say(`⚡ Sim, Daniel! Evitando o ${displayCategory} imediatamente e indo para local seguro.`, 5.0, true, true);
+    } else if (effectiveDirective.directiveType === 'use_crosswalk') {
+      const { approachKerb, oppositeKerb } = this.getCrosswalkApproachAndCrossing(this.position);
+      this.activeDirectiveExecution = {
+        type: 'use_crosswalk',
+        targetLabel: 'Faixa de Pedestres',
+        targetPosition: approachKerb.clone(),
+        finalDestination: oppositeKerb.clone(),
+        stage: 1,
+        elapsedTime: 0,
+      };
+      this.targetPosition = approachKerb.clone();
+      this.hasReceivedServerTarget = false;
+      this.isWaitingAtCrosswalk = false;
+      this.waitTimer = 0;
+      this.speed = this.walkSpeed * 1.25;
+
+      this.say('⚡ Sim, Daniel! Me dirigindo imediatamente para a faixa de pedestres para atravessar.', 5.0, true, true);
+    } else if (effectiveDirective.directiveType === 'go_to_place') {
+      let destTarget: THREE.Vector3;
+      if (targetCategory === 'market') {
+        destTarget = new THREE.Vector3(0, 0.19, -36.0);
+      } else if (targetCategory === 'cafe') {
+        destTarget = new THREE.Vector3(22.0, 0.19, -12.0);
+      } else if (targetCategory === 'praca') {
+        destTarget = new THREE.Vector3(-22.0, 0.19, 18.0);
+      } else {
+        destTarget = new THREE.Vector3(0, 0.19, 0);
+      }
+
+      this.activeDirectiveExecution = {
+        type: 'go_to_place',
+        targetLabel: displayCategory,
+        targetPosition: destTarget.clone(),
+        stage: 1,
+        elapsedTime: 0,
+      };
+      this.targetPosition = destTarget.clone();
+      this.hasReceivedServerTarget = false;
+      this.waitTimer = 0;
+      this.speed = this.walkSpeed * 1.25;
+
+      this.say(`⚡ Sim, Daniel! Roteando e caminhando até o ${displayCategory} agora mesmo.`, 5.0, true, true);
     } else if (effectiveDirective.directiveType === 'wait_stop') {
+      this.activeDirectiveExecution = null;
+      this.targetPosition = null;
       this.stopMovement();
+      this.waitTimer = 60.0;
+      this.say('⚡ Entendido, Daniel! Parando no local e mantendo postura segura.', 5.0, true, true);
     }
   }
 
@@ -656,9 +871,9 @@ export class AgentAvatar {
       this.label.style.display = 'none';
     }
 
-    // Atualiza posição do balão de fala dinâmico apenas se estiver ativo e próximo
+    // Atualiza posição do balão de fala dinâmico se estiver ativo e próximo (ou forceShow ativo para obediência visível)
     if (this.speechBubble) {
-      if (this.speechTimer > 0 && this.isNearPlayer) {
+      if (this.speechTimer > 0 && (this.isNearPlayer || this.forceSpeechShow)) {
         const bubblePos = this.position.clone().add(new THREE.Vector3(0, 2.95, 0));
         bubblePos.project(camera);
         const w = renderer.domElement.clientWidth;
@@ -674,6 +889,7 @@ export class AgentAvatar {
         }
       } else {
         this.speechBubble.style.display = 'none';
+        this.forceSpeechShow = false;
       }
     }
   }
@@ -747,11 +963,11 @@ export class AgentAvatar {
 
     const candidates: THREE.Vector3[] = [];
 
-    // Testa 24 pontos candidatos no entorno do agente (entre 6m e 16m)
+    // Testa 24 pontos candidatos no entorno do agente (entre 5.5m e 9.5m, alcançando a calçada rapidamente)
     for (let i = 0; i < 24; i++) {
       const sideBias = Math.random() < 0.75 ? preferredSideSign : -preferredSideSign;
       const angle = (Math.random() * 0.8 - 0.4) + (sideBias > 0 ? Math.PI / 2 : -Math.PI / 2);
-      const dist = 6.0 + Math.random() * 9.0;
+      const dist = 5.5 + Math.random() * 4.0;
 
       const candX = this.position.x + Math.sin(angle) * dist;
       const candZ = this.position.z + Math.cos(angle) * dist;
@@ -1267,8 +1483,8 @@ export class AgentAvatar {
     }
 
     // Interação e atenção com o avatar do jogador Daniel em proximidade (≤ 3.5m)
-    // Se o habitante estiver em evasão de buzina ou fuga de deadlock, prioriza sua segurança
-    if (playerPos && !this.isEvadingVehicle && !this.isEscapingDeadlock) {
+    // Se o habitante estiver em evasão de buzina, fuga de deadlock ou executando diretiva ativa, prioriza a segurança/obediência
+    if (playerPos && !this.isEvadingVehicle && !this.isEscapingDeadlock && !this.activeDirectiveExecution) {
       const distToPlayer = this.position.distanceTo(playerPos);
       if (distToPlayer <= 3.5) {
         this.isNearPlayer = true;
@@ -1310,7 +1526,7 @@ export class AgentAvatar {
       }
     } else {
       this.isNearPlayer = false;
-      if (this.speechBubble && (this.speechTimer > 0 || this.speechBubble.style.display !== 'none') && !this.isEvadingVehicle && !this.isEscapingDeadlock) {
+      if (this.speechBubble && (this.speechTimer > 0 || this.speechBubble.style.display !== 'none') && !this.isEvadingVehicle && !this.isEscapingDeadlock && !this.activeDirectiveExecution) {
         this.speechTimer = 0;
         this.speechBubble.style.opacity = '0';
         this.speechBubble.style.display = 'none';
@@ -1330,9 +1546,11 @@ export class AgentAvatar {
     }
 
     // Respeito ao semáforo nas imediações da faixa de pedestres central (|x| < 4.5 e |z| < 6)
-    // A evasão de buzina e fuga de aprisionamento possuem prioridade vital sobre a espera na faixa
+    // A evasão de buzina, fuga de deadlock ou travessia já iniciada na faixa prosseguem
+    const isCrossingStage2 = this.activeDirectiveExecution?.type === 'use_crosswalk' && this.activeDirectiveExecution?.stage === 2;
+    const isDirectiveMoving = !!(this.activeDirectiveExecution && this.activeDirectiveExecution.type !== 'use_crosswalk');
     const isNearCrosswalk = Math.abs(this.position.x) < 4.5 && Math.abs(this.position.z) < 6;
-    if (!this.isEvadingVehicle && !this.isEscapingDeadlock && isNearCrosswalk && trafficLightState === 'green') {
+    if (!this.isEvadingVehicle && !this.isEscapingDeadlock && !isCrossingStage2 && !isDirectiveMoving && isNearCrosswalk && trafficLightState === 'green') {
       this.isWaitingAtCrosswalk = true;
       this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
       this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
@@ -1341,9 +1559,26 @@ export class AgentAvatar {
     }
     this.isWaitingAtCrosswalk = false;
 
+    // Se o agente estiver aguardando na faixa pelo semáforo e o sinal veicular fechar (red):
+    if (this.activeDirectiveExecution?.type === 'use_crosswalk' && this.activeDirectiveExecution.stage === 1 && this.isWaitingAtCrosswalk) {
+      if (trafficLightState !== 'green') {
+        this.isWaitingAtCrosswalk = false;
+        this.activeDirectiveExecution.stage = 2;
+        if (this.activeDirectiveExecution.finalDestination) {
+          this.activeDirectiveExecution.targetPosition = this.activeDirectiveExecution.finalDestination;
+          this.targetPosition = this.activeDirectiveExecution.finalDestination;
+          this.say('Sinal vermelho para carros! Atravessando a faixa com segurança!', 3.0, true, true);
+          this.speed = this.walkSpeed * 1.25;
+        }
+      } else {
+        this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
+        return;
+      }
+    }
+
     // Se o agente estiver sob controle autoritativo do servidor e não possuir novo destino ativo,
     // ele permanece no local atual realizando sua atividade em repouso ao invés de ciclar rotas locais.
-    if (!this.isEvadingVehicle && !this.isEscapingDeadlock && !this.targetPosition && this.hasReceivedServerTarget) {
+    if (!this.isEvadingVehicle && !this.isEscapingDeadlock && !this.activeDirectiveExecution && !this.targetPosition && this.hasReceivedServerTarget) {
       this.speed = THREE.MathUtils.lerp(this.speed, 0, delta * 8);
       this.leftLeg.rotation.x = THREE.MathUtils.lerp(this.leftLeg.rotation.x, 0, delta * 8);
       this.rightLeg.rotation.x = THREE.MathUtils.lerp(this.rightLeg.rotation.x, 0, delta * 8);
@@ -1356,8 +1591,9 @@ export class AgentAvatar {
     // Prioridade de destino:
     // 1. Evasão de buzina (sair da frente e buscar local livre)
     // 2. Fuga autônoma de bloqueio/armadilha (achar a saída e ir para local livre)
-    // 3. Destino recebido do servidor (com validação anti-bloqueio memorizado)
-    // 4. Rota de patrulha local (com validação anti-bloqueio memorizado)
+    // 3. Execução direta de diretiva de Daniel (evitar local, faixa de pedestres, destino instruído)
+    // 4. Destino recebido do servidor (com validação anti-bloqueio memorizado)
+    // 5. Rota de patrulha local (com validação anti-bloqueio memorizado)
     let target: THREE.Vector3;
     let isServerTarget = false;
     let isEvasion = false;
@@ -1369,6 +1605,9 @@ export class AgentAvatar {
     } else if (this.isEscapingDeadlock && this.escapeTarget) {
       target = this.escapeTarget;
       isEscape = true;
+    } else if (this.activeDirectiveExecution && this.activeDirectiveExecution.targetPosition) {
+      target = this.activeDirectiveExecution.targetPosition;
+      isServerTarget = false;
     } else if (this.targetPosition) {
       if (this.isPositionInStuckMemory(this.targetPosition.x, this.targetPosition.z)) {
         const mem = this.getNearestStuckMemory(this.targetPosition.x, this.targetPosition.z);
@@ -1401,7 +1640,7 @@ export class AgentAvatar {
     const toTarget = flat.clone().sub(this.position);
     const distToTarget = toTarget.length();
 
-    if (distToTarget < (isEvasion || isEscape ? 0.9 : 0.5)) {
+    if (distToTarget < (isEvasion || isEscape ? 0.9 : 0.6)) {
       if (isEvasion) {
         this.isEvadingVehicle = false;
         this.evasionTarget = null;
@@ -1415,6 +1654,54 @@ export class AgentAvatar {
         this.speed = 0;
         this.say('Ufa! Encontrei a saída e cheguei a um local livre.', 3.5, true, false);
         return;
+      }
+      if (this.activeDirectiveExecution) {
+        if (this.activeDirectiveExecution.type === 'avoid_place') {
+          this.say(`Cheguei a uma área segura e longe de ${this.activeDirectiveExecution.targetLabel}. Ordem cumprida, Daniel!`, 4.5, true, true);
+          this.activeDirectiveExecution = null;
+          this.targetPosition = null;
+          this.waitTimer = 3.0;
+          this.speed = 0;
+          return;
+        }
+        if (this.activeDirectiveExecution.type === 'use_crosswalk') {
+          if (this.activeDirectiveExecution.stage === 1) {
+            // Chegou ao meio-fio da faixa de pedestres
+            if (trafficLightState === 'green') {
+              this.isWaitingAtCrosswalk = true;
+              this.speed = 0;
+              this.say('Aguardando sinal veicular para travessia segura na faixa...', 2.5, true, false);
+              return;
+            } else {
+              // Sinal fechado para carros: inicia travessia
+              this.isWaitingAtCrosswalk = false;
+              this.activeDirectiveExecution.stage = 2;
+              if (this.activeDirectiveExecution.finalDestination) {
+                this.activeDirectiveExecution.targetPosition = this.activeDirectiveExecution.finalDestination;
+                this.targetPosition = this.activeDirectiveExecution.finalDestination;
+                this.say('Sinal vermelho para carros! Atravessando a faixa com segurança!', 3.0, true, true);
+                this.speed = this.walkSpeed * 1.25;
+                return;
+              }
+            }
+          } else if (this.activeDirectiveExecution.stage === 2) {
+            this.say('Travessia concluída com total segurança pela faixa, Daniel!', 4.5, true, true);
+            this.activeDirectiveExecution = null;
+            this.targetPosition = null;
+            this.isWaitingAtCrosswalk = false;
+            this.waitTimer = 2.0;
+            this.speed = 0;
+            return;
+          }
+        }
+        if (this.activeDirectiveExecution.type === 'go_to_place') {
+          this.say(`Cheguei ao local: ${this.activeDirectiveExecution.targetLabel} conforme sua instrução, Daniel!`, 4.5, true, true);
+          this.activeDirectiveExecution = null;
+          this.targetPosition = null;
+          this.waitTimer = 2.5;
+          this.speed = 0;
+          return;
+        }
       }
       if (isServerTarget) {
         this.targetPosition = null;
@@ -1437,8 +1724,9 @@ export class AgentAvatar {
     this.rotationY += angleDiff * Math.min(1, delta * 7);
     this.mesh.rotation.y = this.rotationY;
 
-    // Deslocamento dinâmico: velocidade elevada durante evasão ou fuga de bloqueio
-    const targetSpeed = (isEvasion || isEscape) ? this.walkSpeed * 1.55 : this.walkSpeed;
+    // Deslocamento dinâmico: velocidade elevada durante evasão, fuga de bloqueio ou execução de diretiva de Daniel
+    const isDirective = !!this.activeDirectiveExecution;
+    const targetSpeed = (isEvasion || isEscape || isDirective) ? this.walkSpeed * 1.45 : this.walkSpeed;
     const step = this.speed * delta;
     const desiredDx = steerDir.x * step;
     const desiredDz = steerDir.z * step;

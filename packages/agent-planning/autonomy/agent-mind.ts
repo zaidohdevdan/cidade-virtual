@@ -40,13 +40,13 @@ export interface ExperienceInput {
   description?: string;
   content?: string;
   locationId?: string | null;
-  relatedEntityIds?: string[];
+  relatedEntityIds?: readonly string[] | string[];
   importance?: string | number;
   emotionalWeight?: number;
   confidence?: string | number;
   occurredAt?: Date | string | number;
   timestamp?: Date | string | number;
-  metadata?: Record<string, unknown>;
+  metadata?: unknown;
   sourceType?: string;
 }
 
@@ -616,16 +616,21 @@ export class AgentMind {
 
       // Determina a valência da experiência
       let baseValence: number;
-      if (exp.metadata && typeof exp.metadata['valence'] === 'number') {
-        baseValence = exp.metadata['valence'] as number;
+      const meta =
+        typeof exp.metadata === 'object' && exp.metadata !== null
+          ? (exp.metadata as Record<string, unknown>)
+          : undefined;
+
+      if (meta && typeof meta['valence'] === 'number') {
+        baseValence = meta['valence'] as number;
       } else if (
-        exp.metadata?.['hazard'] === true ||
-        exp.metadata?.['success'] === false ||
+        meta?.['hazard'] === true ||
+        meta?.['success'] === false ||
         /ruim|péssim|perigo|desconfort|lotad|suj|barulh|atropel|acident|intoxica|estragad|caro|hazard|danger|bad|negative|threat|warning|hostil/i.test(text)
       ) {
         baseValence = -0.85;
       } else if (
-        exp.metadata?.['success'] === true ||
+        meta?.['success'] === true ||
         /bom|ótimo|excelent|segur|saboros|refeição|tranquil|agradável|confort|success|safe|delicious|tasty|positive/i.test(text)
       ) {
         baseValence = 0.70;

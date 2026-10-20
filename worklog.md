@@ -1,5 +1,41 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task: Aprendizado & Fixação de Instruções — Mudança Imediata de Comportamento e Obediência Ativa
+- **Data:** 2026-10-19
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Cognitivo, Físico de Navegação e Interação Avatar-Agente
+
+### 1. Diagnóstico da Causa-Raiz
+Ao testar ordens verbais/chat de Daniel como *"Você deve evitar o café"*, *"Atravesse a faixa"*, *"Vá para o mercado"* ou *"Pare aí"*, o usuário relatou: `[ não foi identificado mudança de comportamento, obediencia]`. A investigação revelou 5 causas-raiz estruturais:
+1. **Bug do Congelamento por Proximidade (`agent-avatar.ts` L1272-1301):** Quando Daniel conversava pelo modal de diálogo presencial (`distToPlayer <= 2.2m`), a função `update()` executava `return;` a cada frame. O agente ficava paralisado sem poder dar um único passo enquanto Daniel estivesse próximo.
+2. **Repouso Server-Side Permanente (L1346):** Quando a instrução cancelava `targetPosition = null`, a condição `!this.targetPosition && this.hasReceivedServerTarget` forçava retorno antecipado contínuo, impedindo qualquer movimento.
+3. **Ausência de Deslocamento Ativo no `avoid_place`:** No cliente, evitar um local apenas limpava o alvo se o agente já estivesse caminhando para lá. Se estivesse parado ou conversando, nada acontecia. No backend (`simulation.service.ts`), `reroute` limpava os waypoints mas não calculava rota de escape e não transmitia `agent.target`.
+4. **Coordenadas Incorretas para Travessia de Faixa (`use_crosswalk`):** O cliente direcionava o NPC para `{ x: 0, y: 0.19, z: 2.0 }` (no centro do asfalto onde passam os carros), em vez do meio-fio da Faixa Norte (`z = -9.0`) ou Faixa Sul (`z = 9.0`).
+5. **Inexistência do tipo `go_to_place` no Cliente:** Ordens como *"Vá para o mercado"* caíam em `custom_rule` genérico sem definir qualquer destino.
+
+### 2. Implementações Realizadas
+1. **Pipeline de Execução Ativa (`ActiveDirectiveExecution` em `agent-avatar.ts`)**:
+   - Criada a interface `ActiveDirectiveExecution` e a propriedade `activeDirectiveExecution` no habitante.
+   - **Bypass do Freeze de Proximidade:** Quando há diretiva ativa de Daniel, o habitante não congela na distância `<= 2.2m`, permitindo que ele se afaste, vire e caminhe prontamente na frente do jogador.
+   - **Bypass da Trava de Repouso:** A presença de `activeDirectiveExecution` sobrepõe a trava de repouso autoritativo.
+2. **Execução Imediata por Tipo de Diretiva**:
+   - **`avoid_place` (Evitar Local):** O agente calcula imediatamente um local de escape seguro e vibrante do outro lado da cidade (ex: Praça Central para o café), define `targetPosition`, aciona velocidade dinâmica de marcha rápida (`1.35x` walkSpeed), invalida pontos de patrulha na área evitada e anuncia: *"⚡ Sim, Daniel! Evitando o Café imediatamente e indo para local seguro."*.
+   - **`use_crosswalk` (Usar Faixa de Pedestres):** O agente direciona-se para o meio-fio da faixa mais próxima (`Faixa Norte z = -9.0` ou `Faixa Sul z = 9.0`), aguarda no meio-fio caso o semáforo veicular esteja verde, e atravessa com segurança para o outro lado assim que o semáforo fica vermelho para veículos, anunciando a travessia segura concluída.
+   - **`go_to_place` (Ir ao Mercado / Praça / Café):** Reconhece regex de navegação intencional e direciona o habitante com velocidade elevada ao destino solicitado.
+   - **`wait_stop` (Parar / Aguardar):** Interrompe o movimento imediatamente e fixa tempo de espera seguro.
+3. **Sincronização Autoritativa no Backend (`simulation.service.ts`)**:
+   - No `handlePlayerDialogue()`, todas as 4 ações (`reroute`, `crosswalk`, `goto`, `stop`) agora calculam os waypoints via Recast NavMesh WASM e realizam broadcast imediato via WebSocket do evento de domínio `agent.target`.
+   - Persistência garantida no PostgreSQL (`agent_minds`, `agent_experiences`) e indexação vetorial no Qdrant com peso semântico 1.0.
+4. **Interface e Feedback Visual no Chat (`DialogueModal.tsx` e `App.tsx`)**:
+   - Cada resposta do habitante que assimila uma instrução agora exibe um badge visual de confirmação permanente: `⚡ Diretiva Fixada: [Descrição] (Qdrant & PostgreSQL)`.
+   - Adicionados botões de atalho rápido no chat com as principais ordens cívicas para testes diretos pelo usuário.
+5. **Validação de Testes e Tipagem**:
+   - `npm run typecheck`: **0 erros de tipagem** (100% estrito, zero `any`).
+   - `npx nx run-many -t test`: **26/26 projetos aprovados**, 58 testes no web-client e 33 testes na API (100% green).
+
+---
+
 ## Task: Desvio Ativo de Obstáculos para NPCs e Evasão por Buzina de Automóvel
 - **Data:** 2026-10-19
 - **Status:** Concluído
@@ -1278,10 +1314,25 @@ Implementação de ponta a ponta da capacidade dos agentes autônomos de **ouvir
 - `apps/api`: **29/29 testes aprovados (100%) em 6 arquivos**.
 - Monorepo Nx (`npx nx run-many -t test`): **26/26 projetos aprovados (100%)**.
 
+### 4. Resolução de Tipagem Estática (TypeScript)
+- Corrigida inferência de tipo em `apps/web-client/src/avatars/agent-avatar.ts` na instanciação do fallback de `LearnedDirectiveClient` (`targetEntityId: undefined`).
+- Corrigida chamada de `MemoryService.addMemory()` em `apps/api/src/modules/simulation/simulation.service.ts` com união válida de `sensoryTags` (`['auditory', 'social']`), `memoryType: 'semantic'`, `origin: 'interaction'`, e `timestamp: new Date()`.
+- Verificação completa com `npm run typecheck`: **2/2 projetos aprovados sem nenhum erro**.
 
-
-
-
-
-
+### 5. Eliminação Completa de Tipos `any` (Refatoração de Tipagem Estrita)
+- **`packages/types`:** Definidos `DirectiveType` e `LearnedDirective`, substituindo `learnedDirectives?: any[]` por `learnedDirectives?: LearnedDirective[]`.
+- **`packages/agent-planning`:** Re-exportados `DirectiveType` e `LearnedDirective` do pacote de contratos; `ExperienceInput` ajustado com `metadata?: unknown` e `relatedEntityIds?: readonly string[] | string[]` compatibilizando com `AgentExperienceRow` e `MemorySnippet`; `goal-planner.ts` tipado com `Record<string, unknown>`.
+- **`packages/event-system`:** `cognition.worker.ts` tipado com `citizenId: CitizenId`.
+- **`packages/persistence`:** `experience.repository.ts` removido cast desnecessário `sourceType as any`.
+- **`apps/api`:**
+  - `simulation.service.ts`: Eliminados todos os casts `as any` em `savedMindsMap` (`Map<string, AgentMindRow>`), `restoreState`, `saveAllAgentMinds`, `upsert`, e chamadas com `CitizenId` e `LearnedDirective`.
+  - `world.gateway.ts`: Adicionado método `setTrafficLightState` e tipados `directive?: LearnedDirective` e blocos `catch (err: unknown)`.
+  - `actions.service.ts`: Substituído mock com cast em `worldGateway.handleSetTrafficLight(... as any)` por chamada tipada direta `worldGateway.setTrafficLightState(state, principal.id)`.
+  - `cognition.service.ts`: Removidos casts `persistedExps as any` e `relevantMemories as any`.
+  - `jwt.util.ts`, `rbac.guard.ts`, `auth.service.ts`: Substituído `(decoded as any)` e `catch (err: any)` por tipagens estritas.
+- **`apps/web-client`:** `App.tsx` tipado com `LearnedDirectiveClient` nos listeners de eventos e callbacks de diálogo.
+- **Validação:**
+  - Zero ocorrências de `: any` ou `as any` em todo o código de produção do monorepo.
+  - `npm run typecheck`: **100% de sucesso (0 erros)**.
+  - `npx nx run-many -t test`: **26/26 projetos aprovados (100%)**.
 

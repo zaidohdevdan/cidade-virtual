@@ -52,8 +52,8 @@ export class RbacGuard implements CanActivate {
             displayName: authUser.userId,
           });
           request.principal = principal;
-        } catch (err: any) {
-          this.logger.warn(`[SECURITY] [AUDIT] [RBAC] Falha ao verificar token: ${err.message}`);
+        } catch (err: unknown) {
+          this.logger.warn(`[SECURITY] [AUDIT] [RBAC] Falha ao verificar token: ${(err as Error)?.message || String(err)}`);
           throw new UnauthorizedException('Token inválido ou expirado');
         }
       } else if (request.body?.principal) {

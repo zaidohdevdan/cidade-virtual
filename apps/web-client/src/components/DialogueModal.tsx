@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AgentAvatar } from '../avatars/agent-avatar';
+import { AgentAvatar, type LearnedDirectiveClient } from '../avatars/agent-avatar';
 
 export interface DialogueMessage {
   id: string;
@@ -7,6 +7,7 @@ export interface DialogueMessage {
   senderName: string;
   text: string;
   time: string;
+  directive?: LearnedDirectiveClient;
 }
 
 interface DialogueModalProps {
@@ -83,10 +84,13 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({
   };
 
   const quickPrompts = [
+    'Você deve evitar o café',
+    'Atravesse pela faixa de pedestres',
+    'Vá para o mercado',
+    'Caminhe até a praça',
+    'Pare aqui',
     'Como está o trânsito agora?',
     'Regras principais da praça?',
-    'O que acha da vida na cidade?',
-    'Faixa liberada para pedestres?',
   ];
 
   return (
@@ -288,6 +292,28 @@ export const DialogueModal: React.FC<DialogueModalProps> = ({
                 }}
               >
                 {m.text}
+                {m.directive && (
+                  <div
+                    style={{
+                      marginTop: '6px',
+                      padding: '4px 8px',
+                      borderRadius: '8px',
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      border: '1px solid rgba(56, 189, 248, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '11px',
+                      color: '#7dd3fc',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>⚡</span>
+                    <span>
+                      Diretiva Fixada: <strong>{m.directive.description}</strong> (Qdrant & PostgreSQL)
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -60,11 +60,12 @@ export function verifyJwtToken(token: string): AuthPrincipal {
     throw new Error('INVALID_TOKEN_PAYLOAD: Token não contém os campos do Principal');
   }
 
+  const payload = decoded as Partial<AuthPrincipal>;
   return {
-    userId: (decoded as any).userId,
-    role: (decoded as any).role,
-    clientId: (decoded as any).clientId,
-    scenarioId: (decoded as any).scenarioId,
+    userId: String(payload.userId),
+    role: payload.role as AuthPrincipal['role'],
+    clientId: payload.clientId,
+    scenarioId: payload.scenarioId,
   };
 }
 

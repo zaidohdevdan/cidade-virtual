@@ -19,6 +19,7 @@ import type {
   Principal,
   ActionRequest,
   ActionResult,
+  LearnedDirective,
 } from '@cidade-virtual/types';
 import { createPrincipal } from '@cidade-virtual/types';
 import {
@@ -104,9 +105,9 @@ export class WorldGateway
           `[SECURITY] [AUDIT] Handshake WS autenticado com sucesso para: ${user.userId} (role: ${user.role}, socket: ${socket.id})`,
         );
         next();
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.logger.warn(
-          `[SECURITY] [AUDIT] Conexão WS rejeitada: Token inválido (${err.message}) (socket: ${socket.id})`,
+          `[SECURITY] [AUDIT] Conexão WS rejeitada: Token inválido (${(err as Error)?.message || String(err)}) (socket: ${socket.id})`,
         );
         return next(new Error('AUTHENTICATION_FAILED: Token inválido ou expirado'));
       }
@@ -238,6 +239,22 @@ export class WorldGateway
   }
 
   /**
+   * Altera o estado semafórico autoritativamente e propaga o evento para todos os clientes e agentes.
+   */
+  setTrafficLightState(state: TrafficLightSignal, authorId: string = 'system'): void {
+    if (['green', 'yellow', 'red'].includes(state)) {
+      this.currentTrafficLight = state;
+      this.logger.log(
+        `[SECURITY] [AUDIT] Semáforo alterado autoritativamente por ${authorId} para ${state}`,
+      );
+      this.broadcastDomainEvent({
+        name: 'traffic_light.changed',
+        payload: { state },
+      });
+    }
+  }
+
+  /**
    * Permite que comandos administrativos (God Mode) alterem o semáforo autoritativamente.
    * RESTRITO EXCLUSIVAMENTE a usuários com papel 'admin'.
    */
@@ -258,16 +275,8 @@ export class WorldGateway
       return;
     }
 
-    if (data?.state && ['green', 'yellow', 'red'].includes(data.state)) {
-      this.currentTrafficLight = data.state;
-      this.logger.log(
-        `[SECURITY] [AUDIT] [GodMode] Semáforo alterado autoritativamente por admin ${user.userId} para ${data.state}`,
-      );
-
-      this.broadcastDomainEvent({
-        name: 'traffic_light.changed',
-        payload: { state: data.state },
-      });
+    if (data?.state) {
+      this.setTrafficLightState(data.state, `admin:${user.userId}`);
     }
   }
 
@@ -347,7 +356,7 @@ export class WorldGateway
       targetAgentId: string,
       message: string,
       playerId?: string,
-    ): Promise<{ response: string; agentId: string; directive?: any }>;
+    ): Promise<{ response: string; agentId: string; directive?: LearnedDirective }>;
   };
 
   /**
@@ -358,7 +367,7 @@ export class WorldGateway
       targetAgentId: string,
       message: string,
       playerId?: string,
-    ): Promise<{ response: string; agentId: string; directive?: any }>;
+    ): Promise<{ response: string; agentId: string; directive?: LearnedDirective }>;
   }): void {
     this.simulationService = service;
   }
@@ -395,7 +404,7 @@ export class WorldGateway
   async handlePlayerDialogue(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { targetAgentId: string; message: string },
-  ): Promise<{ success: boolean; response?: string; error?: string; directive?: any }> {
+  ): Promise<{ success: boolean; response?: string; error?: string; directive?: LearnedDirective }> {
     if (!this.checkSocketRateLimit(client)) {
       return { success: false, error: 'Rate limit de mensagens excedido' };
     }

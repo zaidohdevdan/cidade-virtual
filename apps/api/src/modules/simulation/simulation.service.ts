@@ -5,6 +5,7 @@ import {
   AgentIdentityRepository,
   ExperienceRepository,
   AgentMindRepository,
+  AgentMindRow,
 } from '@cidade-virtual/persistence';
 import {
   AgentMind,
@@ -13,7 +14,12 @@ import {
   type Percept,
   type PerceivedActor,
   type WorldWeather,
+  type Needs,
+  type MemoryContext,
+  type Intention,
+  type ActivityState,
 } from '@cidade-virtual/agent-planning';
+import type { CitizenId, LearnedDirective } from '@cidade-virtual/types';
 import { WorldGateway } from '../../gateways/world.gateway';
 import { CognitionService } from '../cognition/cognition.service';
 import { WorldService } from '../world/world.service';
@@ -69,7 +75,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     }
 
     // 2. Registra e sincroniza estados dos 7 habitantes autônomos com mentes vivas
-    let savedMindsMap = new Map<string, any>();
+    let savedMindsMap = new Map<string, AgentMindRow>();
     if (this.agentMindRepo) {
       try {
         const savedRows = await this.agentMindRepo.listAll();
@@ -104,12 +110,12 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       const savedMind = savedMindsMap.get(citizen.id);
       if (savedMind) {
         mind.restoreState({
-          needs: savedMind.needs as any,
-          memory: savedMind.memory as any,
-          currentIntention: savedMind.currentIntention as any,
-          currentActivity: savedMind.currentActivity as any,
+          needs: savedMind.needs as Needs,
+          memory: savedMind.memory as MemoryContext,
+          currentIntention: (savedMind.currentIntention as Intention | null) ?? undefined,
+          currentActivity: (savedMind.currentActivity as ActivityState | null) ?? undefined,
         });
-        const prefCount = Object.keys(savedMind.memory?.placePreferences ?? {}).length;
+        const prefCount = Object.keys((savedMind.memory as MemoryContext)?.placePreferences ?? {}).length;
         this.logger.log(`[AgentMind] Mente de ${citizen.name} (${citizen.id}) restaurada do PostgreSQL (${prefCount} preferências hedônicas).`);
       }
 
@@ -117,7 +123,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         try {
           const pastExps = await this.expRepo.getByAgentId(citizen.id, 50);
           if (pastExps.length > 0) {
-            mind.integrateExperiences(pastExps as any);
+            mind.integrateExperiences(pastExps);
             this.logger.log(`[Task-039] ${pastExps.length} experiências consolidadas integradas à mente de ${citizen.name}.`);
           }
         } catch (err) {
@@ -142,8 +148,8 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     }
 
     // 3. Conecta este serviço ao WorldGateway para receber diálogos e eventos do jogador
-    if (this.worldGateway && typeof (this.worldGateway as any).setSimulationService === 'function') {
-      (this.worldGateway as any).setSimulationService(this);
+    if (this.worldGateway && typeof this.worldGateway.setSimulationService === 'function') {
+      this.worldGateway.setSimulationService(this);
     }
 
     // 4. Inicia Heartbeat Autônomo da Cidade (Ciclo deliberativo e locomoção contínua) fora de testes
@@ -225,8 +231,8 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     agent.mind.update(3.5, { weather, timeOfDay });
 
     // 2. Constrói percepção espacial real do mundo físico
-    const closestPlayer = typeof (this.worldGateway as any)?.getClosestPlayer === 'function'
-      ? (this.worldGateway as any).getClosestPlayer(agent.currentPosition)
+    const closestPlayer = typeof this.worldGateway?.getClosestPlayer === 'function'
+      ? this.worldGateway.getClosestPlayer(agent.currentPosition)
       : null;
     const isPlayerNearby = closestPlayer !== null && closestPlayer.distance <= 3.5;
 
@@ -350,7 +356,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         const observation = `Localizado em [${nextPos.x.toFixed(1)}, ${nextPos.z.toFixed(1)}] na Rua Central. O avatar Daniel está muito próximo (a ${closestPlayer!.distance.toFixed(1)}m). Semáforo está ${trafficLight}. Ação autônoma ativa: ${agent.lastAction}.`;
         const action = await this.cognitionService.processCycle(
           {
-            citizenId: agent.config.id as any,
+            citizenId: agent.config.id as CitizenId,
             currentObservation: observation,
             nearbyObjects: ['avatar-daniel', 'calcada-central'],
             activeGoal: `interagir com Daniel ou prosseguir com ${agent.lastAction}`,
@@ -428,7 +434,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     targetAgentId: string,
     playerMessage: string,
     playerId: string = 'avatar-daniel',
-  ): Promise<{ response: string; agentId: string; directive?: any }> {
+  ): Promise<{ response: string; agentId: string; directive?: LearnedDirective }> {
     let agent = this.agentStates.get(targetAgentId);
     const config = agent?.config || ALL_CITIZENS.find((c) => c.id === targetAgentId);
     if (!config) {
@@ -479,10 +485,10 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         const serialized = agent.mind.serializeState();
         await this.agentMindRepo.upsert({
           agentId: serialized.agentId,
-          needs: serialized.needs as any,
-          memory: serialized.memory as any,
-          currentIntention: serialized.currentIntention as any,
-          currentActivity: serialized.currentActivity as any,
+          needs: serialized.needs,
+          memory: serialized.memory,
+          currentIntention: serialized.currentIntention,
+          currentActivity: serialized.currentActivity,
         });
       } catch (err) {
         this.logger.warn(`[Task-036] Falha ao persistir snapshot imediato da mente após instrução: ${(err as Error).message}`);
@@ -516,13 +522,15 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     if (this.memoryService) {
       this.memoryService
         .addMemory({
-          citizenId: config.id as any,
+          citizenId: config.id as CitizenId,
           content: `Instrução permanente repassada pelo avatar Daniel: "${playerMessage}". Regra aprendida: ${directive.description}.`,
-          sensoryTags: ['auditory', 'instruction'],
-          memoryType: 'declarative',
+          sensoryTags: ['auditory', 'social'],
+          memoryType: 'semantic',
+          origin: 'interaction',
           sourceType: 'direct_observation',
           confidence: 1.0,
           emotionalWeight: 0.9,
+          timestamp: new Date(),
         })
         .catch((err) => {
           this.logger.debug(`Indexação Qdrant de instrução ignorada: ${err.message}`);
@@ -532,7 +540,9 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     // 5. Execução Imediata da Instrução:
     let nextTarget: Vector3Like | null = null;
     if (actionRequired === 'crosswalk') {
-      nextTarget = { x: -4, y: 0.19, z: -10 };
+      const cz = agent.currentPosition.z <= 0 ? -9.0 : 9.0;
+      const approachX = agent.currentPosition.x < 0 ? -7.5 : 7.5;
+      nextTarget = { x: approachX, y: 0.19, z: cz };
       agent.targetDestination = nextTarget;
       const pathResult = this.navService.findPath(agent.currentPosition, nextTarget, {
         trafficLightState: this.worldGateway.getTrafficLightState(),
@@ -551,23 +561,56 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
         },
       });
     } else if (actionRequired === 'reroute') {
-      agent.targetDestination = null;
-      agent.waypoints = [];
+      const targetCat = directive.targetCategory || 'cafe';
+      if (targetCat === 'cafe') {
+        nextTarget = { x: -22, y: 0.19, z: 18 }; // Praça Municipal
+      } else if (targetCat === 'market') {
+        nextTarget = { x: -22, y: 0.19, z: 18 }; // Praça Municipal
+      } else if (targetCat === 'praca') {
+        nextTarget = { x: 18, y: 0.19, z: -5 };  // Alameda Leste
+      } else {
+        nextTarget = { x: agent.currentPosition.x < 0 ? -15 : 15, y: 0.19, z: 0 };
+      }
+
+      agent.targetDestination = nextTarget;
+      const pathResult = this.navService.findPath(agent.currentPosition, nextTarget);
+      agent.waypoints = pathResult.waypoints.length > 0 ? pathResult.waypoints : [nextTarget];
       agent.waypointIndex = 0;
-      agent.lastAction = 'reroute:avoiding_place';
-    } else if (actionRequired === 'goto' && directive.targetEntityId) {
-      const targetEntity = SYNAPSE_WORLD_ENTITIES.find((e) => e.id === directive.targetEntityId);
-      if (targetEntity) {
-        nextTarget = {
-          x: targetEntity.approach?.x ?? targetEntity.position.x,
-          y: targetEntity.approach?.y ?? 0.19,
-          z: targetEntity.approach?.z ?? targetEntity.position.z,
-        };
+      agent.lastAction = `reroute:avoiding_${targetCat}`;
+
+      this.worldGateway.broadcastDomainEvent({
+        name: 'agent.target',
+        payload: {
+          agentId: config.id,
+          targetPosition: nextTarget,
+          action: 'reroute',
+          instruction: directive,
+        },
+      });
+    } else if (actionRequired === 'goto') {
+      if (directive.targetCategory === 'market') {
+        nextTarget = { x: 0, y: 0.19, z: -36 };
+      } else if (directive.targetCategory === 'cafe') {
+        nextTarget = { x: 22, y: 0.19, z: -12 };
+      } else if (directive.targetCategory === 'praca') {
+        nextTarget = { x: -22, y: 0.19, z: 18 };
+      } else if (directive.targetEntityId) {
+        const targetEntity = SYNAPSE_WORLD_ENTITIES.find((e) => e.id === directive.targetEntityId);
+        if (targetEntity) {
+          nextTarget = {
+            x: targetEntity.approach?.x ?? targetEntity.position.x,
+            y: targetEntity.approach?.y ?? 0.19,
+            z: targetEntity.approach?.z ?? targetEntity.position.z,
+          };
+        }
+      }
+
+      if (nextTarget) {
         agent.targetDestination = nextTarget;
         const pathResult = this.navService.findPath(agent.currentPosition, nextTarget);
         agent.waypoints = pathResult.waypoints.length > 0 ? pathResult.waypoints : [nextTarget];
         agent.waypointIndex = 0;
-        agent.lastAction = `goto:${targetEntity.label}`;
+        agent.lastAction = `goto:${directive.targetCategory || directive.targetEntityId}`;
 
         this.worldGateway.broadcastDomainEvent({
           name: 'agent.target',
@@ -584,6 +627,16 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       agent.waypoints = [];
       agent.waypointIndex = 0;
       agent.lastAction = 'wait:stopped_by_daniel';
+
+      this.worldGateway.broadcastDomainEvent({
+        name: 'agent.target',
+        payload: {
+          agentId: config.id,
+          targetPosition: null,
+          action: 'stop',
+          instruction: directive,
+        },
+      });
     }
 
     const trafficLight = this.worldGateway.getTrafficLightState();
@@ -593,7 +646,7 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       let response: string | undefined | null;
       try {
         response = await this.cognitionService.generateConversationalDialogue?.({
-          citizenId: config.id as any,
+          citizenId: config.id as CitizenId,
           citizenName: config.name,
           citizenRole: config.role,
           starDesignation: config.starDesignation,
@@ -832,10 +885,10 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       const serialized = state.mind.serializeState();
       return {
         agentId: serialized.agentId,
-        needs: serialized.needs as any,
-        memory: serialized.memory as any,
-        currentIntention: serialized.currentIntention as any,
-        currentActivity: serialized.currentActivity as any,
+        needs: serialized.needs,
+        memory: serialized.memory,
+        currentIntention: serialized.currentIntention,
+        currentActivity: serialized.currentActivity,
       };
     });
 

@@ -276,7 +276,7 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     expect(agent.speechBubble?.innerHTML).toMatch(/saindo|veículo|calçada|pista|buzina|livre/i);
 
     // Simula corrida de evasão até o local seguro
-    for (let i = 0; i < 40 && agent.isEvadingVehicle; i++) {
+    for (let i = 0; i < 60 && agent.isEvadingVehicle; i++) {
       agent.update(0.1, [], 'green');
     }
 
@@ -411,7 +411,7 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
   });
 
   describe('Aprendizado e Execução de Instruções do Avatar Daniel (Cliente 3D)', () => {
-    it('o NPC deve ouvir e gravar a instrução "vc deve evitar o café" e repelir o movimento em direção ao café', () => {
+    it('o NPC deve ouvir e gravar a instrução "vc deve evitar o café", definir rota de escape e repelir o café', () => {
       agent.learnInstruction('vc deve evitar o café');
       expect(agent.learnedDirectives).toHaveLength(1);
       expect(agent.learnedDirectives[0].directiveType).toBe('avoid_place');
@@ -420,6 +420,13 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
       // Coordenadas dentro da zona do café (x: 25, z: -20) devem ser reconhecidas como evitadas
       expect(agent.isTargetInAvoidedZone(25, -20, 'cafe')).toBe(true);
       expect(agent.isPositionInAvoidedDirective(25, -20)).toBe(true);
+
+      // Deve ter ativado execução de diretiva e navegação imediata para fora da zona do café
+      expect(agent.activeDirectiveExecution).not.toBeNull();
+      expect(agent.activeDirectiveExecution?.type).toBe('avoid_place');
+      expect(agent.targetPosition?.x).toBe(-22.0);
+      expect(agent.targetPosition?.z).toBe(18.0);
+      expect(agent.speechBubble?.innerHTML).toMatch(/evitando.*café/i);
 
       // Posiciona o NPC perto do café querendo andar em direção a ele (+X)
       agent.position.set(14, 0.19, -20);
@@ -430,15 +437,54 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
       expect(steer.x).toBeLessThan(0.7);
     });
 
-    it('o NPC deve ouvir a instrução "vc deve atravessar a faixa" e imediatamente direcionar targetPosition para a faixa de pedestre', () => {
+    it('o NPC não deve congelar diante de Daniel (distToPlayer <= 2.2) se tiver uma diretiva ativa em andamento', () => {
+      agent.position.set(0, 0.19, 0);
+      agent.learnInstruction('vc deve evitar o café');
+      expect(agent.activeDirectiveExecution).not.toBeNull();
+
+      // Daniel está a 1.5m de distância (anteriormente causava freeze imediato return;)
+      const playerPos = new THREE.Vector3(0, 0.19, 1.5);
+      const initialPos = agent.position.clone();
+
+      agent.update(0.1, [], 'green', playerPos);
+
+      // O agente deve ter se movido e não congelado no local
+      expect(agent.position.distanceTo(initialPos)).toBeGreaterThan(0);
+      expect(agent.speed).toBeGreaterThan(0);
+    });
+
+    it('o NPC deve ouvir a instrução "vc deve atravessar a faixa" e direcionar para o meio-fio seguro da faixa de pedestre', () => {
       agent.position.set(10, 0.19, 15);
       agent.learnInstruction('vc deve usar a faixa de pedestre');
 
       expect(agent.learnedDirectives.some((d) => d.directiveType === 'use_crosswalk')).toBe(true);
       expect(agent.targetPosition).not.toBeNull();
-      // O destino deve ser a faixa de pedestres central (x: 0, z próximo a 2)
+      expect(agent.activeDirectiveExecution?.type).toBe('use_crosswalk');
+      // Destino no meio-fio leste da Faixa Sul (z: 9.0, x: 7.5)
+      expect(agent.targetPosition?.x).toBe(7.5);
+      expect(agent.targetPosition?.z).toBe(9.0);
+      expect(agent.activeDirectiveExecution?.finalDestination?.x).toBe(-7.5);
+    });
+
+    it('o NPC deve ouvir "vá para o mercado" e rotacionar/navegar imediatamente para o mercado central', () => {
+      agent.position.set(-15, 0.19, 0);
+      agent.learnInstruction('vá para o mercado');
+
+      expect(agent.activeDirectiveExecution?.type).toBe('go_to_place');
       expect(agent.targetPosition?.x).toBe(0);
-      expect(agent.targetPosition?.z).toBe(2.0);
+      expect(agent.targetPosition?.z).toBe(-36.0);
+      expect(agent.speechBubble?.innerHTML).toMatch(/mercado/i);
+    });
+
+    it('o NPC deve ouvir "pare aí" e interromper o movimento imediatamente', () => {
+      agent.speed = 2.0;
+      agent.learnInstruction('pare agora');
+
+      expect(agent.activeDirectiveExecution).toBeNull();
+      expect(agent.targetPosition).toBeNull();
+      expect(agent.speed).toBe(0);
+      expect(agent.waitTimer).toBeGreaterThan(0);
+      expect(agent.speechBubble?.innerHTML).toMatch(/parando/i);
     });
   });
 });

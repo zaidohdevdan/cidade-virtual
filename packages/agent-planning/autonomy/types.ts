@@ -27,26 +27,7 @@ export interface Personality {
 export type AffordanceType = 'rest' | 'eat' | 'socialize' | 'observe' | 'contemplate' | 'shop' | 'explore' | 'shelter';
 
 /** Tipos de diretivas aprendidas transmitidas pelo avatar Daniel ou regras da cidade */
-export type DirectiveType =
-  | 'avoid_place'
-  | 'use_crosswalk'
-  | 'go_to_place'
-  | 'prefer_action'
-  | 'wait_stop'
-  | 'custom_rule';
-
-/** Diretiva explícita aprendida pelo habitante a partir de instrução do jogador (Daniel) */
-export interface LearnedDirective {
-  id: string;
-  instruction: string;
-  directiveType: DirectiveType;
-  targetEntityId?: string;
-  targetCategory?: string; // ex: 'cafe', 'market', 'crosswalk', 'street', 'praca', 'fountain'
-  strength: number; // 1.0 (máxima autoridade)
-  learnedAt: number;
-  active: boolean;
-  description: string;
-}
+export type { DirectiveType, LearnedDirective } from '@cidade-virtual/types';
 
 export interface WorldEntity {
   id: string;

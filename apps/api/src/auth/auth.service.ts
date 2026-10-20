@@ -49,8 +49,8 @@ export class AuthService {
   validateToken(token: string): AuthPrincipal {
     try {
       return verifyJwtToken(token);
-    } catch (err: any) {
-      this.logger.warn(`[SECURITY] [AUDIT] Falha na validação de token: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.warn(`[SECURITY] [AUDIT] Falha na validação de token: ${(err as Error)?.message || String(err)}`);
       throw new UnauthorizedException('Token inválido ou expirado');
     }
   }

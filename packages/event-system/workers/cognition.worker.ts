@@ -11,11 +11,11 @@ import {
   getRedisConnectionOptions,
 } from '../queues';
 import { defaultLogger, metrics } from '@cidade-virtual/observability';
-import type { AgentAction } from '@cidade-virtual/types';
+import type { AgentAction, CitizenId } from '@cidade-virtual/types';
 
 export interface ICognitionCycleProcessor {
   processCycle(context: {
-    citizenId: any;
+    citizenId: CitizenId;
     currentObservation: string;
     nearbyObjects: string[];
     activeGoal?: string;

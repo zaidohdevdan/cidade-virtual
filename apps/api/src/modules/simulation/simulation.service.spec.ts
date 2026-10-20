@@ -214,5 +214,88 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     const resetVega = service.getAgentStates().get('agent-vega');
     expect(resetVega?.mind.memory.placePreferences?.['market-central']).toBeUndefined();
   });
+
+  describe('handlePlayerDialogue — Assimilação Semântica e Obediência Imediata', () => {
+    it('deve assimilar "vc deve evitar o café", recalcular rota para local seguro e emitir evento agent.target', async () => {
+      await service.onModuleInit();
+
+      const result = await service.handlePlayerDialogue('agent-vega', 'Você deve evitar o café', 'avatar-daniel');
+
+      expect(result.directive).toBeDefined();
+      expect(result.directive?.directiveType).toBe('avoid_place');
+      expect(result.directive?.targetCategory).toBe('cafe');
+      expect(result.response).toMatch(/evitar.*café|cancelada/i);
+
+      // Deve ter gravado a mente no repositório de persistência
+      expect(mockAgentMindRepo.upsert).toHaveBeenCalled();
+
+      // Deve ter transmitido agent.target com o destino de escape (Praça Central)
+      expect(mockWorldGateway.broadcastDomainEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'agent.target',
+          payload: expect.objectContaining({
+            agentId: 'agent-vega',
+            action: 'reroute',
+            targetPosition: expect.objectContaining({ x: -22, z: 18 }),
+          }),
+        }),
+      );
+    });
+
+    it('deve assimilar "use a faixa de pedestre" e direcionar imediatamente para a faixa', async () => {
+      await service.onModuleInit();
+
+      const result = await service.handlePlayerDialogue('agent-vega', 'Por favor use a faixa de pedestre', 'avatar-daniel');
+
+      expect(result.directive?.directiveType).toBe('use_crosswalk');
+      expect(mockWorldGateway.broadcastDomainEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'agent.target',
+          payload: expect.objectContaining({
+            agentId: 'agent-vega',
+            action: 'crosswalk',
+          }),
+        }),
+      );
+    });
+
+    it('deve assimilar "vá para o mercado" e direcionar rota para o mercado central', async () => {
+      await service.onModuleInit();
+
+      const result = await service.handlePlayerDialogue('agent-vega', 'Vá para o mercado agora', 'avatar-daniel');
+
+      expect(result.directive?.directiveType).toBe('go_to_place');
+      expect(mockWorldGateway.broadcastDomainEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'agent.target',
+          payload: expect.objectContaining({
+            agentId: 'agent-vega',
+            action: 'goto',
+            targetPosition: expect.objectContaining({ z: -36 }),
+          }),
+        }),
+      );
+    });
+
+    it('deve assimilar "pare aí" e cancelar o destino ativo', async () => {
+      await service.onModuleInit();
+
+      const result = await service.handlePlayerDialogue('agent-vega', 'Pare imediatamente', 'avatar-daniel');
+
+      expect(result.directive?.directiveType).toBe('wait_stop');
+      const agentState = service.getAgentStates().get('agent-vega');
+      expect(agentState?.targetDestination).toBeNull();
+      expect(mockWorldGateway.broadcastDomainEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'agent.target',
+          payload: expect.objectContaining({
+            agentId: 'agent-vega',
+            action: 'stop',
+            targetPosition: null,
+          }),
+        }),
+      );
+    });
+  });
 });
 

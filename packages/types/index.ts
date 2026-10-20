@@ -227,6 +227,26 @@ export function createPrincipal(params: {
   };
 }
 
+export type DirectiveType =
+  | 'avoid_place'
+  | 'use_crosswalk'
+  | 'go_to_place'
+  | 'prefer_action'
+  | 'wait_stop'
+  | 'custom_rule';
+
+export interface LearnedDirective {
+  id: string;
+  instruction: string;
+  directiveType: DirectiveType;
+  targetEntityId?: string;
+  targetCategory?: string;
+  strength: number;
+  learnedAt: number;
+  active: boolean;
+  description: string;
+}
+
 // ── Contrato de Mente Subjetiva e Memória Hedônica (Task-036) ──
 export interface AgentNeedsState {
   energy: number;
@@ -242,7 +262,7 @@ export interface AgentMemoryContextState {
   actorAffinity?: Record<string, number>;
   placePreferences?: Record<string, number>;
   suggestedTargets?: Record<string, number>;
-  learnedDirectives?: any[];
+  learnedDirectives?: LearnedDirective[];
 }
 
 export interface AgentMindState {

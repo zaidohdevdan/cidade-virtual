@@ -17,7 +17,7 @@ export class ExperienceRepository {
   async getByAgentId(agentId: string, limit: number = 50, sourceType?: string): Promise<AgentExperienceRow[]> {
     const conditions = [eq(agentExperiencesTable.agentId, agentId)];
     if (sourceType) {
-      conditions.push(eq(agentExperiencesTable.sourceType, sourceType as any));
+      conditions.push(eq(agentExperiencesTable.sourceType, sourceType));
     }
     return this.db
       .select()

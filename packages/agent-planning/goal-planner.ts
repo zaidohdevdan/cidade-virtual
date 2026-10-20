@@ -238,12 +238,16 @@ Formato de resposta: JSON puro array de passos:
 
       if (!Array.isArray(parsed)) return null;
 
-      return parsed.map((item: any, idx: number) => ({
+      return parsed.map((item: Record<string, unknown>, idx: number) => ({
         stepIndex: idx + 1,
-        action: String(item.action || `step_${idx + 1}`),
-        target: item.target ? String(item.target) : undefined,
-        description: String(item.description || item.action || `Passo ${idx + 1} para ${goal}`),
-        estimatedDurationMs: Number(item.estimatedDurationMs || 2500),
+        action: typeof item.action === 'string' && item.action ? item.action : `step_${idx + 1}`,
+        target: typeof item.target === 'string' && item.target ? item.target : undefined,
+        description: typeof item.description === 'string' && item.description
+          ? item.description
+          : typeof item.action === 'string' && item.action
+            ? item.action
+            : `Passo ${idx + 1} para ${goal}`,
+        estimatedDurationMs: typeof item.estimatedDurationMs === 'number' ? item.estimatedDurationMs : 2500,
         status: 'pending' as const,
       }));
     } catch {
