@@ -59,13 +59,23 @@ export class GoogleAuthService {
     const rawClientId = this.getGoogleClientId();
     const expectedClientId = rawClientId ? rawClientId : undefined;
 
-    // ── Modo de Teste Determinístico / Mock Offline ──
-    if (
-      trimmedToken.startsWith('mock-google-token:') ||
-      trimmedToken.startsWith('test-google-token:') ||
+    const isMockAllowed =
       process.env['NODE_ENV'] === 'test' ||
-      process.env['GOOGLE_AUTH_MOCK'] === 'true'
-    ) {
+      process.env['GOOGLE_AUTH_MOCK'] === 'true';
+
+    // ── Previne Auth Bypass: rejeita tokens forjados/mock fora de ambiente de teste/mock autorizado ──
+    if (trimmedToken.startsWith('mock-google-token:') || trimmedToken.startsWith('test-google-token:')) {
+      if (!isMockAllowed) {
+        this.logger.warn(
+          `[SECURITY] [BLOCK] Tentativa de bypass de autenticação com mock token rejeitada. Ambiente: ${process.env['NODE_ENV'] || 'production'}`
+        );
+        throw new UnauthorizedException('Tokens de teste/mock não são permitidos neste ambiente.');
+      }
+      return this.verifyMockOrTestToken(trimmedToken, expectedClientId);
+    }
+
+    // Se estiver em modo de teste e for um JWT simulado
+    if (isMockAllowed && trimmedToken.split('.').length === 3) {
       return this.verifyMockOrTestToken(trimmedToken, expectedClientId);
     }
 
@@ -104,14 +114,6 @@ export class GoogleAuthService {
       throw new UnauthorizedException('Token Google inválido: ausência do claim sub');
     }
 
-    const aud = typeof payload['aud'] === 'string' ? payload['aud'].trim() : '';
-    if (expectedClientId && expectedClientId.trim().length > 0) {
-      if (aud !== expectedClientId.trim()) {
-        this.logger.warn(`[SECURITY] Audience mismatch: recebido "${aud}", esperado "${expectedClientId}"`);
-        throw new UnauthorizedException('AUDIENCE_MISMATCH: Token Google não pertence a esta aplicação');
-      }
-    }
-
     const iss = typeof payload['iss'] === 'string' ? payload['iss'].trim() : '';
     if (iss !== 'https://accounts.google.com' && iss !== 'accounts.google.com') {
       this.logger.warn(`[SECURITY] Emissor inválido: "${iss}"`);
@@ -128,6 +130,17 @@ export class GoogleAuthService {
     if (exp + 30 < nowSec) {
       this.logger.warn(`[SECURITY] Token Google expirado: exp=${exp}, now=${nowSec}`);
       throw new UnauthorizedException('TOKEN_EXPIRED: Token Google expirado');
+    }
+
+    const aud = typeof payload['aud'] === 'string' ? payload['aud'].trim() : '';
+    if (expectedClientId && expectedClientId.trim().length > 0) {
+      if (aud !== expectedClientId.trim()) {
+        this.logger.warn(`[SECURITY] Audience mismatch: recebido "${aud}", esperado "${expectedClientId}"`);
+        throw new UnauthorizedException('AUDIENCE_MISMATCH: Token Google não pertence a esta aplicação');
+      }
+    } else if (process.env['NODE_ENV'] !== 'test' && process.env['GOOGLE_AUTH_MOCK'] !== 'true') {
+      this.logger.error(`[SECURITY] Falha de configuração: GOOGLE_CLIENT_ID não configurado no servidor.`);
+      throw new UnauthorizedException('CONFIG_ERROR: Provedor Google não configurado no servidor');
     }
 
     return {

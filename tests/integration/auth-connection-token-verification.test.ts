@@ -11,7 +11,12 @@ describe('Verificação de Conexão, Validação de Token e Chamada à API do Go
   let googleAuthService: GoogleAuthService;
   let authService: AuthService;
 
+  const TEST_CLIENT_ID = 'dev-google-client-id';
+  let previousClientId: string | undefined;
+
   beforeAll(async () => {
+    previousClientId = process.env['GOOGLE_CLIENT_ID'];
+    process.env['GOOGLE_CLIENT_ID'] = TEST_CLIENT_ID;
     dbConnection = createDatabaseConnection();
     marketplaceRepo = new MarketplaceRepository(dbConnection.db);
     googleAuthService = new GoogleAuthService();
@@ -19,6 +24,11 @@ describe('Verificação de Conexão, Validação de Token e Chamada à API do Go
   });
 
   afterAll(async () => {
+    if (previousClientId !== undefined) {
+      process.env['GOOGLE_CLIENT_ID'] = previousClientId;
+    } else {
+      delete process.env['GOOGLE_CLIENT_ID'];
+    }
     await dbConnection.pool.end();
   });
 
@@ -297,6 +307,21 @@ describe('Verificação de Conexão, Validação de Token e Chamada à API do Go
       );
       // Confirma que o serviço tentou contatar a API do Google
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('3.4. [SECURITY] Deve REJEITAR sumariamente qualquer tentativa de token forjado/mock fora do ambiente de teste', async () => {
+      const forgedMockToken = 'mock-google-token:{"sub":"attacker_123","email":"ceo@empresa.com","aud":"synapse-city-official-app","iss":"https://accounts.google.com","exp":9999999999}';
+
+      globalThis.fetch = vi.fn();
+      const liveGoogleAuthService = new GoogleAuthService();
+      const liveAuthService = new AuthService(liveGoogleAuthService, marketplaceRepo);
+
+      await expect(liveAuthService.loginWithGoogle(forgedMockToken)).rejects.toThrow(
+        /Tokens de teste\/mock não são permitidos neste ambiente/
+      );
+
+      // Garante que nem tentou contatar a API nem emitiu sessão
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
   });
 });
