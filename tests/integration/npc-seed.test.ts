@@ -44,11 +44,11 @@ describe('Task-013 — Popular 3-5 NPCs com Fase Meta de Consciência', () => {
     await conn.close();
   });
 
-  it('deve semear os 5 cidadãos canônicos no PostgreSQL com todos os arquétipos requeridos', async () => {
+  it('deve semear o cidadão canônico no PostgreSQL com todos os arquétipos requeridos', async () => {
     const result = await citizensService.seedDefaultCitizens();
-    expect(result.seededCount).toBe(5);
+    expect(result.seededCount).toBe(1);
 
-    // Valida cada um dos 5 NPCs persistidos no PostgreSQL
+    // Valida o NPC persistidos no PostgreSQL
     for (const config of SEED_CITIZENS) {
       const persisted = await agentRepo.getById(config.id);
       expect(persisted).not.toBeNull();
@@ -61,13 +61,9 @@ describe('Task-013 — Popular 3-5 NPCs com Fase Meta de Consciência', () => {
       expect((persisted?.currentLocation as { x: number; y: number; z: number }).x).toBeTypeOf('number');
     }
 
-    // Valida variedade de arquétipos: worker, guard, citizen, child, elder
-    const archetypes = SEED_CITIZENS.map((c) => c.archetype);
-    expect(archetypes).toContain('worker');
-    expect(archetypes).toContain('guard');
-    expect(archetypes).toContain('citizen');
-    expect(archetypes).toContain('child');
-    expect(archetypes).toContain('elder');
+    // Roster MVP: apenas Sulafat (worker)
+    expect(SEED_CITIZENS.map((c) => c.id)).toEqual(['agent-sulafat']);
+    expect(SEED_CITIZENS[0].archetype).toBe('worker');
   });
 
   it('cada NPC deve possuir no mínimo 3 memórias/experiências episódicas iniciais no PostgreSQL', async () => {
@@ -85,16 +81,6 @@ describe('Task-013 — Popular 3-5 NPCs com Fase Meta de Consciência', () => {
   });
 
   it('as memórias devem estar indexadas semanticamente no Qdrant para recuperação vetorial', async () => {
-    // Consulta semântica para Vega (Guardiã focada em semáforo e segurança)
-    const vegaMemories = await citizensService.getCitizenMemories(
-      'agent-vega',
-      'respeitar faixa de pedestres e semáforo',
-      5
-    );
-    expect(vegaMemories.length).toBeGreaterThan(0);
-    expect(vegaMemories[0].citizenId).toBe('agent-vega');
-    expect(vegaMemories[0].content).toMatch(/semáforo|patrulha|PROIBIDO JOGAR LIXO/i);
-
     // Consulta semântica para Sulafat (Ecológica focada em lixo e árvores)
     const sulafatMemories = await citizensService.getCitizenMemories(
       'agent-sulafat',
@@ -108,21 +94,17 @@ describe('Task-013 — Popular 3-5 NPCs com Fase Meta de Consciência', () => {
 
   it('a operação de seed deve ser estritamente idempotente (não duplicar habitantes nem memórias)', async () => {
     // Captura contagens prévias
-    const preCountVega = (await citizensService.getCitizenExperiences('agent-vega')).length;
-    const preCountEpsilon = (await citizensService.getCitizenExperiences('agent-epsilon')).length;
+    const preCount = (await citizensService.getCitizenExperiences('agent-sulafat')).length;
 
     // Executa o seed novamente
     const result2 = await citizensService.seedDefaultCitizens();
-    expect(result2.seededCount).toBe(5);
+    expect(result2.seededCount).toBe(1);
     expect(result2.experiencesCount).toBe(0); // 0 novas experiências canônicas inseridas
 
     // Verifica que as memórias canônicas permanecem intactas e não duplicadas
-    const postCountVega = (await citizensService.getCitizenExperiences('agent-vega')).length;
-    const postCountEpsilon = (await citizensService.getCitizenExperiences('agent-epsilon')).length;
+    const postCount = (await citizensService.getCitizenExperiences('agent-sulafat')).length;
 
-    expect(postCountVega).toBeGreaterThanOrEqual(preCountVega);
-    expect(postCountEpsilon).toBeGreaterThanOrEqual(preCountEpsilon);
-    expect(postCountVega - preCountVega).toBeLessThanOrEqual(2);
-    expect(postCountEpsilon - preCountEpsilon).toBeLessThanOrEqual(2);
+    expect(postCount).toBeGreaterThanOrEqual(preCount);
+    expect(postCount - preCount).toBeLessThanOrEqual(2);
   });
 });

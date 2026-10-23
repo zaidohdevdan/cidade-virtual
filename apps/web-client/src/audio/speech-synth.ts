@@ -2,7 +2,7 @@
 /**
  * Módulo de Síntese de Voz (TTS) em Português (pt-BR)
  * Utiliza a Web Speech API nativa (window.speechSynthesis) com calibração acústica
- * de pitch, velocidade (rate) e perfis vocais distintos para os 7 cidadãos canônicos.
+ * de pitch, velocidade (rate) e perfis vocais distintos para o cidadão canônico do MVP (Sulafat).
  */
 
 export interface AgentVoiceProfile {
@@ -14,54 +14,12 @@ export interface AgentVoiceProfile {
 }
 
 export const CITIZEN_VOICE_PROFILES: Record<string, AgentVoiceProfile> = {
-  'agent-vega': {
-    pitch: 1.15,
-    rate: 1.05,
-    preferredGender: 'female',
-    lang: 'pt-BR',
-    description: 'Voz feminina assertiva, firme e confiante (Arquiteta Urbana)',
-  },
   'agent-sulafat': {
     pitch: 0.88,
     rate: 0.95,
     preferredGender: 'male',
     lang: 'pt-BR',
     description: 'Voz masculina calma, ponderada e zelosa (Zelador Urbano)',
-  },
-  'agent-sheliak': {
-    pitch: 1.05,
-    rate: 1.15,
-    preferredGender: 'neutral',
-    lang: 'pt-BR',
-    description: 'Voz dinâmica, analítica e direta (Técnico de Mobilidade)',
-  },
-  'agent-chason': {
-    pitch: 1.25,
-    rate: 1.15,
-    preferredGender: 'male',
-    lang: 'pt-BR',
-    description: 'Voz jovem, alegre, acelerada e animada (Estudante e Skatista)',
-  },
-  'agent-epsilon': {
-    pitch: 0.72,
-    rate: 0.82,
-    preferredGender: 'male',
-    lang: 'pt-BR',
-    description: 'Voz madura, grave, pausada e reflexiva (Idoso e Filósofo)',
-  },
-  'agent-aladfar': {
-    pitch: 0.95,
-    rate: 0.95,
-    preferredGender: 'neutral',
-    lang: 'pt-BR',
-    description: 'Voz suave, poética e contemplativa (Artista Urbano)',
-  },
-  'agent-xihe': {
-    pitch: 1.12,
-    rate: 1.08,
-    preferredGender: 'female',
-    lang: 'pt-BR',
-    description: 'Voz expressiva, clara e curiosa (Entusiasta e Pesquisadora)',
   },
 };
 

@@ -48,16 +48,8 @@ describe('SpeechSynthesizer (Web Speech API TTS)', () => {
     vi.restoreAllMocks();
   });
 
-  it('deve possuir perfis acústicos únicos para os 7 cidadãos canônicos', () => {
-    const requiredAgents = [
-      'agent-vega',
-      'agent-sulafat',
-      'agent-sheliak',
-      'agent-chason',
-      'agent-epsilon',
-      'agent-aladfar',
-      'agent-xihe',
-    ];
+  it('deve possuir perfis acústicos únicos para o cidadão canônico (Sulafat)', () => {
+    const requiredAgents = ['agent-sulafat'];
 
     for (const agentId of requiredAgents) {
       const profile = CITIZEN_VOICE_PROFILES[agentId];
@@ -70,21 +62,9 @@ describe('SpeechSynthesizer (Web Speech API TTS)', () => {
     }
   });
 
-  it('Vega deve possuir entonação feminina assertiva e Epsilon entonação madura grave', () => {
-    const vega = CITIZEN_VOICE_PROFILES['agent-vega'];
-    const epsilon = CITIZEN_VOICE_PROFILES['agent-epsilon'];
-    const chason = CITIZEN_VOICE_PROFILES['agent-chason'];
-
-    // Vega tem pitch mais agudo que a média (1.15)
-    expect(vega.pitch).toBeGreaterThan(1.0);
-    expect(vega.preferredGender).toBe('female');
-
-    // Epsilon tem pitch grave (0.72) e ritmo pausado (0.82)
-    expect(epsilon.pitch).toBeLessThan(0.8);
-    expect(epsilon.rate).toBeLessThan(0.9);
-
-    // Chason é o mais veloz e enérgico (pitch 1.25)
-    expect(chason.pitch).toBeGreaterThan(1.2);
+  it('roster de vozes deve conter somente Sulafat', () => {
+    expect(Object.keys(CITIZEN_VOICE_PROFILES)).toEqual(['agent-sulafat']);
+    expect(CITIZEN_VOICE_PROFILES['agent-sulafat'].pitch).toBeLessThan(1.0);
   });
 
   it('deve higienizar emojis e formatação markdown no cleanText', () => {
@@ -100,7 +80,7 @@ describe('SpeechSynthesizer (Web Speech API TTS)', () => {
   });
 
   it('deve sintetizar fala e configurar pitch/rate do cidadão correspondente', async () => {
-    const success = await synth.speak('agent-vega', 'Atenção na travessia urbana.');
+    const success = await synth.speak('agent-sulafat', 'Atenção na travessia urbana.');
     expect(success).toBe(true);
     expect(mockSpeechSynthesis.cancel).toHaveBeenCalled();
     expect(mockSpeechSynthesis.speak).toHaveBeenCalled();
@@ -108,9 +88,9 @@ describe('SpeechSynthesizer (Web Speech API TTS)', () => {
     const utterance = spokenUtterances[0];
     expect(utterance).toBeDefined();
     expect(utterance.text).toBe('Atenção na travessia urbana.');
-    expect(utterance.pitch).toBe(CITIZEN_VOICE_PROFILES['agent-vega'].pitch);
-    expect(utterance.rate).toBe(CITIZEN_VOICE_PROFILES['agent-vega'].rate);
-    expect(utterance.voice?.name).toContain('Luciana');
+    expect(utterance.pitch).toBe(CITIZEN_VOICE_PROFILES['agent-sulafat'].pitch);
+    expect(utterance.rate).toBe(CITIZEN_VOICE_PROFILES['agent-sulafat'].rate);
+    expect(utterance.voice?.name).toContain('Daniel');
   });
 
   it('deve selecionar voz masculina para Sulafat', async () => {
@@ -123,7 +103,7 @@ describe('SpeechSynthesizer (Web Speech API TTS)', () => {
     synth.setMuted(true);
     expect(synth.isMuted()).toBe(true);
 
-    const success = await synth.speak('agent-chason', 'Bora pro skatepark!');
+    const success = await synth.speak('agent-sulafat', 'Bora pro skatepark!');
     expect(success).toBe(false);
     expect(mockSpeechSynthesis.speak).not.toHaveBeenCalled();
 
@@ -131,7 +111,7 @@ describe('SpeechSynthesizer (Web Speech API TTS)', () => {
     synth.toggleMute();
     expect(synth.isMuted()).toBe(false);
 
-    const successAfterUnmute = await synth.speak('agent-chason', 'Bora pro skatepark!');
+    const successAfterUnmute = await synth.speak('agent-sulafat', 'Bora pro skatepark!');
     expect(successAfterUnmute).toBe(true);
     expect(mockSpeechSynthesis.speak).toHaveBeenCalled();
   });

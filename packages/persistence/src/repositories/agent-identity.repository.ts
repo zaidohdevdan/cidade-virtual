@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, notInArray } from 'drizzle-orm';
 import { AppDatabase } from '../client';
 import { agentIdentitiesTable, AgentIdentityRow, NewAgentIdentityRow } from '../schema';
 
@@ -68,5 +68,14 @@ export class AgentIdentityRepository {
       .returning();
 
     return rows.length > 0 ? rows[0] : null;
+  }
+
+  /** Remove identidades fora do roster vigente (limpeza de órfãos). */
+  async deleteNotIn(keepIds: string[]): Promise<number> {
+    const deleted = await this.db
+      .delete(agentIdentitiesTable)
+      .where(keepIds.length > 0 ? notInArray(agentIdentitiesTable.id, keepIds) : sql`true`)
+      .returning({ id: agentIdentitiesTable.id });
+    return deleted.length;
   }
 }

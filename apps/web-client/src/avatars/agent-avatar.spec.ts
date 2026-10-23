@@ -36,7 +36,7 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
       },
     };
 
-    const config = CITY_AGENTS.find((a) => a.id === 'agent-vega')!;
+    const config = CITY_AGENTS.find((a) => a.id === 'agent-sulafat')!;
     agent = new AgentAvatar(config);
   });
 
@@ -44,11 +44,11 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     agent.dispose();
   });
 
-  it('deve possuir exatamente os 3 cidadãos estelares ativos (Vega, Sulafat e Sheliak)', () => {
-    expect(CITY_AGENTS).toHaveLength(3);
+  it('deve possuir exatamente 1 cidadão estelar ativo (Sulafat)', () => {
+    expect(CITY_AGENTS).toHaveLength(1);
 
     const names = CITY_AGENTS.map((a) => a.name);
-    expect(names).toEqual(['Vega', 'Sulafat', 'Sheliak']);
+    expect(names).toEqual(['Sulafat']);
   });
 
   it('alertas de bloqueio, fuga e memória de obstáculo NÃO devem emitir áudio de voz pelo speechSynth', () => {
@@ -66,7 +66,7 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
 
     // Mensagem comum sem bloqueio deve acionar áudio normalmente
     agent.say('Olá Daniel, como vai você?');
-    expect(speakSpy).toHaveBeenCalledWith('agent-vega', 'Olá Daniel, como vai você?');
+    expect(speakSpy).toHaveBeenCalledWith('agent-sulafat', 'Olá Daniel, como vai você?');
 
     speakSpy.mockRestore();
   });
@@ -92,7 +92,7 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     expect(agent.speechTimer).toBe(4.0);
     expect(agent.speechBubble).toBeDefined();
     expect(agent.speechBubble?.innerHTML).toContain('Avenida limpa e fluxo seguro!');
-    expect(agent.speechBubble?.innerHTML).toContain('Vega');
+    expect(agent.speechBubble?.innerHTML).toContain('Sulafat');
     expect(document.body.contains(agent.speechBubble!)).toBe(true);
   });
 
@@ -161,7 +161,7 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     expect(agent.speechBubble).toBeDefined();
     expect(agent.speechBubble?.innerHTML).toContain('Olá Daniel, bem-vindo!');
     expect(document.body.contains(agent.speechBubble!)).toBe(true);
-    expect(speakSpy).toHaveBeenCalledWith('agent-vega', 'Olá Daniel, bem-vindo!');
+    expect(speakSpy).toHaveBeenCalledWith('agent-sulafat', 'Olá Daniel, bem-vindo!');
 
     speakSpy.mockClear();
 
@@ -169,7 +169,7 @@ describe('AgentAvatar & CITY_AGENTS (Unit Test — Web Client)', () => {
     agent.isNearPlayer = false;
     agent.say('Resposta no chat', 5, true);
     expect(agent.speechBubble?.innerHTML).toContain('Resposta no chat');
-    expect(speakSpy).toHaveBeenCalledWith('agent-vega', 'Resposta no chat');
+    expect(speakSpy).toHaveBeenCalledWith('agent-sulafat', 'Resposta no chat');
 
     speakSpy.mockRestore();
   });

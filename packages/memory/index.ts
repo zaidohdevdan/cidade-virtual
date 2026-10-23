@@ -306,6 +306,21 @@ export class MemoryService {
     return { deletedCount: res.ok ? 1 : 0 };
   }
 
+  /**
+   * Remove do Qdrant todas as memórias de cidadãos fora do roster vigente (limpeza de órfãos).
+   */
+  async purgeCitizensNotIn(keepCitizenIds: string[]): Promise<boolean> {
+    await this.ensureCollection();
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/collections/${this.collectionName}/points/delete?wait=true`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filter: { must_not: [{ key: 'citizenId', match: { any: keepCitizenIds } }] },
+      }),
+    });
+    return res.ok;
+  }
+
   private async fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);

@@ -506,3 +506,74 @@ html, body {
 
 .controls-strip { animation-delay: 0.1s; }
 .bottom-bar { animation-delay: 0.2s; }
+
+/* ── Marketplace & Store Navigation (Task-045 / Task-046) ── */
+.store-search-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-glass);
+  border: 1px solid rgba(255, 208, 0, 0.45);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+
+.store-search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 13px;
+  width: 220px;
+}
+
+.store-search-input::placeholder {
+  color: #94a3b8;
+}
+
+.store-search-btn {
+  background: #004cbf;
+  color: #ffd000;
+  border: 1px solid #ffd000;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.store-search-btn:hover {
+  background: #0f2c59;
+  transform: scale(1.03);
+}
+
+.store-route-card {
+  background: linear-gradient(135deg, rgba(15, 44, 89, 0.95), rgba(0, 76, 191, 0.9));
+  border: 1.5px solid #ffd000;
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: fadeIn 0.3s ease both;
+}
+
+.store-interior-banner {
+  background: linear-gradient(135deg, rgba(15, 44, 89, 0.95), rgba(0, 76, 191, 0.95));
+  border: 2px solid #ffd000;
+  border-radius: var(--radius);
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+

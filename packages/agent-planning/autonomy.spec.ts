@@ -202,7 +202,7 @@ describe('Autonomia Real dos Agentes — Sem Roteiros Pré-fixados', () => {
     };
 
     const mind = new AgentMind({
-      id: 'agent-sheliak',
+      id: 'agent-sulafat',
       name: 'Sheliak',
       role: 'Engenheiro Urbano',
       biography: 'Engenheiro atento ao movimento da cidade',
@@ -238,7 +238,7 @@ describe('Autonomia Real dos Agentes — Sem Roteiros Pré-fixados', () => {
 
   it('A8: deve reagir a sugestões contextuais do Avatar Daniel aumentando atratividade do local', async () => {
     const mind = new AgentMind({
-      id: 'agent-vega',
+      id: 'agent-peer-test',
       name: 'Vega',
       role: 'Pioneira',
       biography: 'Exploradora da cidade',
@@ -273,7 +273,7 @@ describe('Autonomia Real dos Agentes — Sem Roteiros Pré-fixados', () => {
 
   it('A9: deve realizar interação mútua espontânea entre agentes autônomos em proximidade', () => {
     const mindVega = new AgentMind({
-      id: 'agent-vega',
+      id: 'agent-peer-test',
       name: 'Vega',
       role: 'Pioneira',
       biography: 'Exploradora',
@@ -304,7 +304,7 @@ describe('Autonomia Real dos Agentes — Sem Roteiros Pré-fixados', () => {
 
   it('A10: deve aprender preferências hedônicas orgânicas por locais visitados', async () => {
     const mind = new AgentMind({
-      id: 'agent-vega',
+      id: 'agent-peer-test',
       name: 'Vega',
       role: 'Pioneira',
       biography: 'Exploradora',
@@ -585,7 +585,7 @@ describe('Autonomia Real dos Agentes — Sem Roteiros Pré-fixados', () => {
 
     it('o habitante deve ouvir a instrução de ATRAVESSAR PELA FAIXA (ex: "vc deve usar a faixa de pedestre") e priorizar a faixa', async () => {
       const mind = new AgentMind({
-        id: 'agent-sheliak',
+        id: 'agent-sulafat',
         name: 'Sheliak',
         role: 'Engenheiro',
         biography: 'Atleta',

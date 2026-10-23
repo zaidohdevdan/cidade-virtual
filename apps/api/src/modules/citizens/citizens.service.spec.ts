@@ -43,7 +43,7 @@ describe('CitizensService (Unit Test — Task-002)', () => {
     mockAgentRepo.upsert.mockImplementation(async (data) => data);
 
     const result = await service.create({
-      name: 'Vega',
+      name: 'Sulafat',
       archetype: 'citizen',
       initialPosition: { lat: 10, lng: -20, altitude: 0 },
       initialEmotion: 'curious',
@@ -55,13 +55,13 @@ describe('CitizensService (Unit Test — Task-002)', () => {
     expect(result.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     );
-    expect(result.name).toBe('Vega');
+    expect(result.name).toBe('Sulafat');
     expect(result.archetype).toBe('citizen');
 
     expect(mockAgentRepo.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         id: result.id,
-        name: 'Vega',
+        name: 'Sulafat',
         archetype: 'citizen',
         emotionState: 'curious',
       })

@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, notInArray } from 'drizzle-orm';
 import { AppDatabase } from '../client';
 import { agentMindsTable, AgentMindRow, NewAgentMindRow } from '../schema';
 
@@ -57,5 +57,14 @@ export class AgentMindRepository {
 
   async deleteAll(): Promise<void> {
     await this.db.delete(agentMindsTable);
+  }
+
+  /** Remove mentes fora do roster vigente (evita restauração de agentes removidos). */
+  async deleteNotIn(keepAgentIds: string[]): Promise<number> {
+    const deleted = await this.db
+      .delete(agentMindsTable)
+      .where(keepAgentIds.length > 0 ? notInArray(agentMindsTable.agentId, keepAgentIds) : sql`true`)
+      .returning({ agentId: agentMindsTable.agentId });
+    return deleted.length;
   }
 }

@@ -13,6 +13,7 @@ interface PlayerProps {
   vehicles?: VehicleAgent[];
   agents?: AgentAvatar[];
   interactiveObjects: InteractiveObject[];
+  isFirstPerson?: boolean;
   onTelemetryUpdate?: (x: number, z: number, speedKmH: number) => void;
   onObservationUpdate?: (obs: InteractiveObject | null) => void;
 }
@@ -24,6 +25,7 @@ export const Player: React.FC<PlayerProps> = ({
   vehicles,
   agents,
   interactiveObjects,
+  isFirstPerson = false,
   onTelemetryUpdate,
   onObservationUpdate,
 }) => {
@@ -163,6 +165,10 @@ export const Player: React.FC<PlayerProps> = ({
     // Projeta balão de fala do jogador para tela 2D
     player.updateLabel(camera, gl);
   });
+
+  useEffect(() => {
+    player.mesh.visible = !isFirstPerson;
+  }, [player, isFirstPerson]);
 
   useEffect(() => {
     return () => {

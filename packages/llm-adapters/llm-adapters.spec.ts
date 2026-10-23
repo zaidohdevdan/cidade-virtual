@@ -162,12 +162,33 @@ describe('LLM Adapters — Fornecedores Desacoplados de IA Generativa', () => {
       delete process.env['OPENAI_API_KEY'];
       delete process.env['OLLAMA_BASE_URL'];
       delete process.env['USE_OLLAMA'];
+      delete process.env['ALLOW_PAID_LLM'];
 
       const adapter = createDefaultLLMAdapter();
       expect(adapter).toBeUndefined();
     });
 
-    it('deve instanciar GeminiLLMAdapter prioritariamente quando GEMINI_API_KEY estiver presente', () => {
+    it('NÃO deve usar Gemini pago sem ALLOW_PAID_LLM (MVP sem custo)', () => {
+      process.env['GEMINI_API_KEY'] = 'fake-gemini-key';
+      delete process.env['ALLOW_PAID_LLM'];
+      delete process.env['OLLAMA_BASE_URL'];
+      delete process.env['USE_OLLAMA'];
+      expect(createDefaultLLMAdapter()).toBeUndefined();
+      delete process.env['GEMINI_API_KEY'];
+    });
+
+    it('deve instanciar Ollama (gratuito) por padrão quando USE_OLLAMA=true', () => {
+      process.env['USE_OLLAMA'] = 'true';
+      process.env['GEMINI_API_KEY'] = 'fake-gemini-key';
+      expect(createDefaultLLMAdapter()).toBeInstanceOf(OllamaLLMAdapter);
+      delete process.env['USE_OLLAMA'];
+      delete process.env['GEMINI_API_KEY'];
+    });
+
+    it('deve instanciar GeminiLLMAdapter quando ALLOW_PAID_LLM=true e GEMINI_API_KEY presente', () => {
+      process.env['ALLOW_PAID_LLM'] = 'true';
+      delete process.env['USE_OLLAMA'];
+      delete process.env['OLLAMA_BASE_URL'];
       process.env['GEMINI_API_KEY'] = 'fake-gemini-key';
       delete process.env['OPENAI_API_KEY'];
 
@@ -176,13 +197,17 @@ describe('LLM Adapters — Fornecedores Desacoplados de IA Generativa', () => {
       expect(adapter?.isConfigured?.()).toBe(true);
     });
 
-    it('deve instanciar OpenAILLMAdapter quando apenas OPENAI_API_KEY estiver presente', () => {
+    it('deve instanciar OpenAILLMAdapter quando ALLOW_PAID_LLM=true e apenas OPENAI_API_KEY', () => {
+      process.env['ALLOW_PAID_LLM'] = 'true';
+      delete process.env['USE_OLLAMA'];
+      delete process.env['OLLAMA_BASE_URL'];
       delete process.env['GEMINI_API_KEY'];
       process.env['OPENAI_API_KEY'] = 'fake-openai-key';
 
       const adapter = createDefaultLLMAdapter();
       expect(adapter).toBeInstanceOf(OpenAILLMAdapter);
       expect(adapter?.isConfigured?.()).toBe(true);
+      delete process.env['ALLOW_PAID_LLM'];
     });
   });
 });

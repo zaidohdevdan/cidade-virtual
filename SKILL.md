@@ -1,10 +1,13 @@
 ---
 name: synapse-city-engine
-version: 2.0.0
-description: Arquitetura de software e contrato mestre para simulação de sociedades virtuais povoadas por agentes artificiais com identidade persistente, memória individual, capacidade de adaptação comportamental e aprendizagem social.
+version: 3.0.0
+description: PIVÔ v3.0 — marketplace 3D imersivo (piloto TomPets, vendedor agente com RAG grounding, checkout Mercado Pago, XR-ready). Base legada: arquitetura de software e contrato mestre para simulação de sociedades virtuais povoadas por agentes artificiais com identidade persistente, memória individual, capacidade de adaptação comportamental e aprendizagem social.
 language: pt-BR
 author: Daniel Ferreira de Almeida
 tags:
+  - marketplace
+  - rag-grounding
+  - webxr
   - synapse-city-engine
   - autonomous-agents
   - persistent-simulation
@@ -16,6 +19,11 @@ tags:
   - three-js
   - modular-monolith
 triggers:
+  - marketplace
+  - tompets
+  - vendedor agente
+  - rag grounding
+  - mercado pago
   - synapse city
   - criar habitante
   - simular cidade
@@ -28,7 +36,7 @@ triggers:
 
 # SYNAPSE CITY ENGINE
 
-**Versão:** 2.0.0  
+**Versão:** 3.0.0  
 **Autor:** Daniel Ferreira de Almeida  
 **Status:** Em desenvolvimento  
 **Categoria:** Simulação de mundos virtuais, agentes autônomos e aprendizagem individual e coletiva  
@@ -37,6 +45,29 @@ triggers:
 **Objetivo central:** Construir uma sociedade virtual persistente na qual habitantes artificiais aprendam por meio da experiência, desenvolvam comportamentos próprios e transmitam conhecimentos entre si.
 
 ---
+
+# PIVÔ v3.0 — MARKETPLACE IMERSIVO (vigente desde 2026-10-22)
+
+A cidade passa a funcionar como um **marketplace 3D**. Usuários entram com Google, escolhem avatar, conversam com outros avatares e compram produtos **novos ou usados** em lojas (boxes) cujo endereço o lojista divulga por WhatsApp/Instagram. O **vendedor é um agente** que fala sobre o produto. Loja piloto: **TomPets** (petshop). Pagamento: **Mercado Pago**, fora da plataforma. A loja é **XR-ready** para a futura versão em óculos (WebXR).
+
+## Regras de ouro do marketplace
+1. **Grounding obrigatório (anti-alucinação):** descrição e características do produto só podem ser ditas com base em evidência recuperada por **RAG** (Qdrant + metadados `storeId/productId/sourceId`), com citação da fonte. Sem evidência, o agente recusa e encaminha ao lojista.
+2. **Fatos transacionais por tools, não por LLM:** `get_price`, `check_stock`, `get_product_details`, `create_checkout` consultam o Postgres. Preço em centavos (inteiro). O texto gerado é validado contra o retorno das tools.
+3. **Preço antes do detalhe:** a UX mostra o preço na vitrine; o detalhe abre ao pegar o produto.
+4. **Checkout externo:** a plataforma nunca manipula dados de cartão. Webhook com assinatura validada, idempotência e consulta do pagamento antes de confirmar.
+5. **Custo zero no MVP:** `LLMProviderAdapter` com Ollama (local). Pagos só com `ALLOW_PAID_LLM=true`. Todo LLM passa pelo adapter.
+6. **Servidor autoritativo e WebXR-first:** o servidor decide pedido, preço e posição; o cliente renderiza. Interações abstraídas (ray/pointer), escala em metros.
+7. **Atendimento híbrido:** vendedor online assume a conversa (agente inativo, sem tokens); offline, ele recebe o alerta "cliente entrou na loja" e decide entrar ou deixar o agente. **Padrão: agente.** Transferência nos dois sentidos com resumo de contexto; o cliente sempre vê quem atende e o agente nunca se passa por humano. O agente só roda sob demanda (mensagem do cliente), com contexto mínimo e limites de tokens.
+8. **Cadastro:** inicialmente feito pelo admin do projeto; autosserviço do lojista é etapa posterior.
+
+## Impacto nos módulos descritos abaixo
+- **Reaproveitados:** `client-render`, `world-physics` (navegação), `memory-system` (RAG/Qdrant), persistência, gateway em tempo real, `speech-synth`, `llm-adapters`.
+- **Reduzidos:** `agent-cognition`/`agent-planning` — o agente de loja é um **vendedor conversacional**, não um habitante com necessidades.
+- **Congelados (legado):** aprendizagem social, consolidação passiva, economia entre NPCs. Não remover; não evoluir até novo aviso.
+- Detalhamento e critérios de aceite: `task.md` seção **3B (Tasks 042-051, marco M8)**.
+
+---
+
 
 # 1. VISÃO GERAL
 

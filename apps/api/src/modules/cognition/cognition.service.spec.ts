@@ -108,8 +108,8 @@ describe('CognitionService — Ciclo Cognitivo Real (Task-004)', () => {
     });
 
     const dialogue = await cognitionService.generateConversationalDialogue({
-      citizenId: 'agent-vega' as CitizenId,
-      citizenName: 'Vega',
+      citizenId: 'agent-sulafat' as CitizenId,
+      citizenName: 'Sulafat',
       citizenRole: 'Pioneira & Navegadora de Segurança',
       starDesignation: 'Alpha Lyrae',
       backstorySeed: 'Responsável pela segurança viária.',
@@ -121,14 +121,14 @@ describe('CognitionService — Ciclo Cognitivo Real (Task-004)', () => {
     expect(dialogue).toBe('Olá Daniel! A circulação da via principal está fluindo com total atenção.');
     expect(mockMemoryService.semanticQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        citizenId: 'agent-vega',
+        citizenId: 'agent-sulafat',
         queryText: 'Como estão as ruas hoje?',
       }),
     );
     expect(mockLLMAdapter.complete).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: expect.stringContaining('Como estão as ruas hoje?'),
-        systemPrompt: expect.stringContaining('Vega'),
+        systemPrompt: expect.stringContaining('Sulafat'),
       }),
     );
   });
@@ -137,8 +137,8 @@ describe('CognitionService — Ciclo Cognitivo Real (Task-004)', () => {
     const serviceWithoutLLM = new CognitionService(mockMemoryService, mockExpRepo, undefined);
 
     const dialogue = await serviceWithoutLLM.generateConversationalDialogue({
-      citizenId: 'agent-vega' as CitizenId,
-      citizenName: 'Vega',
+      citizenId: 'agent-sulafat' as CitizenId,
+      citizenName: 'Sulafat',
       citizenRole: 'Pioneira & Navegadora de Segurança',
       starDesignation: 'Alpha Lyrae',
       backstorySeed: 'Responsável pela segurança viária.',

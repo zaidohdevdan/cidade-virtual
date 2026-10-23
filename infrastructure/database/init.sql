@@ -71,3 +71,100 @@ CREATE TABLE IF NOT EXISTS agent_minds (
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_minds_updated_at ON agent_minds(updated_at DESC);
+
+-- 6. Lojas e Boxes do Marketplace (Épico M / Task-044)
+CREATE TABLE IF NOT EXISTS stores (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    slug VARCHAR(64) UNIQUE NOT NULL,
+    category VARCHAR(64) DEFAULT 'petshop' NOT NULL,
+    address_box VARCHAR(128) NOT NULL,
+    coordinates JSONB DEFAULT '{"x": 0, "y": 0.19, "z": 0}'::jsonb NOT NULL,
+    theme_colors JSONB DEFAULT '{}'::jsonb NOT NULL,
+    seller_persona JSONB DEFAULT '{}'::jsonb NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_stores_slug ON stores(slug);
+
+-- 7. Produtos Novos e Usados (Épico M / Task-044)
+CREATE TABLE IF NOT EXISTS products (
+    id VARCHAR(64) PRIMARY KEY,
+    store_id VARCHAR(64) NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL,
+    category VARCHAR(64) NOT NULL,
+    condition VARCHAR(32) DEFAULT 'new' NOT NULL,
+    condition_details TEXT,
+    price_cents INT NOT NULL,
+    currency VARCHAR(8) DEFAULT 'BRL' NOT NULL,
+    stock_quantity INT DEFAULT 10 NOT NULL,
+    status VARCHAR(32) DEFAULT 'active' NOT NULL,
+    shelf_location JSONB DEFAULT '{}'::jsonb NOT NULL,
+    media JSONB DEFAULT '[]'::jsonb NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_products_store_id ON products(store_id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+CREATE INDEX IF NOT EXISTS idx_products_condition ON products(condition);
+
+-- 8. Fatos e Características Estruturadas para RAG Grounding (Task-044 / Task-047)
+CREATE TABLE IF NOT EXISTS product_facts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id VARCHAR(64) NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    store_id VARCHAR(64) NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    attribute_key VARCHAR(64) NOT NULL,
+    fact_statement TEXT NOT NULL,
+    source_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_facts_product_id ON product_facts(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_facts_store_id ON product_facts(store_id);
+
+-- 9. Pedidos do Marketplace (Task-048)
+CREATE TABLE IF NOT EXISTS orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    store_id VARCHAR(64) NOT NULL REFERENCES stores(id),
+    user_id VARCHAR(64) NOT NULL,
+    total_cents INT NOT NULL,
+    currency VARCHAR(8) DEFAULT 'BRL' NOT NULL,
+    status VARCHAR(32) DEFAULT 'created' NOT NULL,
+    items JSONB DEFAULT '[]'::jsonb NOT NULL,
+    checkout_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_store_id ON orders(store_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+
+-- 10. Pagamentos Externos (Mercado Pago / Checkout Pro - Task-048)
+CREATE TABLE IF NOT EXISTS payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    provider VARCHAR(32) DEFAULT 'mercadopago' NOT NULL,
+    external_payment_id VARCHAR(128) UNIQUE,
+    status VARCHAR(32) NOT NULL,
+    amount_cents INT NOT NULL,
+    raw_webhook_payload JSONB DEFAULT '{}'::jsonb,
+    processed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_external_id ON payments(external_payment_id);
+
+-- 11. Perfis de Usuário e Escolha de Avatar (Task-043)
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id VARCHAR(64) PRIMARY KEY,
+    email VARCHAR(255),
+    display_name VARCHAR(128),
+    avatar_config JSONB DEFAULT '{}'::jsonb NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+

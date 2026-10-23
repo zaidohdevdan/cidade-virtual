@@ -34,7 +34,7 @@ export class CitizensService implements OnModuleInit {
   }
 
   /**
-   * Popula idempotentemente os 5 habitantes canônicos (Task-013) com arquétipos variados,
+   * Popula idempotentemente os habitantes canônicos (roster MVP) com arquétipo,
    * posições urbanas, objetivos e memórias episódicas iniciais persistidas no PostgreSQL e Qdrant.
    */
   async seedDefaultCitizens(): Promise<{ seededCount: number; experiencesCount: number }> {
@@ -54,6 +54,8 @@ export class CitizensService implements OnModuleInit {
         this.logger.warn(`Não foi possível inicializar a coleção no Qdrant: ${err}`);
       }
     }
+
+    await this.purgeOrphanedCitizens();
 
     for (const citizenConfig of ALL_CITIZENS) {
       try {
@@ -126,6 +128,27 @@ export class CitizensService implements OnModuleInit {
     );
 
     return { seededCount, experiencesCount };
+  }
+
+  /**
+   * Remove no Postgres (identidades, experiências) e no Qdrant (memórias) todos os dados de
+   * agentes que não pertencem mais ao roster ALL_CITIZENS. As mentes persistidas são limpas
+   * pela AutonomousSimulationService na restauração.
+   */
+  async purgeOrphanedCitizens(): Promise<void> {
+    const keep = ALL_CITIZENS.map((c) => c.id);
+    try {
+      const exps = await this.expRepo.deleteByAgentIdsNotIn?.(keep);
+      const ids = await this.agentRepo.deleteNotIn?.(keep);
+      if (this.memoryService) {
+        await this.memoryService.purgeCitizensNotIn?.(keep);
+      }
+      if (exps || ids) {
+        this.logger.log(`Órfãos removidos: ${ids ?? 0} identidades, ${exps ?? 0} experiências.`);
+      }
+    } catch (err) {
+      this.logger.warn(`Falha na limpeza de agentes órfãos: ${err}`);
+    }
   }
 
   /**

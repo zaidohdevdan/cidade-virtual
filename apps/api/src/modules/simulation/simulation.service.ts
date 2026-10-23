@@ -49,6 +49,8 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
   private agentStates = new Map<string, AutonomousAgentRuntimeState>();
   private activeAgentIndex = 0;
   private isProcessingTick = false;
+  private static readonly GREETING_COOLDOWN_MS = 30_000;
+  private lastGreetingAt = new Map<string, number>();
 
   constructor(
     @Inject(WorldGateway) private readonly worldGateway: WorldGateway,
@@ -74,11 +76,13 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
       this.logger.warn(`NavMesh Recast operando em modo fallback: ${(err as Error).message}`);
     }
 
-    // 2. Registra e sincroniza estados dos 7 habitantes autônomos com mentes vivas
+    // 2. Registra e sincroniza estados dos habitantes autônomos com mentes vivas
     let savedMindsMap = new Map<string, AgentMindRow>();
     if (this.agentMindRepo) {
       try {
-        const savedRows = await this.agentMindRepo.listAll();
+        const keepIds = ALL_CITIZENS.map((c) => c.id);
+        await this.agentMindRepo.deleteNotIn?.(keepIds);
+        const savedRows = (await this.agentMindRepo.listAll()).filter((r) => keepIds.includes(r.agentId));
         for (const row of savedRows) {
           savedMindsMap.set(row.agentId, row);
         }
@@ -370,17 +374,19 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
 
         // Se ainda não houve fala disparada neste ciclo, emite saudação contextual
         if (!agent.lastSpeech) {
-          const speechMessage = this.generateDynamicProximityGreeting(agent, trafficLight);
-          agent.lastSpeech = speechMessage;
+          const speechMessage = await this.generateDynamicProximityGreeting(agent, trafficLight);
+          if (speechMessage) {
+            agent.lastSpeech = speechMessage;
 
-          this.worldGateway.broadcastDomainEvent({
-            name: 'agent.speech',
-            payload: {
-              agentId: agent.config.id,
-              message: speechMessage,
-              isProximitySpeech: true,
-            },
-          });
+            this.worldGateway.broadcastDomainEvent({
+              name: 'agent.speech',
+              payload: {
+                agentId: agent.config.id,
+                message: speechMessage,
+                isProximitySpeech: true,
+              },
+            });
+          }
         }
       } catch (err) {
         this.logger.warn(`Falha na deliberação de proximidade de ${agent.config.id}: ${(err as Error).message}`);
@@ -402,28 +408,40 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
   }
 
   /**
-   * Gera saudação contextual e dinâmica baseada na intenção atual do agente,
-   * sua personalidade e seu papel na cidade, sem frases pré-fixadas por ID.
+   * Gera a saudação a partir da mente do agente (intenção, personalidade, memórias) via
+   * LLMProviderAdapter. Sem texto pré-fixado: se o LLM estiver indisponível, limitado por
+   * rate/orçamento ou em cooldown, o agente permanece em silêncio (retorna null).
    */
-  private generateDynamicProximityGreeting(
+  private async generateDynamicProximityGreeting(
     agent: AutonomousAgentRuntimeState,
     trafficLight: 'green' | 'yellow' | 'red',
-  ): string {
+  ): Promise<string | null> {
+    const now = Date.now();
+    const last = this.lastGreetingAt.get(agent.config.id) ?? 0;
+    if (now - last < AutonomousSimulationService.GREETING_COOLDOWN_MS) return null;
+    this.lastGreetingAt.set(agent.config.id, now);
+
     const intention = agent.mind.currentIntention;
     const targetLabel = intention?.candidate.targetLabel ?? 'pela Rua Central';
-    const affordance = intention?.candidate.affordance;
+    const affordance = intention?.candidate.affordance ?? 'explorar';
+    const config = agent.config;
 
-    if (affordance === 'eat' || affordance === 'shop') {
-      return `Olá Daniel! Estou a caminho de ${targetLabel} para comer algo e abastecer as energias. Como vai você?`;
+    try {
+      const text = await this.cognitionService.generateConversationalDialogue?.({
+        citizenId: config.id as CitizenId,
+        citizenName: config.name,
+        citizenRole: config.role,
+        starDesignation: config.starDesignation,
+        backstorySeed: config.backstorySeed,
+        activeGoals: config.activeGoals,
+        playerMessage: '',
+        situation: `Daniel acabou de se aproximar de você. Neste momento você está com a intenção "${affordance}" rumo a "${targetLabel}". Cumprimente-o espontaneamente em 1 frase, de acordo com sua mente e personalidade.`,
+        trafficLight,
+      });
+      return text && text.length >= 3 ? text : null;
+    } catch {
+      return null;
     }
-    if (affordance === 'rest' || affordance === 'contemplate') {
-      return `Olá Daniel! Estava indo até ${targetLabel} para descansar um pouco e apreciar a praça.`;
-    }
-    if (affordance === 'socialize') {
-      return `Olá Daniel! Que bom encontrar você por aqui na Avenida Central! O que está achando da cidade hoje?`;
-    }
-
-    return `Olá Daniel! Estou explorando os arredores de ${targetLabel}. Sinal está ${trafficLight === 'green' ? 'aberto' : 'fechado'} para os veículos!`;
   }
 
   /**
@@ -706,164 +724,6 @@ export class AutonomousSimulationService implements OnModuleInit, OnModuleDestro
     } catch (err) {
       this.logger.error(`Erro ao processar diálogo de ${config.id}: ${(err as Error).message}`);
       return { response: confirmationSpeech, agentId: config.id, directive };
-    }
-  }
-
-  /**
-   * Gera saudação contextual quando Daniel se aproxima espontaneamente.
-   */
-  private generatePlayerProximityGreeting(
-    config: SeedCitizenConfig,
-    trafficLight: 'green' | 'yellow' | 'red',
-  ): string {
-    const isGreen = trafficLight === 'green';
-    switch (config.id) {
-      case 'agent-vega':
-        return isGreen
-          ? 'Olá Daniel! Sinal verde para veículos — aguarde com segurança na calçada.'
-          : 'Olá Daniel! Sinal fechado para os carros, a faixa de pedestres está segura.';
-      case 'agent-sulafat':
-        return 'Olá Daniel! Cuidando da nossa praça? Vamos manter as calçadas limpas e sustentáveis.';
-      case 'agent-sheliak':
-        return 'E aí Daniel! Analisando os semáforos da Avenida Central, o fluxo está fluindo bem.';
-      case 'agent-epsilon':
-        return 'Saudações, jovem Daniel. É sempre revigorante ver cidadãos conscientes em nossa cidade.';
-      case 'agent-chason':
-        return 'E aí Daniel! O trânsito tá suave hoje, bora curtir a praça com responsabilidade!';
-      case 'agent-aladfar':
-        return 'Oi Daniel! Reparou nas cores da cidade refletindo nas fachadas da rua?';
-      case 'agent-xihe':
-        return 'Olá Daniel! Estou conferindo as espécies botânicas dos canteiros da calçada.';
-      default:
-        return `Olá Daniel! Bom ver você por aqui na Rua Central.`;
-    }
-  }
-
-  /**
-   * Síntese de resposta conversacional quando Daniel faz uma pergunta ou envia mensagem.
-   */
-  private generateConversationalResponse(
-    config: SeedCitizenConfig,
-    playerMessage: string,
-    trafficLight: 'green' | 'yellow' | 'red',
-  ): string {
-    const text = playerMessage.toLowerCase();
-
-    // Saudação básica
-    if (text.includes('olá') || text.includes('oi') || text.includes('bom dia') || text.includes('boa tarde') || text.includes('tudo bem')) {
-      switch (config.id) {
-        case 'agent-vega':
-          return 'Olá Daniel! Tudo tranquilo por aqui na segurança viária. Lembre-se de sempre olhar para os dois lados antes de cruzar a via.';
-        case 'agent-sulafat':
-          return 'Oi Daniel! Tudo ótimo! Estava catalogando a flora da praça e conferindo a coleta seletiva nas lixeiras municipais.';
-        case 'agent-sheliak':
-          return 'Fala Daniel! Tudo em ordem. Eu estava calculando a sincronia semafórica e verificando a passagem dos veículos.';
-        case 'agent-epsilon':
-          return 'Saudações fraternas, Daniel. A convivência nesta cidade floresce quando cada cidadão compartilha respeito e empatia.';
-        case 'agent-chason':
-          return 'E aí Daniel! Beleza pura? Tô aproveitando a calçada livre pra dar umas manobras de skate, mas sempre respeitando quem tá a pé!';
-        case 'agent-aladfar':
-          return 'Oi Daniel! Que bom ver você por aqui. As linhas, luzes e reflexos dessa avenida são pura inspiração visual!';
-        case 'agent-xihe':
-          return 'Olá Daniel! Tudo ótimo! Estava catalogando a copa das árvores e conferindo a umidade dos canteiros da calçada.';
-        default:
-          return `Olá Daniel! Prazer em falar com você. O que gostaria de saber sobre nosso distrito?`;
-      }
-    }
-
-    // Perguntas sobre trânsito, sinal, semáforo, travessia
-    if (text.includes('sinal') || text.includes('semáforo') || text.includes('faixa') || text.includes('atravessar') || text.includes('trânsito') || text.includes('carro')) {
-      switch (config.id) {
-        case 'agent-vega':
-          return `Atualmente o sinal da via principal está ${trafficLight === 'green' ? 'VERDE para veículos — pedestres aguardam na calçada de espera' : 'VERMELHO para veículos — travessia permitida na faixa'}! Segurança sempre em primeiro lugar.`;
-        case 'agent-sheliak':
-          return 'Nossos semáforos operam no padrão DENATRAN com 8s de verde, 3s de atenção amarela e 8s de transversal. Uma sincronização matemática precisa!';
-        case 'agent-chason':
-          return 'Quando o sinal fecha pros carros, a faixa de pedestres fica liberada pra gente cruzar! Mas no verde deles, fico esperando na calçada.';
-        case 'agent-aladfar':
-          return `Adoro como as luzes do semáforo criam um ritmo na cidade! No momento está ${trafficLight === 'green' ? 'verde para veículos — pedestres aguardam' : 'vermelho para veículos — travessia liberada'}!`;
-        case 'agent-xihe':
-          return `O semáforo está em estado ${trafficLight}. Uma mobilidade equilibrada garante a segurança dos pedestres e a integridade dos canteiros verdes.`;
-        default:
-          return `O semáforo está em estado ${trafficLight}. Respeitar as faixas de retenção garante a integridade de todos na cidade.`;
-      }
-    }
-
-    // Perguntas sobre lixo, praça, sustentabilidade e regras
-    if (text.includes('lixo') || text.includes('praça') || text.includes('limpeza') || text.includes('regra') || text.includes('lei')) {
-      switch (config.id) {
-        case 'agent-sulafat':
-          return 'Seguimos a Lei Federal 12.305/10 (Política Nacional de Resíduos Sólidos). A lixeira municipal fica em frente à placa de advertência ecológica.';
-        case 'agent-epsilon':
-          return 'As regras urbanas não são prisões, Daniel, mas a partitura que permite que mentes diversas convivam em harmonia.';
-        case 'agent-aladfar':
-          return 'O design urbano só é verdadeiramente belo quando o espaço público é limpo e respeitado por todos nós.';
-        case 'agent-xihe':
-          return 'A separação correta de resíduos e a proteção da flora da praça são fundamentais para o ecossistema de Synapse City!';
-        default:
-          return 'A preservação dos espaços públicos e a destinação correta dos resíduos são deveres de todos os cidadãos da cidade.';
-      }
-    }
-
-    // Resposta padrão personalizada pelo arquétipo
-    switch (config.id) {
-      case 'agent-vega':
-        return `Compreendido, Daniel! Como responsável pela patrulha urbana, meu dever é manter a ordem e a segurança para todos os habitantes.`;
-      case 'agent-sulafat':
-        return `Interessante seu ponto de vista, Daniel. Vou registrar essa observação em nossos estudos de impacto ambiental e ecologia urbana.`;
-      case 'agent-sheliak':
-        return `Boa reflexão, Daniel! A infraestrutura urbana e a engenharia de mobilidade dependem de cidadãos participativos como você.`;
-      case 'agent-epsilon':
-        return `Suas palavras ecoam a eterna busca humana por sentido na urbe, Daniel. Cada encontro na praça enriquece nossa memória coletiva.`;
-      case 'agent-chason':
-        return `Maneiro falar contigo, Daniel! Se precisar de uma dica das melhores rotas de skate pela calçada, é só chamar!`;
-      case 'agent-aladfar':
-        return `Excelente perspectiva, Daniel! Cada diálogo como esse me inspira a pensar novas formas de arte e harmonia urbana.`;
-      case 'agent-xihe':
-        return `Com certeza, Daniel. A sustentabilidade e o convívio urbano florescem quando cada cidadão faz a sua parte.`;
-      default:
-        return `Entendi perfeitamente sua mensagem, Daniel. Vamos juntos fazer da Cidade Virtual um lugar cada vez melhor!`;
-    }
-  }
-
-  /**
-   * Constrói falas e monólogos interiores expressivos alinhados aos arquétipos da Constelação de Lira.
-   */
-  private generateAgentSpeech(
-    config: SeedCitizenConfig,
-    action: { actionType: string; reasonCode?: string; expectedOutcome?: string },
-    trafficLight: 'green' | 'yellow' | 'red',
-  ): string {
-    const isTrafficGreen = trafficLight === 'green';
-
-    switch (config.id) {
-      case 'agent-vega':
-        return isTrafficGreen
-          ? 'Sinal veicular verde. Garantindo que os pedestres aguardem com segurança na calçada.'
-          : 'Sinal fechado para veículos! Faixa liberada para travessia segura.';
-
-      case 'agent-sulafat':
-        return 'Verificando as lixeiras municipais e a arborização urbana ao redor da praça.';
-
-      case 'agent-sheliak':
-        return 'Avaliando a fluidez do tráfego e a sincronização do semáforo da Avenida Central.';
-
-      case 'agent-epsilon':
-        return 'Observando como as regras e o respeito mútuo criam harmonia na Cidade Virtual.';
-
-      case 'agent-chason':
-        return isTrafficGreen
-          ? 'Sinal verde para os carros! Parando o skate na calçada antes da faixa.'
-          : 'Sinal vermelho para carros! Hora de cruzar para a praça.';
-
-      case 'agent-aladfar':
-        return 'Observando a harmonia das cores nos edifícios e o contraste dos reflexos de vidro na calçada.';
-
-      case 'agent-xihe':
-        return 'Monitorando o desenvolvimento das mudas e a distribuição de sombra natural pela praça.';
-
-      default:
-        return 'Em patrulhamento ativo pelas vias municipais.';
     }
   }
 

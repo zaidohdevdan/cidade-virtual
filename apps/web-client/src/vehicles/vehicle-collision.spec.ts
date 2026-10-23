@@ -114,7 +114,7 @@ describe('Vehicle & Agent Collision Physics (Unit Tests — Web Client)', () => 
         cx: 0,
         cz: 0.6,
         radius: 0.4,
-        name: 'Agent-Vega',
+        name: 'Agent-Sulafat',
       },
     ];
 

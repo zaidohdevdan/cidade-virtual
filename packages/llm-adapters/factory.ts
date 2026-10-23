@@ -11,35 +11,36 @@ export interface AutoLLMAdapterOptions {
 /**
  * Cria dinamicamente a melhor instância de LLMProviderAdapter disponível
  * a partir das variáveis de ambiente configuradas:
- * 1. GEMINI_API_KEY -> GeminiLLMAdapter (gemini-2.0-flash)
- * 2. OPENAI_API_KEY -> OpenAILLMAdapter (gpt-4o-mini)
- * 3. OLLAMA_BASE_URL (se definido explicitamente) -> OllamaLLMAdapter
- * 4. undefined se nenhuma credencial for detectada (mantendo o modo local gracioso).
+ * 1. USE_OLLAMA=true ou OLLAMA_BASE_URL -> OllamaLLMAdapter (gratuito, padrão do MVP)
+ * 2. Apenas com ALLOW_PAID_LLM=true: GEMINI_API_KEY -> Gemini, OPENAI_API_KEY -> OpenAI
+ * 3. undefined se nenhuma credencial for detectada (mantendo o modo local gracioso).
  */
 export function createDefaultLLMAdapter(options?: AutoLLMAdapterOptions): LLMProviderAdapter | undefined {
   const prefer = options?.prefer;
 
-  if (prefer === 'gemini' && process.env['GEMINI_API_KEY']) {
+  const paid = process.env['ALLOW_PAID_LLM'] === 'true';
+  if (prefer === 'gemini' && paid && process.env['GEMINI_API_KEY']) {
     return new GeminiLLMAdapter();
   }
-  if (prefer === 'openai' && process.env['OPENAI_API_KEY']) {
+  if (prefer === 'openai' && paid && process.env['OPENAI_API_KEY']) {
     return new OpenAILLMAdapter();
   }
   if (prefer === 'ollama' && process.env['OLLAMA_BASE_URL']) {
     return new OllamaLLMAdapter();
   }
 
-  // Detecção automática por precedência padrão
-  if (process.env['GEMINI_API_KEY'] && process.env['GEMINI_API_KEY'].trim().length > 0) {
-    return new GeminiLLMAdapter();
-  }
-
-  if (process.env['OPENAI_API_KEY'] && process.env['OPENAI_API_KEY'].trim().length > 0) {
-    return new OpenAILLMAdapter();
-  }
-
+  // MVP sem custo: Ollama (local/gratuito) é o padrão. Provedores pagos só com opt-in explícito.
   if (process.env['USE_OLLAMA'] === 'true' || process.env['OLLAMA_BASE_URL']) {
     return new OllamaLLMAdapter();
+  }
+
+  if (process.env['ALLOW_PAID_LLM'] === 'true') {
+    if (process.env['GEMINI_API_KEY'] && process.env['GEMINI_API_KEY'].trim().length > 0) {
+      return new GeminiLLMAdapter();
+    }
+    if (process.env['OPENAI_API_KEY'] && process.env['OPENAI_API_KEY'].trim().length > 0) {
+      return new OpenAILLMAdapter();
+    }
   }
 
   return undefined;

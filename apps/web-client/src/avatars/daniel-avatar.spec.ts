@@ -52,14 +52,54 @@ describe('DanielAvatar — Locomoção Urbana e Acesso ao Anel Viário Perimetra
     expect(player.position.x).toBeLessThanOrEqual(82);
   });
 
-  it('Daniel deve ser construído como avatar padrão limpo, sem áurea mística de chamas/luzes', () => {
-    // Não deve haver PointLight ou grupos de áurea anexados ao modelo
+  it('Daniel deve ser construído como avatar limpo, sem luzes móveis (PointLight ou DirectionalLight) anexadas à malha para não poluir reflexos no cenário', () => {
     let hasPointLight = false;
+    let hasDirectionalLight = false;
     player.mesh.traverse((child) => {
       if ((child as any).isPointLight) {
         hasPointLight = true;
       }
+      if ((child as any).isDirectionalLight) {
+        hasDirectionalLight = true;
+      }
     });
+    // Garante que o avatar não carrega fontes de luz que perturbem o mundo ou gerem reflexos a cada passo
     expect(hasPointLight).toBe(false);
+    expect(hasDirectionalLight).toBe(false);
+  });
+
+  it('deve possuir os pilares visuais canônicos: óculos com lente translúcida, highlight de olho (1 draw call) e sombra de contato', () => {
+    let hasEyeHighlight = false;
+    let hasTranslucentLens = false;
+    let hasContactShadow = false;
+
+    player.mesh.traverse((child) => {
+      if ((child as any).isMesh) {
+        const mesh = child as any;
+        const mat = mesh.material;
+
+        // Verifica o brilho branco no olho (MeshBasicMaterial branco)
+        if (mat?.isMeshBasicMaterial && mat?.color?.getHexString() === 'ffffff' && mesh.geometry?.type === 'SphereGeometry') {
+          hasEyeHighlight = true;
+        }
+
+        // Verifica lente translúcida dos óculos
+        if (mat?.transparent && mat?.opacity < 0.5 && mat?.roughness <= 0.2) {
+          hasTranslucentLens = true;
+        }
+
+        // Verifica sombra de contato no plano do piso
+        if (mesh.geometry?.type === 'PlaneGeometry' && mesh.rotation.x === -Math.PI / 2) {
+          hasContactShadow = true;
+        }
+      }
+    });
+
+    // 1. Olho com highlight vivo de MeshBasicMaterial branco (1 draw call)
+    expect(hasEyeHighlight).toBe(true);
+    // 2. Óculos de verdade com lente translúcida
+    expect(hasTranslucentLens).toBe(true);
+    // 3. Sombra de contato no piso
+    expect(hasContactShadow).toBe(true);
   });
 });

@@ -80,7 +80,7 @@ describe('Task-036 — Persistência e Restauração de Mente Subjetiva (AgentMi
     };
     originalMind.memory.actorAffinity = {
       'avatar-daniel': 0.95,
-      'agent-sheliak': 0.70,
+      'agent-sulafat': 0.70,
     };
 
     // 3. Serializa e salva no banco de dados real
@@ -131,7 +131,7 @@ describe('Task-036 — Persistência e Restauração de Mente Subjetiva (AgentMi
     expect(restartedMind.memory.placePreferences?.['market-central']).toBeCloseTo(-0.35, 2);
     expect(restartedMind.memory.visitCounts?.['cafe-bistro']).toBe(5);
     expect(restartedMind.memory.actorAffinity?.['avatar-daniel']).toBeCloseTo(0.95, 2);
-    expect(restartedMind.memory.actorAffinity?.['agent-sheliak']).toBeCloseTo(0.70, 2);
+    expect(restartedMind.memory.actorAffinity?.['agent-sulafat']).toBeCloseTo(0.70, 2);
   });
 
   it('deve realizar snapshot em lote de 7 mentes em menos de 50ms', async () => {

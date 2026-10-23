@@ -39,6 +39,32 @@ export interface TrafficLightRef {
   state: TrafficLightState;
 }
 
+export interface StoreLocation {
+  id: string;
+  name: string;
+  slug: string;
+  addressBox: string;
+  boxNumber?: string;
+  streetName?: string;
+  category: string;
+  coordinates: { x: number; y: number; z: number };
+  entrancePosition: { x: number; y: number; z: number };
+}
+
+export const CITY_STORES: StoreLocation[] = [
+  {
+    id: 'store-tompets',
+    name: 'TomPets',
+    slug: 'tompets',
+    addressBox: 'Alameda das Nações, Box 04',
+    boxNumber: 'Box 04',
+    streetName: 'Alameda das Nações',
+    category: 'petshop',
+    coordinates: { x: 25, y: 0.19, z: -18 },
+    entrancePosition: { x: 23.5, y: 0.22, z: -17.0 },
+  },
+];
+
 // ─────────────────────────────────────────────
 // CITY SCENE — Synapse City
 // Layout Urbano Realista:
@@ -50,6 +76,7 @@ export interface TrafficLightRef {
 //   - Praça Central no Quadrante Sudoeste (SW) com fonte, bancos e flores
 //   - Mercado no Quadrante Norte (NE/N)
 //   - Café no Quadrante Leste (SE/E)
+//   - Loja TomPets (Box 04 - Alameda das Nações)
 //   - Sistema completo de Colliders para física/colisão
 // ─────────────────────────────────────────────
 export class CityScene {
@@ -57,6 +84,12 @@ export class CityScene {
   public interactiveObjects: InteractiveObject[] = [];
   public trafficLights: TrafficLightRef[] = [];
   public colliders: ObstacleCollider[] = [];
+
+  // Grupo e estado do sistema de navegação até lojas / boxes (Task-045)
+  public navigationGroup: THREE.Group = new THREE.Group();
+  public activeNavigationTarget: { x: number; z: number; name: string } | null = null;
+  private navigationBeacon: THREE.Mesh | null = null;
+  private navigationTime: number = 0;
 
   private ambientLight!: THREE.AmbientLight;
   private sunLight!: THREE.DirectionalLight;
@@ -67,6 +100,8 @@ export class CityScene {
     this.scene.background = new THREE.Color(0x87ceeb);
     this.scene.fog = new THREE.FogExp2(0xd4e8f7, 0.008);
 
+    this.scene.add(this.navigationGroup);
+
     this.buildLighting();
     this.buildGround();
     this.buildRoads();
@@ -75,6 +110,7 @@ export class CityScene {
     this.buildPraca();        // Praça de pedestres no quadrante SW
     this.buildMarket();       // Mercado no quadrante norte
     this.buildCafe();         // Café no quadrante leste
+    this.buildTomPetsStore(); // Loja TomPets (Box 04 - Alameda das Nações)
     this.buildBuildings();    // Edifícios nos quarteirões
     this.buildSigns();        // Placas de trânsito e proibido lixo
     this.buildTrees();        // Árvores urbanas
@@ -1208,36 +1244,36 @@ export class CityScene {
 
   // ──────────────────── CAFÉ (QUADRANTE LESTE) ────────────────────
   private buildCafe(): void {
-    const cx = 32;
-    const cz = -20;
+    const cx = 38;
+    const cz = -22;
 
     const wallMat = new THREE.MeshStandardMaterial({ color: 0xecdcc9, roughness: 0.75 });
     const roofMat = new THREE.MeshStandardMaterial({ color: 0x6d4c41, roughness: 0.7 });
     const awningMat = new THREE.MeshStandardMaterial({ color: 0xd7ccc8, roughness: 0.6 });
 
     // Estrutura do café
-    const body = new THREE.Mesh(new THREE.BoxGeometry(16, 6, 14), wallMat);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(14, 6, 12), wallMat);
     body.position.set(cx, 3.0, cz);
     body.castShadow = true;
     body.receiveShadow = true;
     this.scene.add(body);
 
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(17, 0.6, 15), roofMat);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(15, 0.6, 13), roofMat);
     roof.position.set(cx, 6.3, cz);
     this.scene.add(roof);
 
     // Toldo frontal
-    const awning = new THREE.Mesh(new THREE.BoxGeometry(16, 0.15, 3.5), awningMat);
-    awning.position.set(cx, 4.2, cz + 8.5);
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(14, 0.15, 3.0), awningMat);
+    awning.position.set(cx, 4.2, cz + 7.5);
     this.scene.add(awning);
 
-    this.buildHUDSign('☕ CAFÉ BISTRO', cx, 4.8, cz + 7.2, 0x4e342e, 0xfff8e1);
+    this.buildHUDSign('☕ CAFÉ BISTRO', cx, 4.8, cz + 6.2, 0x4e342e, 0xfff8e1);
 
     // Mesas ao ar livre
     const tablePositions = [
-      [cx - 4, cz + 11],
-      [cx, cz + 11],
-      [cx + 4, cz + 11],
+      [cx - 4, cz + 9.5],
+      [cx, cz + 9.5],
+      [cx + 4, cz + 9.5],
     ] as [number, number][];
 
     for (const [tx, tz] of tablePositions) {
@@ -1253,10 +1289,10 @@ export class CityScene {
 
     this.colliders.push({
       type: 'box',
-      minX: cx - 8.5,
-      maxX: cx + 8.5,
-      minZ: cz - 7.5,
-      maxZ: cz + 7.5,
+      minX: cx - 7.5,
+      maxX: cx + 7.5,
+      minZ: cz - 6.5,
+      maxZ: cz + 6.5,
       name: 'Edifício do Café',
     });
 
@@ -1264,7 +1300,7 @@ export class CityScene {
       id: 'cafe',
       name: 'Café Bistro',
       type: 'building',
-      position: new THREE.Vector3(cx, 2.5, cz + 10),
+      position: new THREE.Vector3(cx, 2.5, cz + 8.5),
       observationRadius: 10,
       description: 'Cafeteria aconchegante com mesas externas e cardápio de cafés especiais.',
       semanticRule: 'Espaço de refeição e conversa. Bebidas e lanches servidos nas mesas.',
@@ -1289,6 +1325,434 @@ export class CityScene {
     this.scene.add(g);
   }
 
+  // ──────────────────── LOJA TOMPETS (BOX 04 - ALAMEDA DAS NAÇÕES) ────────────────────
+  private buildTomPetsStore(): void {
+    const sx = 25;
+    const sz = -21;
+
+    // Cores canônicas da marca TomPets / Petz
+    const royalBlue = 0x004cbf; // Azul Royal Petz (#004CBF)
+    const navyBlue = 0x0f2c59;  // Azul Marinho Profundo (#0F2C59)
+    const solarYellow = 0xffd000; // Amarelo Solar Petz (#FFD000)
+
+    const wallMat = new THREE.MeshStandardMaterial({ color: royalBlue, roughness: 0.5, metalness: 0.1 });
+    const baseMat = new THREE.MeshStandardMaterial({ color: navyBlue, roughness: 0.6 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: solarYellow, roughness: 0.4 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: navyBlue, roughness: 0.7 });
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: 0x90caf9,
+      transparent: true,
+      opacity: 0.45,
+      metalness: 0.2,
+      roughness: 0.1,
+    });
+
+    // 1. Corpo principal do Box 04 (8m de largura, 5.2m de altura, 8m de profundidade)
+    const body = new THREE.Mesh(new THREE.BoxGeometry(8, 5.2, 8), wallMat);
+    body.position.set(sx, 2.6, sz);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    this.scene.add(body);
+
+    // 2. Base de proteção em Azul Marinho
+    const baseboard = new THREE.Mesh(new THREE.BoxGeometry(8.2, 0.7, 8.2), baseMat);
+    baseboard.position.set(sx, 0.35, sz);
+    this.scene.add(baseboard);
+
+    // 3. Moldura superior e teto com borda amarela
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.4, 8.5), roofMat);
+    roof.position.set(sx, 5.3, sz);
+    this.scene.add(roof);
+
+    const roofTrim = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.12, 8.6), trimMat);
+    roofTrim.position.set(sx, 5.5, sz);
+    this.scene.add(roofTrim);
+
+    // 4. Toldo amarelo Petz sobre a calçada de entrada (Alameda das Nações)
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.15, 2.4), trimMat);
+    awning.position.set(sx, 3.8, sz + 4.8);
+    awning.rotation.x = 0.12;
+    awning.castShadow = true;
+    this.scene.add(awning);
+
+    // 5. Letreiro Principal Iluminado "🐾 TOMPETS • BOX 04"
+    this.buildTomPetsMarquee(sx, 4.4, sz + 4.05);
+
+    // 6. Vitrine panorâmica à direita da porta
+    const windowFrame = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.4, 0.2), trimMat);
+    windowFrame.position.set(sx + 1.8, 2.0, sz + 4.02);
+    this.scene.add(windowFrame);
+
+    const windowGlass = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.2, 0.05), glassMat);
+    windowGlass.position.set(sx + 1.8, 2.0, sz + 4.06);
+    this.scene.add(windowGlass);
+
+    // Luz aconchegante interna visível pela vitrine
+    const interiorWarmLight = new THREE.PointLight(0xfff3e0, 2.0, 10);
+    interiorWarmLight.position.set(sx + 1.8, 2.4, sz + 2.5);
+    this.scene.add(interiorWarmLight);
+
+    // 7. Porta de Entrada Comercial com Pórtico, Vidros Deslizantes e Puxadores em Aço Inox
+    const doorFrameMetalMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b, // Alumínio anodizado grafite escuro
+      metalness: 0.88,
+      roughness: 0.22,
+    });
+    const doorChromeMat = new THREE.MeshStandardMaterial({
+      color: 0xf1f5f9, // Aço inox escovado/cromado
+      metalness: 0.95,
+      roughness: 0.1,
+    });
+    const doorGlassMat = new THREE.MeshStandardMaterial({
+      color: 0x93c5fd, // Vidro temperado translúcido com reflexo azul
+      transparent: true,
+      opacity: 0.42,
+      roughness: 0.05,
+      metalness: 0.88,
+    });
+
+    // Batentes laterais do pórtico
+    const postGeo = new THREE.BoxGeometry(0.18, 3.2, 0.25);
+    const postLeft = new THREE.Mesh(postGeo, doorFrameMetalMat);
+    postLeft.position.set(sx - 3.2, 1.6, sz + 4.02);
+    postLeft.castShadow = true;
+    this.scene.add(postLeft);
+
+    const postRight = new THREE.Mesh(postGeo, doorFrameMetalMat);
+    postRight.position.set(sx - 0.8, 1.6, sz + 4.02);
+    postRight.castShadow = true;
+    this.scene.add(postRight);
+
+    // Verga superior em alumínio
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(2.58, 0.25, 0.25), doorFrameMetalMat);
+    lintel.position.set(sx - 2.0, 3.1, sz + 4.02);
+    this.scene.add(lintel);
+
+    const lintelTrim = new THREE.Mesh(new THREE.BoxGeometry(2.62, 0.06, 0.28), trimMat);
+    lintelTrim.position.set(sx - 2.0, 3.24, sz + 4.02);
+    this.scene.add(lintelTrim);
+
+    // Letreiro luminoso sobre a porta "🐾 ENTRADA • BOX 04"
+    const entrySignCanvas = document.createElement('canvas');
+    entrySignCanvas.width = 512;
+    entrySignCanvas.height = 140;
+    const esCtx = entrySignCanvas.getContext('2d')!;
+    esCtx.fillStyle = '#0f2c59';
+    if (typeof esCtx.roundRect === 'function') {
+      esCtx.roundRect(0, 0, 512, 140, 14);
+      esCtx.fill();
+    } else {
+      esCtx.fillRect(0, 0, 512, 140);
+    }
+    esCtx.lineWidth = 8;
+    esCtx.strokeStyle = '#ffd000';
+    esCtx.strokeRect(6, 6, 500, 128);
+    esCtx.fillStyle = '#ffd000';
+    esCtx.font = 'bold 36px sans-serif';
+    esCtx.textAlign = 'center';
+    esCtx.textBaseline = 'middle';
+    esCtx.fillText('🐾 ENTRADA • BOX 04', 256, 70);
+
+    const entrySignTex = new THREE.CanvasTexture(entrySignCanvas);
+    const entrySignMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1.6, 0.36, 0.06),
+      new THREE.MeshStandardMaterial({
+        map: entrySignTex,
+        roughness: 0.25,
+        emissive: 0x0f2c59,
+        emissiveMap: entrySignTex,
+        emissiveIntensity: 0.55,
+      })
+    );
+    entrySignMesh.position.set(sx - 2.0, 3.48, sz + 4.08);
+    this.scene.add(entrySignMesh);
+
+    // Sensor de presença automático
+    const sensorBox = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.08), doorFrameMetalMat);
+    sensorBox.position.set(sx - 2.0, 2.95, sz + 4.1);
+    this.scene.add(sensorBox);
+
+    const sensorLed = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 0.02, 0.02),
+      new THREE.MeshBasicMaterial({ color: 0x10b981 })
+    );
+    sensorLed.position.set(sx - 2.0, 2.93, sz + 4.15);
+    this.scene.add(sensorLed);
+
+    // Folhas de Vidro Deslizantes Semi-Abertas (vão livre central de 1.0m para passagem)
+    const glassGeo = new THREE.BoxGeometry(0.75, 2.8, 0.04);
+    const glassLeft = new THREE.Mesh(glassGeo, doorGlassMat);
+    glassLeft.position.set(sx - 2.7, 1.45, sz + 4.02);
+    this.scene.add(glassLeft);
+
+    const glassRight = new THREE.Mesh(glassGeo, doorGlassMat);
+    glassRight.position.set(sx - 1.3, 1.45, sz + 4.02);
+    this.scene.add(glassRight);
+
+    // Puxadores tubulares em aço inox cromado
+    const handleGeo = new THREE.CylinderGeometry(0.022, 0.022, 1.2, 16);
+    const handleL = new THREE.Mesh(handleGeo, doorChromeMat);
+    handleL.position.set(sx - 2.38, 1.4, sz + 4.08);
+    this.scene.add(handleL);
+
+    const handleR = new THREE.Mesh(handleGeo, doorChromeMat);
+    handleR.position.set(sx - 1.62, 1.4, sz + 4.08);
+    this.scene.add(handleR);
+
+    // Spot direcionado focado na calçada de entrada
+    const entranceSpot = new THREE.SpotLight(0xfffaec, 2.8, 8.0, Math.PI / 3.5, 0.35, 1.0);
+    entranceSpot.position.set(sx - 2.0, 3.8, sz + 4.6);
+    entranceSpot.target.position.set(sx - 2.0, 0, sz + 4.8);
+    this.scene.add(entranceSpot);
+    this.scene.add(entranceSpot.target);
+
+    // 8. Tapete de Boas-Vindas na calçada com moldura metálica chanfrada
+    const matBezel = new THREE.Mesh(
+      new THREE.BoxGeometry(2.36, 0.02, 1.36),
+      doorFrameMetalMat
+    );
+    matBezel.position.set(sx - 2.0, 0.022, sz + 4.8);
+    this.scene.add(matBezel);
+
+    const matCanvas = document.createElement('canvas');
+    matCanvas.width = 1024;
+    matCanvas.height = 512;
+    const matCtx = matCanvas.getContext('2d')!;
+
+    matCtx.fillStyle = '#0f2c59';
+    if (typeof matCtx.roundRect === 'function') {
+      matCtx.roundRect(0, 0, 1024, 512, 28);
+      matCtx.fill();
+    } else {
+      matCtx.fillRect(0, 0, 1024, 512);
+    }
+
+    // Ranhuras antiderrapantes
+    matCtx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    matCtx.lineWidth = 4;
+    for (let y = 16; y < 512; y += 14) {
+      matCtx.beginPath();
+      matCtx.moveTo(16, y);
+      matCtx.lineTo(1008, y);
+      matCtx.stroke();
+    }
+
+    matCtx.lineWidth = 18;
+    matCtx.strokeStyle = '#ffd000';
+    matCtx.strokeRect(14, 14, 996, 484);
+
+    matCtx.lineWidth = 4;
+    matCtx.strokeStyle = '#ffffff';
+    matCtx.strokeRect(28, 28, 968, 456);
+
+    matCtx.fillStyle = '#ffffff';
+    matCtx.font = 'bold 54px sans-serif';
+    matCtx.textAlign = 'center';
+    matCtx.textBaseline = 'middle';
+    matCtx.fillText('🐾 BEM-VINDO À TOMPETS', 512, 110);
+
+    matCtx.fillStyle = '#ffd000';
+    matCtx.font = '900 64px sans-serif';
+    matCtx.fillText('BOX 04 • PET SHOP OFICIAL', 512, 255);
+
+    matCtx.fillStyle = '#38bdf8';
+    matCtx.font = 'bold 36px sans-serif';
+    matCtx.fillText('ALAMEDA DAS NAÇÕES • ENTRE PARA CONHECER', 512, 390);
+
+    const matTex = new THREE.CanvasTexture(matCanvas);
+    const welcomeMat = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.3, 1.3),
+      new THREE.MeshStandardMaterial({
+        map: matTex,
+        roughness: 0.65,
+        emissive: 0x0f2c59,
+        emissiveMap: matTex,
+        emissiveIntensity: 0.25,
+      })
+    );
+    welcomeMat.rotation.x = -Math.PI / 2;
+    welcomeMat.position.set(sx - 2.0, 0.038, sz + 4.8);
+    welcomeMat.receiveShadow = true;
+    this.scene.add(welcomeMat);
+
+    // 9. Colliders físicos (paredes do Box 04, permitindo passagem pelo vão da porta em x = 23)
+    this.colliders.push({
+      type: 'box',
+      minX: sx - 4.1,
+      maxX: sx + 4.1,
+      minZ: sz - 4.1,
+      maxZ: sz - 3.8,
+      name: 'TomPets Parede Posterior',
+    });
+    this.colliders.push({
+      type: 'box',
+      minX: sx - 4.1,
+      maxX: sx - 3.8,
+      minZ: sz - 4.0,
+      maxZ: sz + 4.1,
+      name: 'TomPets Parede Lateral Esquerda',
+    });
+    this.colliders.push({
+      type: 'box',
+      minX: sx + 3.8,
+      maxX: sx + 4.1,
+      minZ: sz - 4.0,
+      maxZ: sz + 4.1,
+      name: 'TomPets Parede Lateral Direita',
+    });
+    this.colliders.push({
+      type: 'box',
+      minX: sx - 0.7,
+      maxX: sx + 4.1,
+      minZ: sz + 3.8,
+      maxZ: sz + 4.1,
+      name: 'TomPets Vitrine Frontal',
+    });
+    this.colliders.push({
+      type: 'box',
+      minX: sx - 4.1,
+      maxX: sx - 3.3,
+      minZ: sz + 3.8,
+      maxZ: sz + 4.1,
+      name: 'TomPets Pilar Esquerdo',
+    });
+
+    // 10. Objeto Interativo de Percepção Urbana
+    this.interactiveObjects.push({
+      id: 'store-tompets',
+      name: 'TomPets Pet Shop (Box 04)',
+      type: 'building',
+      position: new THREE.Vector3(sx - 2.0, 1.5, sz + 4.5),
+      observationRadius: 5.0,
+      description: 'Pet Shop oficial TomPets. Alameda das Nações, Box 04. Alimentos Super Premium, acessórios e itens semi-novos revisados.',
+      semanticRule: 'Loja e marketplace. Entre pela porta para ver prateleiras de produtos, preços e falar com o vendedor Tom.',
+      emotionalWeight: 0.9,
+    });
+  }
+
+  private buildTomPetsMarquee(x: number, y: number, z: number): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+
+    // Fundo Azul Petz com cantos arredondados
+    ctx.fillStyle = '#004cbf';
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(0, 0, 1024, 256, 32);
+      ctx.fill();
+    } else {
+      ctx.fillRect(0, 0, 1024, 256);
+    }
+
+    // Borda Amarela Petz
+    ctx.lineWidth = 18;
+    ctx.strokeStyle = '#ffd000';
+    ctx.strokeRect(10, 10, 1004, 236);
+
+    // Medalhão circular placeholder para a logomarca do Tom
+    if (typeof ctx.save === 'function') ctx.save();
+    if (typeof ctx.beginPath === 'function') ctx.beginPath();
+    if (typeof ctx.arc === 'function') ctx.arc(145, 128, 80, 0, Math.PI * 2);
+    ctx.fillStyle = '#0f2c59';
+    if (typeof ctx.fill === 'function') ctx.fill();
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#ffd000';
+    if (typeof ctx.stroke === 'function') ctx.stroke();
+    if (typeof ctx.restore === 'function') ctx.restore();
+
+    // Texto de destaque
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 74px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('TOMPETS', 590, 85);
+
+    // Subtítulo do Box
+    ctx.fillStyle = '#ffd000';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillText('BOX 04 • ALAMEDA DAS NAÇÕES • MASCOTE: TOM', 590, 168);
+
+    const tex = new THREE.CanvasTexture(canvas);
+
+    if (typeof Image !== 'undefined') {
+      try {
+        const tomImg = new Image();
+        tomImg.crossOrigin = 'anonymous';
+        tomImg.onload = () => {
+          if (typeof ctx.save === 'function') ctx.save();
+          if (typeof ctx.beginPath === 'function') ctx.beginPath();
+          if (typeof ctx.arc === 'function') ctx.arc(145, 128, 76, 0, Math.PI * 2);
+          if (typeof ctx.closePath === 'function') ctx.closePath();
+          if (typeof ctx.clip === 'function') ctx.clip();
+          if (typeof ctx.drawImage === 'function') ctx.drawImage(tomImg, 69, 52, 152, 152);
+          if (typeof ctx.restore === 'function') ctx.restore();
+
+          ctx.lineWidth = 8;
+          ctx.strokeStyle = '#ffd000';
+          if (typeof ctx.beginPath === 'function') ctx.beginPath();
+          if (typeof ctx.arc === 'function') ctx.arc(145, 128, 76, 0, Math.PI * 2);
+          if (typeof ctx.stroke === 'function') ctx.stroke();
+
+          tex.needsUpdate = true;
+        };
+        tomImg.src = '/tom-logo.jpg';
+      } catch {
+        // Fallback gracioso
+      }
+    }
+
+    const marquee = new THREE.Mesh(
+      new THREE.BoxGeometry(5.2, 1.25, 0.12),
+      new THREE.MeshStandardMaterial({
+        map: tex,
+        emissive: 0x002d72,
+        emissiveIntensity: 0.35,
+        roughness: 0.3,
+      })
+    );
+    marquee.position.set(x, y, z);
+    this.scene.add(marquee);
+
+    // Medalhão 3D em relevo do Tom na fachada externa
+    const exteriorTomLogo = new THREE.Group();
+    exteriorTomLogo.position.set(x - 1.85, y, z + 0.08);
+
+    const goldBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.44, 0.44, 0.03, 32),
+      new THREE.MeshStandardMaterial({ color: 0xffd000, metalness: 0.85, roughness: 0.2 })
+    );
+    goldBase.rotation.x = Math.PI / 2;
+    exteriorTomLogo.add(goldBase);
+
+    // Foto do Tom
+    let tomTex: THREE.Texture = tex;
+    if (typeof window !== 'undefined' && typeof Image !== 'undefined') {
+      try {
+        const loader = new THREE.TextureLoader();
+        tomTex = loader.load('/tom-logo.jpg');
+        tomTex.colorSpace = THREE.SRGBColorSpace;
+      } catch {
+        // fallback
+      }
+    }
+    const faceCircle = new THREE.Mesh(
+      new THREE.CircleGeometry(0.41, 32),
+      new THREE.MeshStandardMaterial({ map: tomTex, roughness: 0.3 })
+    );
+    faceCircle.position.set(0, 0, 0.02);
+    exteriorTomLogo.add(faceCircle);
+
+    const goldRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.42, 0.025, 16, 32),
+      new THREE.MeshStandardMaterial({ color: 0xffd000, metalness: 0.95, roughness: 0.15 })
+    );
+    goldRing.position.set(0, 0, 0.025);
+    exteriorTomLogo.add(goldRing);
+
+    this.scene.add(exteriorTomLogo);
+  }
+
   // ──────────────────── SIGNS & NO LITTERING ────────────────────
   private buildSigns(): void {
     // Placa "ATENÇÃO: PROIBIDO JOGAR LIXO" na entrada da praça
@@ -1299,6 +1763,7 @@ export class CityScene {
     this.buildStreetSign(8.8, 14.5, 'AVENIDA CENTRAL', 'Sentido Sul • Bairro Centro', 0);
     this.buildStreetSign(-14.5, 8.8, 'RUA TRANSVERSAL', 'Sentido Oeste • Bairro Centro', Math.PI / 2);
     this.buildStreetSign(14.5, -8.8, 'RUA TRANSVERSAL', 'Sentido Leste • Bairro Centro', Math.PI / 2);
+    this.buildStreetSign(20.5, -14.5, 'ALAMEDA DAS NAÇÕES', 'Box 01 a 12 • TomPets Box 04', 0);
 
     // Billboards educativos na cidade
     this.buildBillboard(-36, 4, -18, '#1565c0', 'Cidade Conectada\nIAs em Harmonia', '🌐');
@@ -2100,4 +2565,123 @@ export class CityScene {
       this.streetLights.forEach((l) => (l.intensity = 3.0));
     }
   }
+
+  // ──────────────────── SISTEMA DE ROTA E NAVEGAÇÃO ATÉ LOJAS (TASK-045) ────────────────────
+  public setNavigationTarget(
+    target: { x: number; z: number; name: string } | null,
+    startPos?: { x: number; z: number }
+  ): void {
+    this.activeNavigationTarget = target;
+    // Limpa objetos anteriores do grupo de navegação
+    while (this.navigationGroup.children.length > 0) {
+      const child = this.navigationGroup.children[0];
+      this.navigationGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry?.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach((m) => m.dispose());
+        } else {
+          child.material?.dispose();
+        }
+      }
+    }
+    this.navigationBeacon = null;
+
+    if (!target) return;
+
+    const start = startPos || { x: 8.5, z: 12.0 };
+    const waypoints = this.calculateSidewalkRoute(start, target);
+
+    // 1. Linha luminosa no chão ligando os waypoints
+    const points = waypoints.map((p) => new THREE.Vector3(p.x, 0.24, p.z));
+    const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x00e5ff,
+      linewidth: 3,
+    });
+    const routeLine = new THREE.Line(lineGeo, lineMat);
+    this.navigationGroup.add(routeLine);
+
+    // 2. Discos pulsantes em cada waypoint ao longo das calçadas
+    const ringGeo = new THREE.RingGeometry(0.35, 0.65, 24);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffd000,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+    });
+
+    waypoints.forEach((wp) => {
+      const disc = new THREE.Mesh(ringGeo, ringMat);
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.set(wp.x, 0.23, wp.z);
+      this.navigationGroup.add(disc);
+
+      // Pequeno pilar de luz suave
+      const beamGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.8, 8);
+      const beamMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.6 });
+      const beam = new THREE.Mesh(beamGeo, beamMat);
+      beam.position.set(wp.x, 0.65, wp.z);
+      this.navigationGroup.add(beam);
+    });
+
+    // 3. Beacon flutuante 3D sobre o ponto de destino da loja
+    const beaconGeo = new THREE.OctahedronGeometry(0.7, 0);
+    const beaconMat = new THREE.MeshStandardMaterial({
+      color: 0xffd000,
+      emissive: 0xff9900,
+      emissiveIntensity: 0.8,
+      metalness: 0.3,
+      roughness: 0.2,
+    });
+    this.navigationBeacon = new THREE.Mesh(beaconGeo, beaconMat);
+    this.navigationBeacon.position.set(target.x, 4.2, target.z);
+    this.navigationGroup.add(this.navigationBeacon);
+  }
+
+  public calculateSidewalkRoute(
+    start: { x: number; z: number },
+    target: { x: number; z: number }
+  ): { x: number; z: number }[] {
+    return calculateSidewalkRoute(start, target);
+  }
+
+  public updateNavigation(delta: number, _playerPos?: { x: number; z: number }): void {
+    if (!this.navigationBeacon) return;
+    this.navigationTime += delta;
+    // Rotação contínua e oscilação vertical suave do beacon
+    this.navigationBeacon.rotation.y += delta * 2.0;
+    this.navigationBeacon.position.y = 4.2 + Math.sin(this.navigationTime * 3) * 0.25;
+  }
 }
+
+/**
+ * Calcula rota pelas calçadas para pedestres até a entrada do Box comercial.
+ */
+export function calculateSidewalkRoute(
+  start: { x: number; z: number },
+  target: { x: number; z: number }
+): { x: number; z: number }[] {
+  const route: { x: number; z: number }[] = [];
+  route.push({ x: start.x, z: start.z });
+
+  // Se o avatar estiver ao sul do cruzamento (z > 0):
+  if (start.z > 2) {
+    // 1. Move-se na calçada leste em direção ao cruzamento
+    route.push({ x: 8.8, z: Math.max(start.z - 2, 4) });
+    route.push({ x: 8.8, z: 0 }); // Próximo à faixa de pedestres leste
+  }
+
+  // 2. Atravessa ou contorna em direção ao quadrante nordeste
+  route.push({ x: 8.8, z: -9.5 });
+
+  // 3. Entra na calçada da Alameda das Nações no quadrante leste
+  route.push({ x: 15.0, z: -13.5 });
+  route.push({ x: 20.0, z: -15.5 });
+
+  // 4. Chega em frente à porta da loja
+  route.push({ x: target.x, z: target.z });
+
+  return route;
+}
+

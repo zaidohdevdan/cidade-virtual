@@ -345,6 +345,8 @@ export class CognitionService {
     backstorySeed: string;
     activeGoals: string[];
     playerMessage: string;
+    /** Situação espontânea (ex.: saudação) que substitui a pergunta do jogador no prompt. */
+    situation?: string;
     trafficLight: 'green' | 'yellow' | 'red';
     relevantMemories?: MemorySnippet[];
   }): Promise<string | null> {
@@ -358,7 +360,7 @@ export class CognitionService {
         try {
           memories = await this.memoryService.semanticQuery({
             citizenId: params.citizenId,
-            queryText: params.playerMessage,
+            queryText: params.situation ?? params.playerMessage,
             topK: 3,
           });
         } catch {
@@ -383,7 +385,9 @@ Diretrizes Estritas:
 3. Seja conciso (máximo 2 a 3 frases envolventes), mantendo tom expressivo e caloroso.
 4. Jamais quebre a imersão de habitante vivo da cidade virtual.`;
 
-      const userPrompt = `Daniel aproximou-se e perguntou: "${params.playerMessage}". Como você responde a ele?`;
+      const userPrompt =
+        params.situation ??
+        `Daniel aproximou-se e perguntou: "${params.playerMessage}". Como você responde a ele?`;
 
       const response = await this.llmAdapter.complete({
         systemPrompt,

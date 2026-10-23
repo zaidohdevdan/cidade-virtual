@@ -86,10 +86,10 @@ describe('Task-025 — Contrato Principal + AgentAction API e RBAC', () => {
   describe('2. RBAC e Rejeição Auditável de Recursos Não Autorizados (Critério de Aceite 1)', () => {
     it('deve rejeitar tentativa de controle de semáforo por NPC ou cidadão com motivo auditável', async () => {
       const npcPrincipal = createPrincipal({
-        id: 'agent-vega',
+        id: 'agent-sulafat',
         type: 'npc',
         roles: ['citizen'],
-        agentId: 'agent-vega',
+        agentId: 'agent-sulafat',
       });
 
       const request: ActionRequest = {
@@ -104,7 +104,7 @@ describe('Task-025 — Contrato Principal + AgentAction API e RBAC', () => {
       expect(result.reasonCode).toBe('PERMISSION_DENIED');
       expect(result.error).toContain("Requer a permissão 'world:control'");
       expect(result.actionType).toBe('traffic_control');
-      expect(result.principalId).toBe('agent-vega');
+      expect(result.principalId).toBe('agent-sulafat');
     });
 
     it('deve permitir controle de semáforo quando executado por Principal com papel admin', async () => {
@@ -144,7 +144,7 @@ describe('Task-025 — Contrato Principal + AgentAction API e RBAC', () => {
         switchToHttp: () => ({
           getRequest: () => ({
             principal: createPrincipal({
-              id: 'agent-chason',
+              id: 'agent-sulafat',
               type: 'npc',
               roles: ['citizen'],
             }),
@@ -159,10 +159,10 @@ describe('Task-025 — Contrato Principal + AgentAction API e RBAC', () => {
   describe('3. Execução Unificada da Ação Move via HTTP REST e Socket.IO (Critério de Aceite 2)', () => {
     it('deve executar a ação move com sucesso via HTTP REST (ActionsController)', async () => {
       const citizenPrincipal = createPrincipal({
-        id: 'agent-sheliak',
+        id: 'agent-sulafat',
         type: 'npc',
         roles: ['citizen'],
-        agentId: 'agent-sheliak',
+        agentId: 'agent-sulafat',
       });
 
       const restResult = await actionsController.execute(
@@ -177,16 +177,16 @@ describe('Task-025 — Contrato Principal + AgentAction API e RBAC', () => {
 
       expect(restResult.success).toBe(true);
       expect(restResult.actionType).toBe('move');
-      expect(restResult.principalId).toBe('agent-sheliak');
+      expect(restResult.principalId).toBe('agent-sulafat');
       expect(restResult.data).toEqual({ position: { x: 5, y: 0.19, z: -10 } });
     });
 
     it('deve executar a ação move com sucesso via Socket.IO Gateway (WorldGateway)', async () => {
       const mockSocket = {
-        id: 'socket_sheliak_123',
+        id: 'socket_sulafat_123',
         data: {
           user: {
-            userId: 'agent-sheliak',
+            userId: 'agent-sulafat',
             role: 'citizen',
           },
         },
@@ -202,7 +202,7 @@ describe('Task-025 — Contrato Principal + AgentAction API e RBAC', () => {
 
       expect(socketResult.success).toBe(true);
       expect(socketResult.actionType).toBe('move');
-      expect(socketResult.principalId).toBe('agent-sheliak');
+      expect(socketResult.principalId).toBe('agent-sulafat');
       expect(socketResult.data).toEqual({ position: { x: 5.5, y: 0.19, z: -10.5 } });
 
       // Garante que o gateway respondeu ao cliente via evento socket
@@ -214,7 +214,7 @@ describe('Task-025 — Contrato Principal + AgentAction API e RBAC', () => {
 
     it('deve rejeitar movimento com colisão física server-side em ambos os canais', async () => {
       const citizenPrincipal = createPrincipal({
-        id: 'agent-vega',
+        id: 'agent-sulafat',
         type: 'npc',
         roles: ['citizen'],
       });
@@ -235,7 +235,7 @@ describe('Task-025 — Contrato Principal + AgentAction API e RBAC', () => {
 
   describe('4. Interoperabilidade com o Grafo Cognitivo (CognitiveCycleManager)', () => {
     it('deve emitir ActionRequest assinado pelo Principal e executar via AgentAction API', async () => {
-      const agentId = 'agent-epsilon' as CitizenId;
+      const agentId = 'agent-sulafat' as CitizenId;
       const observation = 'Avenida limpa e semáforo aberto para travessia';
 
       // 1. Deliberação cognitiva gera ActionRequest canônico

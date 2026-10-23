@@ -58,7 +58,7 @@ describe('Task-020 (DoD Marco M0) — Prova E2E do Fluxo de Aprendizagem em 7 Pa
     // PASSO 1: Habitante recebe identidade persistente (Postgres)
     // ══════════════════════════════════════════════════════════════════
     const citizen = await citizensService.create({
-      name: 'Vega (Lyra Alpha)',
+      name: 'Sulafat (Lyra Gamma)',
       archetype: 'citizen',
       initialPosition: { lat: 8.5, lng: 12.0, altitude: 0 },
       initialEmotion: 'curious',
@@ -68,7 +68,7 @@ describe('Task-020 (DoD Marco M0) — Prova E2E do Fluxo de Aprendizagem em 7 Pa
     expect(citizen.id).toBeDefined();
     const persistedIdentity = await agentRepo.getById(citizen.id);
     expect(persistedIdentity).not.toBeNull();
-    expect(persistedIdentity?.name).toBe('Vega (Lyra Alpha)');
+    expect(persistedIdentity?.name).toBe('Sulafat (Lyra Gamma)');
 
     // ══════════════════════════════════════════════════════════════════
     // PASSO 2: Observa um acontecimento no cenário (Cruzamento / Semáforo)

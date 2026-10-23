@@ -29,3 +29,7 @@ Thumbs.db
 # Media
 *.mp4
 *.webm
+public/*.jpg
+public/*.png
+
+*:Zone.Identifier

@@ -3,8 +3,10 @@ import {
   Controller,
   Post,
   Get,
+  Put,
   Headers,
   UnauthorizedException,
+  BadRequestException,
   Body,
   HttpCode,
   HttpStatus,
@@ -13,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import type { AuthPrincipal } from './auth.types';
+import type { UserProfileRow } from '@cidade-virtual/persistence';
 
 @Controller('auth')
 export class AuthController {
@@ -27,8 +30,19 @@ export class AuthController {
    */
   @Post('guest-token')
   @HttpCode(HttpStatus.OK)
-  createGuestToken(): { token: string; user: AuthPrincipal } {
+  createGuestToken(@Body() _body?: Record<string, unknown>): { token: string; user: AuthPrincipal } {
     return this.authService.createGuestToken();
+  }
+
+  /**
+   * Endpoint público para o frontend obter o Google Client ID configurado na aplicação.
+   */
+  @Get('config')
+  @HttpCode(HttpStatus.OK)
+  getAuthConfig(): { googleClientId: string } {
+    return {
+      googleClientId: this.authService.getGoogleClientId(),
+    };
   }
 
   /**
@@ -44,10 +58,55 @@ export class AuthController {
   }
 
   /**
+   * Endpoint de login via Google OIDC (Task-043).
+   * Recebe o idToken fornecido pelo Google Sign-In / One Tap no frontend.
+   */
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  async loginWithGoogle(@Body() body: { idToken?: string }): Promise<{
+    token: string;
+    user: AuthPrincipal;
+    profile: UserProfileRow;
+  }> {
+    if (!body?.idToken) {
+      throw new BadRequestException('O campo idToken é obrigatório');
+    }
+    return this.authService.loginWithGoogle(body.idToken);
+  }
+
+  /**
    * Retorna os dados do Principal autenticado via cabeçalho Authorization.
    */
   @Get('me')
   getMe(@Headers('authorization') authHeader?: string): AuthPrincipal {
+    return this.extractAuthenticatedPrincipal(authHeader);
+  }
+
+  /**
+   * Retorna o perfil completo do usuário autenticado incluindo preferências e avatarConfig (Task-043).
+   */
+  @Get('profile')
+  async getProfile(@Headers('authorization') authHeader?: string): Promise<UserProfileRow> {
+    const principal = this.extractAuthenticatedPrincipal(authHeader);
+    return this.authService.getUserProfile(principal.userId);
+  }
+
+  /**
+   * Atualiza a configuração do avatar do usuário autenticado de forma persistente (Task-043).
+   */
+  @Put('profile/avatar')
+  async updateAvatar(
+    @Headers('authorization') authHeader?: string,
+    @Body() body?: { avatarConfig?: unknown },
+  ): Promise<UserProfileRow> {
+    const principal = this.extractAuthenticatedPrincipal(authHeader);
+    if (!body || body.avatarConfig === undefined) {
+      throw new BadRequestException('O campo avatarConfig é obrigatório');
+    }
+    return this.authService.updateAvatarConfig(principal.userId, body.avatarConfig);
+  }
+
+  private extractAuthenticatedPrincipal(authHeader?: string): AuthPrincipal {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new UnauthorizedException('Cabeçalho Authorization com formato Bearer obrigatório');
     }

@@ -5,6 +5,7 @@ import {
   AgentIdentityRepository,
   ExperienceRepository,
   AgentMindRepository,
+  MarketplaceRepository,
 } from '@cidade-virtual/persistence';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
@@ -46,6 +47,13 @@ export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
       },
       inject: [DATABASE_CONNECTION],
     },
+    {
+      provide: MarketplaceRepository,
+      useFactory: (conn: ReturnType<typeof createDatabaseConnection>) => {
+        return new MarketplaceRepository(conn.db);
+      },
+      inject: [DATABASE_CONNECTION],
+    },
   ],
   exports: [
     DATABASE_CONNECTION,
@@ -53,6 +61,7 @@ export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
     AgentIdentityRepository,
     ExperienceRepository,
     AgentMindRepository,
+    MarketplaceRepository,
   ],
 })
 export class PersistenceModule implements OnModuleDestroy {

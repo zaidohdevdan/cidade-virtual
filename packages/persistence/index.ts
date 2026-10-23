@@ -10,3 +10,4 @@ export * from './src/repositories/world-state.repository';
 export * from './src/repositories/agent-identity.repository';
 export * from './src/repositories/experience.repository';
 export * from './src/repositories/agent-mind.repository';
+export * from './src/repositories/marketplace.repository';

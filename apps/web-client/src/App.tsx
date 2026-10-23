@@ -5,29 +5,70 @@ import * as THREE from 'three';
 import { io, Socket } from 'socket.io-client';
 
 import { CityScene, TrafficLightState, type InteractiveObject } from './scenes/city-scene';
+import { TomPetsInteriorScene, InteriorProductData } from './scenes/tompets-interior';
 import { DanielAvatar } from './avatars/daniel-avatar';
 import { AgentAvatar, CITY_AGENTS, type LearnedDirectiveClient } from './avatars/agent-avatar';
 import { VehicleAgent, CITY_VEHICLES } from './vehicles/vehicle-agent';
 import { City } from './components/City';
+import { TomPetsInterior } from './components/TomPetsInterior';
 import { Player } from './components/Player';
 import { Agents } from './components/Agents';
 import { Vehicles } from './components/Vehicles';
 import { CameraController } from './components/CameraController';
 import { HUD } from './components/HUD';
 import { DialogueModal, DialogueMessage } from './components/DialogueModal';
+import { AvatarCustomizerModal } from './components/AvatarCustomizerModal';
+import { WelcomeLoginModal } from './components/WelcomeLoginModal';
+import { ProductDetailModal } from './components/ProductDetailModal';
 import { cityStore, useCityStore } from './store/city-store';
+import { fetchGuestToken } from './services/api';
+import type { AvatarCustomizationConfig } from './avatars/daniel-avatar';
 
 export const App: React.FC = () => {
   // Modelos e simulações urbanas instanciados de forma estável
   const city = useMemo(() => new CityScene(), []);
+  const tompetsInterior = useMemo(() => new TomPetsInteriorScene(), []);
   const player = useMemo(() => new DanielAvatar(), []);
   const agents = useMemo(() => CITY_AGENTS.map((cfg) => new AgentAvatar(cfg)), []);
   const vehicles = useMemo(() => CITY_VEHICLES.map((cfg) => new VehicleAgent(cfg)), []);
+
+  // Estados de localização e navegação comercial (Task-045 e Task-046)
+  const [currentLocation, setCurrentLocation] = useState<'city' | 'store-tompets'>('city');
+  const [activeNavigationStore, setActiveNavigationStore] = useState<{ id: string; name: string; slug: string; addressBox: string } | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<InteriorProductData | null>(null);
+  const [isProductModalOpen, setIsProductModalOpen] = useState<boolean>(false);
 
   // Estados locais do shell da aplicação
   const [isSnapshotOpen, setIsSnapshotOpen] = useState<boolean>(false);
   const [snapshotData, setSnapshotData] = useState<unknown>(null);
   const socketRef = useRef<Socket | null>(null);
+
+  // Estados de autenticação e customização de avatar (Task-043 + Task-049)
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const savedToken = localStorage.getItem('synapse_city_auth_token');
+    const guestEntered = sessionStorage.getItem('synapse_city_guest_entered');
+    return !savedToken && !guestEntered;
+  });
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState<boolean>(false);
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('synapse_city_auth_token');
+  });
+  const [currentUser, setCurrentUser] = useState<{ displayName?: string; email?: string } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = localStorage.getItem('synapse_city_user_profile');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // Ignora erro
+    }
+    return null;
+  });
+  const [isGuest, setIsGuest] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return sessionStorage.getItem('synapse_city_guest_entered') === 'true';
+  });
 
   // Estados do sistema conversacional e de proximidade (Task-026 + Diálogo Bidirecional)
   const [isDialogueOpen, setIsDialogueOpen] = useState<boolean>(false);
@@ -42,9 +83,130 @@ export const App: React.FC = () => {
   const isFirstPerson = useCityStore((s) => s.isFirstPerson);
   const cameraAngleY = useCityStore((s) => s.cameraAngleY);
 
-  // Monitora proximidade física entre o avatar Daniel e os habitantes autônomos (raio ≤ 3.5m)
+  // Restaura preferências salvas de avatar do usuário autenticado (Task-043 + Task-049)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const savedProfile = localStorage.getItem('synapse_city_user_profile');
+      if (savedProfile) {
+        const parsed = JSON.parse(savedProfile);
+        if (parsed.avatarConfig) {
+          player.applyConfig(parsed.avatarConfig);
+        }
+      }
+    } catch {
+      // Ignora erro
+    }
+  }, [player]);
+
+  const handleLoginSuccess = useCallback(
+    (data: {
+      token: string;
+      profile: {
+        id?: string;
+        displayName?: string;
+        email?: string;
+        avatarConfig?: AvatarCustomizationConfig;
+      };
+      isGuest: boolean;
+    }) => {
+      setAuthToken(data.token);
+      setCurrentUser({
+        displayName: data.profile.displayName,
+        email: data.profile.email,
+      });
+      setIsGuest(data.isGuest);
+
+      if (data.isGuest) {
+        sessionStorage.setItem('synapse_city_guest_entered', 'true');
+      } else {
+        localStorage.setItem('synapse_city_auth_token', data.token);
+        localStorage.setItem('synapse_city_user_profile', JSON.stringify(data.profile));
+      }
+
+      if (data.profile.avatarConfig) {
+        player.applyConfig(data.profile.avatarConfig);
+      }
+
+      setIsLoginModalOpen(false);
+    },
+    [player],
+  );
+
+  // Detecção de link compartilhável da loja via URL (?store=tompets ou /loja/tompets - Task-045)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const storeParam = params.get('store') || (window.location.hash.includes('tompets') ? 'tompets' : null);
+
+    if (storeParam === 'tompets') {
+      const tompetsStore = {
+        id: 'store-tompets',
+        name: 'TomPets',
+        slug: 'tompets',
+        addressBox: 'Alameda das Nações, Box 04',
+      };
+      setActiveNavigationStore(tompetsStore);
+      city.setNavigationTarget({ x: 23.5, z: -17.0, name: 'TomPets (Box 04)' }, player.position);
+    }
+  }, [city, player]);
+
+  const lastLocationChangeRef = useRef<number>(0);
+
+  // Transição física suave de entrada/saída pela porta da loja sem recarregar a página (Task-046)
   useEffect(() => {
     const interval = setInterval(() => {
+      const now = Date.now();
+      // Debounce de segurança de 2.0s para impedir re-trigger ou loops imediatos
+      if (now - lastLocationChangeRef.current < 2000) return;
+
+      if (currentLocation === 'city') {
+        // Proximidade com a porta do Box 04 TomPets (x: 23.5, z: -17.0)
+        const dx = player.position.x - 23.5;
+        const dz = player.position.z - (-17.0);
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 1.3) {
+          lastLocationChangeRef.current = now;
+          setCurrentLocation('store-tompets');
+          city.setNavigationTarget(null);
+          setActiveNavigationStore(null);
+          player.teleport(0, 0.22, 2.6, Math.PI);
+        }
+      } else if (currentLocation === 'store-tompets') {
+        // Proximidade com a porta de saída da loja (x entre -1.6 e 1.6, z >= 4.0)
+        const inDoorwayX = Math.abs(player.position.x) <= 1.6;
+        if (inDoorwayX && player.position.z >= 4.0) {
+          lastLocationChangeRef.current = now;
+          setCurrentLocation('city');
+          // Teleporta para a calçada da cidade fora do raio de re-entrada (z = -14.2)
+          player.teleport(23.5, 0.22, -14.2, 0);
+        }
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [currentLocation, city, player]);
+
+  // Monitora proximidade física entre o avatar Daniel e os habitantes autônomos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (currentLocation === 'store-tompets') {
+        // Dentro da loja, o vendedor Tom fica no balcão central de atendimento em x = 0, z = -6.2
+        const dx = player.position.x - 0.0;
+        const dz = player.position.z - (-6.2);
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist <= 3.8) {
+          setNearbyAgent({
+            id: 'agent-tom',
+            name: 'Tom',
+            role: 'Vendedor Especialista em Nutrição e Cuidados Pet',
+          });
+        } else {
+          setNearbyAgent(null);
+        }
+        return;
+      }
+
       let closest: AgentAvatar | null = null;
       let minDistance = 3.5;
 
@@ -70,7 +232,7 @@ export const App: React.FC = () => {
     }, 120);
 
     return () => clearInterval(interval);
-  }, [agents, player]);
+  }, [agents, player, currentLocation]);
 
   // Transmite periodicamente a posição física autoritativa do avatar Daniel para o servidor via Socket.IO
   useEffect(() => {
@@ -382,9 +544,97 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isDialogueOpen, nearbyAgent, handleOpenDialogueForNearbyAgent]);
 
-  // Envio de mensagem bidirecional de Daniel para o habitante autônomo
+  // Ações de navegação, marketplace e loja (Task-045 & Task-046)
+  const handleNavigateToStore = useCallback((storeSlug: string) => {
+    if (storeSlug === 'tompets') {
+      const tompetsStore = {
+        id: 'store-tompets',
+        name: 'TomPets',
+        slug: 'tompets',
+        addressBox: 'Alameda das Nações, Box 04',
+      };
+      setActiveNavigationStore(tompetsStore);
+      city.setNavigationTarget({ x: 23.5, z: -17.0, name: 'TomPets (Box 04)' }, player.position);
+    }
+  }, [city, player]);
+
+  const handleTeleportToStore = useCallback((storeSlug: string) => {
+    if (storeSlug === 'tompets') {
+      lastLocationChangeRef.current = Date.now();
+      setCurrentLocation('store-tompets');
+      city.setNavigationTarget(null);
+      setActiveNavigationStore(null);
+      player.teleport(0, 0.22, 2.6, Math.PI);
+    }
+  }, [city, player]);
+
+  const handleCancelNavigation = useCallback(() => {
+    setActiveNavigationStore(null);
+    city.setNavigationTarget(null);
+  }, [city]);
+
+  const handleEnterStore = useCallback(() => {
+    lastLocationChangeRef.current = Date.now();
+    setCurrentLocation('store-tompets');
+    city.setNavigationTarget(null);
+    setActiveNavigationStore(null);
+    player.teleport(0, 0.22, 2.6, Math.PI);
+  }, [city, player]);
+
+  const handleExitStore = useCallback(() => {
+    lastLocationChangeRef.current = Date.now();
+    setCurrentLocation('city');
+    player.teleport(23.5, 0.22, -14.2, 0);
+  }, [player]);
+
+  const handleSelectProduct = useCallback((prod: InteriorProductData) => {
+    setSelectedProduct(prod);
+    setIsProductModalOpen(true);
+  }, []);
+
+  const handleTalkToTom = useCallback(() => {
+    const tomAgent = new AgentAvatar({
+      id: 'agent-tom',
+      name: 'Tom',
+      starDesignation: 'TomPets Box 04',
+      role: 'Vendedor Especialista em Nutrição e Cuidados Pet',
+      color: 0x004cbf,
+      accentColor: 0xffd000,
+      hairColor: 0x212121,
+      hairStyle: 'short',
+      skinColor: 0xd79a6b,
+      pantsColor: 0x0f2c59,
+      shoeColor: 0x111111,
+      accessory: 'smartwatch',
+      labelColor: 'linear-gradient(135deg, rgba(0, 76, 191, 0.95), rgba(15, 44, 89, 0.95))',
+      startPosition: new THREE.Vector3(3.2, 0, -3.5),
+      patrolPoints: [new THREE.Vector3(3.2, 0, -3.5)],
+    });
+    setActiveDialogueAgent(tomAgent);
+    setIsDialogueOpen(true);
+    setDialogueMessages([
+      {
+        id: `greet-${Date.now()}`,
+        sender: 'agent',
+        senderName: 'Tom',
+        text: 'Olá! Seja muito bem-vindo à TomPets! Sou o vendedor virtual especialista em nutrição e cuidados pet. Como posso ajudar seu melhor amigo hoje?',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+  }, []);
+
+  const handleAskAgentTom = useCallback((prod: InteriorProductData) => {
+    setIsProductModalOpen(false);
+    handleTalkToTom();
+  }, [handleTalkToTom]);
+
+  const handleCheckout = useCallback((prod: InteriorProductData) => {
+    alert(`[Task-048 Checkout Sandbox] Pedido iniciado para "${prod.name}" (${prod.condition === 'used' ? 'Semi-novo' : 'Novo'}) — Total: R$ ${(prod.priceCents / 100).toFixed(2)} via Mercado Pago.`);
+  }, []);
+
+  // Envio de mensagem bidirecional de Daniel para o habitante autônomo ou vendedor Tom (RAG Grounding)
   const handleSendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, focusedProductId?: string) => {
       if (!activeDialogueAgent) return;
 
       const playerMsg: DialogueMessage = {
@@ -401,6 +651,39 @@ export const App: React.FC = () => {
 
       const targetAgentId = activeDialogueAgent.config.id;
       const targetAgentName = activeDialogueAgent.config.name;
+
+      // Integração direta com a API de RAG Grounding da TomPets (Task-047)
+      if (targetAgentId === 'agent-tom') {
+        const host = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname;
+        try {
+          const res = await fetch(`http://${host}:3001/marketplace/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              storeId: 'store-tompets',
+              userMessage: text,
+              focusedProductId,
+              customerName: currentUser?.displayName || 'Daniel',
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setIsThinking(false);
+            const agentMsg: DialogueMessage = {
+              id: `msg-a-${Date.now()}`,
+              sender: 'agent',
+              senderName: targetAgentName,
+              text: data.reply,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+            setDialogueMessages((prev) => [...prev, agentMsg]);
+            activeDialogueAgent.say(data.reply, 7, true);
+            return;
+          }
+        } catch {
+          // Fallback gracioso caso a API HTTP esteja oscilando
+        }
+      }
 
       if (socketRef.current?.connected) {
         socketRef.current.emit(
@@ -442,7 +725,7 @@ export const App: React.FC = () => {
           setIsThinking(false);
           activeDialogueAgent.learnInstruction(text);
           const latestDirective = activeDialogueAgent.learnedDirectives[activeDialogueAgent.learnedDirectives.length - 1];
-          const fallback = `Instrução ouvida e gravada, Daniel! Aprendi e cumprirei: "${text}". Jamais esquecerei!`;
+          const fallback = `Olá Daniel! Fico à sua total disposição aqui na TomPets para esclarecer qualquer dúvida sobre nosso catálogo!`;
           const agentMsg: DialogueMessage = {
             id: `msg-a-${Date.now()}`,
             sender: 'agent',
@@ -456,7 +739,7 @@ export const App: React.FC = () => {
         }, 500);
       }
     },
-    [activeDialogueAgent, player],
+    [activeDialogueAgent, player, currentUser],
   );
 
   return (
@@ -475,30 +758,52 @@ export const App: React.FC = () => {
       >
         <Suspense fallback={null}>
           <Physics gravity={[0, -9.81, 0]}>
-            <City city={city} trafficLightState={trafficLightState} timeOfDay={timeOfDay} />
-            <Vehicles
-              vehicles={vehicles}
-              trafficLights={city.trafficLights}
-              agents={agents}
-              playerPos={player.position}
-            />
-            <Player
-              player={player}
-              cameraAngleY={cameraAngleY}
-              colliders={city.colliders}
-              vehicles={vehicles}
-              agents={agents}
-              interactiveObjects={city.interactiveObjects}
-            />
-            <Agents
-              agents={agents}
-              vehicles={vehicles}
-              colliders={city.colliders}
-              playerPos={player.position}
-            />
+            {currentLocation === 'city' ? (
+              <>
+                <City city={city} trafficLightState={trafficLightState} timeOfDay={timeOfDay} />
+                <Vehicles
+                  vehicles={vehicles}
+                  trafficLights={city.trafficLights}
+                  agents={agents}
+                  playerPos={player.position}
+                />
+                <Player
+                  player={player}
+                  cameraAngleY={cameraAngleY}
+                  colliders={city.colliders}
+                  vehicles={vehicles}
+                  agents={agents}
+                  interactiveObjects={city.interactiveObjects}
+                  isFirstPerson={isFirstPerson}
+                />
+                <Agents
+                  agents={agents}
+                  vehicles={vehicles}
+                  colliders={city.colliders}
+                  playerPos={player.position}
+                />
+              </>
+            ) : (
+              <>
+                <TomPetsInterior
+                  interior={tompetsInterior}
+                  onSelectProduct={handleSelectProduct}
+                  onTalkToTom={handleTalkToTom}
+                  onExitStore={handleExitStore}
+                />
+                <Player
+                  player={player}
+                  cameraAngleY={cameraAngleY}
+                  colliders={tompetsInterior.colliders}
+                  interactiveObjects={[]}
+                  isFirstPerson={isFirstPerson}
+                />
+              </>
+            )}
             <CameraController
               playerPosition={player.position}
               isFirstPerson={isFirstPerson}
+              isInsideStore={currentLocation === 'store-tompets'}
               onAngleChange={handleCameraAngleChange}
               onToggleFirstPerson={handleToggleFirstPerson}
             />
@@ -506,7 +811,7 @@ export const App: React.FC = () => {
         </Suspense>
       </Canvas>
 
-      {/* HUD Overlay — Controles, Telemetria, Percepção e Notificação de Proximidade */}
+      {/* HUD Overlay — Controles, Telemetria, Busca por Box e Navegação */}
       <HUD
         agentCount={agents.length}
         onToggleTrafficLight={handleToggleTrafficLight}
@@ -517,9 +822,59 @@ export const App: React.FC = () => {
         snapshotData={snapshotData}
         nearbyAgent={isDialogueOpen ? null : nearbyAgent}
         onOpenDialogue={handleOpenDialogueForNearbyAgent}
+        onOpenAvatarCustomizer={() => setIsAvatarModalOpen(true)}
+        currentUser={currentUser}
+        isGuest={isGuest}
+        onOpenLogin={() => setIsLoginModalOpen(true)}
+        onNavigateToStore={handleNavigateToStore}
+        onTeleportToStore={handleTeleportToStore}
+        activeNavigationStore={activeNavigationStore}
+        onCancelNavigation={handleCancelNavigation}
+        isInsideStore={currentLocation === 'store-tompets'}
+        onEnterStore={handleEnterStore}
+        onExitStore={handleExitStore}
+        onTalkToTom={handleTalkToTom}
+        onToggleFirstPerson={handleToggleFirstPerson}
       />
 
-      {/* Modal Glassmorphism de Diálogo Bidirecional com Cidadãos Autônomos */}
+      {/* Tela de Login Inicial & Boas-Vindas (Entrada como Visitante ou Google OIDC - Task-049) */}
+      <WelcomeLoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        currentUser={currentUser}
+        onLoginSuccess={handleLoginSuccess}
+        onOpenCustomizer={() => setIsAvatarModalOpen(true)}
+      />
+
+      {/* Modal de Customização de Avatar e Login Google (Task-043) */}
+      <AvatarCustomizerModal
+        isOpen={isAvatarModalOpen}
+        onClose={() => setIsAvatarModalOpen(false)}
+        player={player}
+        token={authToken}
+        currentUser={currentUser}
+        onLoginSuccess={(data) => {
+          setAuthToken(data.token);
+          setCurrentUser({
+            displayName: data.profile.displayName,
+            email: data.profile.email,
+          });
+          setIsGuest(false);
+          localStorage.setItem('synapse_city_auth_token', data.token);
+          localStorage.setItem('synapse_city_user_profile', JSON.stringify(data.profile));
+        }}
+      />
+
+      {/* Modal de Detalhamento do Produto (Task-046) */}
+      <ProductDetailModal
+        product={selectedProduct}
+        isOpen={isProductModalOpen}
+        onClose={() => setIsProductModalOpen(false)}
+        onAskAgentTom={handleAskAgentTom}
+        onCheckout={handleCheckout}
+      />
+
+      {/* Modal Glassmorphism de Diálogo Bidirecional com Cidadãos Autônomos e Vendedor Tom */}
       <DialogueModal
         agent={activeDialogueAgent}
         isOpen={isDialogueOpen}

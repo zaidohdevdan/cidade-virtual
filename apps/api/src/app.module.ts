@@ -9,6 +9,7 @@ import { PersistenceModule } from './modules/persistence/persistence.module';
 import { GatewayModule } from './gateways/gateway.module';
 import { ActionsModule } from './modules/actions/actions.module';
 import { SimulationModule } from './modules/simulation/simulation.module';
+import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -25,6 +26,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     MemoryModule,
     ActionsModule,
     SimulationModule,
+    MarketplaceModule,
   ],
   providers: [
     {

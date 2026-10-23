@@ -1,4 +1,5 @@
-import { eq, desc, gte, inArray, and } from 'drizzle-orm';
+import { eq, desc, gte, inArray, notInArray, and } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { AppDatabase } from '../client';
 import { agentExperiencesTable, AgentExperienceRow, NewAgentExperienceRow } from '../schema';
 
@@ -49,6 +50,19 @@ export class ExperienceRepository {
     const deleted = await this.db
       .delete(agentExperiencesTable)
       .where(inArray(agentExperiencesTable.id, ids))
+      .returning({ id: agentExperiencesTable.id });
+    return deleted.length;
+  }
+
+  /** Remove experiências de agentes fora do roster vigente (limpeza de órfãos). */
+  async deleteByAgentIdsNotIn(keepAgentIds: string[]): Promise<number> {
+    const deleted = await this.db
+      .delete(agentExperiencesTable)
+      .where(
+        keepAgentIds.length > 0
+          ? notInArray(agentExperiencesTable.agentId, keepAgentIds)
+          : sql`true`,
+      )
       .returning({ id: agentExperiencesTable.id });
     return deleted.length;
   }

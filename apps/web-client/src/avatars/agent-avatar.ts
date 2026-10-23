@@ -1843,34 +1843,11 @@ export class AgentAvatar {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OS 3 CIDADÃOS ESTELARES ATIVOS NA CIDADE VIRTUAL
-// Reduzido para exatamente 3 NPCs principais:
-//   1. Vega (Alpha Lyrae) — Pioneira & Navegadora
-//   2. Sulafat (Gamma Lyrae) — Cientista & Ecologista
-//   3. Sheliak (Beta Lyrae) — Engenheiro & Atleta
+// CIDADÃO ESTELAR ATIVO NA CIDADE VIRTUAL (MVP)
+// Roster reduzido a 1 NPC: Sulafat (Gamma Lyrae) — Cientista & Ecologista.
+// Deve espelhar ALL_CITIZENS do backend (garantido por roster-sync.test.ts).
 // ─────────────────────────────────────────────────────────────────────────────
 export const CITY_AGENTS: AgentConfig[] = [
-  {
-    id: 'agent-vega',
-    name: 'Vega',
-    starDesignation: 'Alpha Lyrae (α Lyr)',
-    role: 'Pioneira & Navegadora',
-    color: 0x1e88e5, // Azul safira vibrante
-    accentColor: 0x80d8ff, // Azul celeste luminoso
-    hairColor: 0x1a237e, // Cabelo azul meia-noite
-    hairStyle: 'short',
-    skinColor: 0xf5d0b5,
-    pantsColor: 0x0d47a1,
-    shoeColor: 0x1565c0,
-    accessory: 'visor',
-    labelColor: 'linear-gradient(135deg, rgba(21, 101, 192, 0.9), rgba(0, 176, 255, 0.9))',
-    startPosition: new THREE.Vector3(-4, 0.19, -25),
-    patrolPoints: [
-      new THREE.Vector3(-4, 0.19, -38),
-      new THREE.Vector3(-4, 0.19, -18),
-      new THREE.Vector3(4, 0.19, -25),
-    ],
-  },
   {
     id: 'agent-sulafat',
     name: 'Sulafat',
@@ -1891,29 +1868,6 @@ export const CITY_AGENTS: AgentConfig[] = [
       new THREE.Vector3(-55.5, 0.19, 9.5),
       new THREE.Vector3(-75.5, 0.19, 0), // Banco Perimetral Oeste & Alameda Ecológica
       new THREE.Vector3(-55.5, 0.19, -9.5),
-    ],
-  },
-  {
-    id: 'agent-sheliak',
-    name: 'Sheliak',
-    starDesignation: 'Beta Lyrae (β Lyr)',
-    role: 'Engenheiro & Atleta',
-    color: 0xe65100, // Laranja solar / cobre
-    accentColor: 0xffb74d, // Âmbar radiante
-    hairColor: 0x5d4037, // Cobre escuro
-    hairStyle: 'spiky',
-    skinColor: 0xe0a97c,
-    pantsColor: 0x212121,
-    shoeColor: 0xbf360c,
-    accessory: 'headphones',
-    labelColor: 'linear-gradient(135deg, rgba(230, 81, 0, 0.9), rgba(255, 152, 0, 0.9))',
-    startPosition: new THREE.Vector3(20, 0.19, -14),
-    patrolPoints: [
-      new THREE.Vector3(14, 0.19, 14),
-      new THREE.Vector3(9.5, 0.19, 55.5),  // Conector Sul
-      new THREE.Vector3(0, 0.19, 75.5),    // Banco Perimetral Sul
-      new THREE.Vector3(72, 0.19, 72),     // Mirante Panorâmico Sudeste
-      new THREE.Vector3(55.5, 0.19, 9.5),  // Conector Leste
     ],
   },
 ];

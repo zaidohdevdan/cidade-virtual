@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect } from 'react';
+import { useFrame } from '@react-three/fiber';
 import { RigidBody, CuboidCollider, CylinderCollider } from '@react-three/rapier';
 import { CityScene, TrafficLightState } from '../scenes/city-scene';
 
@@ -16,6 +17,10 @@ export const City: React.FC<CityProps> = ({ city, trafficLightState, timeOfDay }
   useEffect(() => {
     city.setTimeOfDay(timeOfDay);
   }, [city, timeOfDay]);
+
+  useFrame((_, delta) => {
+    city.updateNavigation(delta);
+  });
 
   // Rapier Colliders criados a partir dos obstáculos da CityScene
   const colliders = useMemo(() => {

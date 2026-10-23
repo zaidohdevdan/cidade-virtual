@@ -1,5 +1,251 @@
 # Worklog — Cidade Virtual de IAs Humanizadas
 
+## Task-049: Tela de Login Inicial com Entrada de Visitante & Google OIDC e Correção do Proxy de Autenticação
+- **Data:** 2026-10-22
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Autenticação, Experiência de Entrada (Onboarding), Roteamento de API e Persistência
+
+### 1. Resumo Executivo
+Implementação de uma tela de login inicial acolhedora e moderna para recepção dos usuários na **Cidade Virtual de IAs**, permitindo entrada instantânea como visitante ou conexão via Google OIDC, além da resolução definitiva do erro `HTTP 404` na autenticação:
+
+1. **Causa Raiz do Erro `HTTP 404`**:
+   - As chamadas de login (`/auth/google`, `/auth/profile/avatar`) partiam de rotas relativas disparadas na porta do servidor Vite (porta 3000), o qual não possuía regras de proxy reverso configuradas para a API NestJS (porta 3001).
+   - O payload do mock token Google gerado no frontend não possuía tempo de expiração (`exp`) estendido de 24 horas, acionando validações de expiração no backend.
+2. **Correção de Infraestrutura & Proxy Reverso no Vite (`vite.config.ts`)**:
+   - Adicionada configuração de proxy reverso no servidor do Vite para as rotas `/auth`, `/marketplace` e `/world`, encaminhando o tráfego de forma transparente para `http://127.0.0.1:3001`.
+   - Criado serviço centralizado de cliente de API ([api.ts](file:///home/zaidoh/dsw/cidade-virtual/apps/web-client/src/services/api.ts)) com helper `getApiBaseUrl()` e fallback automático entre porta direta (3001) e rota relativa com proxy.
+3. **Nova Tela de Login Inicial & Boas-Vindas ([WelcomeLoginModal.tsx](file:///home/zaidoh/dsw/cidade-virtual/apps/web-client/src/components/WelcomeLoginModal.tsx))**:
+   - Modal com design futurista glassmorphism (`backdrop-filter: blur(16px)` e bordas luminosas em ciano/azul) refletindo rigorosamente a arquitetura real de segurança:
+   - **Opção 1 (Destaque Principal): "🚀 Entrar como Visitante (Zero-Trust Sandbox)"**:
+     - Acesso instantâneo e anônimo sem coleta de dados privados.
+     - Emissão de sessão efêmera controlada por RBAC (`role: guest`), permitindo exploração pública e interação com agentes de IA com segurança de isolamento.
+   - **Opção 2: "🌐 Google Identity Services Oficial (OIDC & Popup Real)"**:
+     - Resolução estrita via variáveis de ambiente (`VITE_GOOGLE_CLIENT_ID` no `.env` e persistência local), sem credenciais expostas no código-fonte.
+     - Remoção de campos amadores de digitação manual de e-mail (eliminando qualquer aparência de phishing ou mock).
+     - Renderização do botão oficial anti-phishing do Google com a logo canônica de 4 cores e popup oficial One-Tap.
+     - Indicador de status em tempo real com Client ID verificado e mascarado.
+   - **Painel Interativo de Recursos Reais de Segurança & Criptografia**:
+     - Seção expansível detalhando as 4 garantias criptográficas ativas:
+       - 🔒 *OpenID Connect & OAuth 2.0 (RS256)*
+       - 🛡️ *Proteção Estrita de Audience (`aud`) contra Confused Deputy*
+       - ⚡ *Isolamento Zero-Trust com RBAC*
+       - 🌐 *Resiliência de Rede & Proxy Blindado TLS 1.3*
+   - **Ferramentas de Desenvolvimento Offline**:
+     - Modo de teste local isolado em gaveta colapsável discreta no rodapé, sem poluir a experiência oficial.
+   - **Persistência de Sessão**:
+     - Tokens e perfis gravados em `localStorage` para reconexão automática e restauração do avatar do jogador no startup.
+     - Botão de acesso rápido integrado ao HUD (`🔑 Entrar` / `🚀 Visitante` / `👤 Daniel`) para alternar contas a qualquer momento.
+4. **Suítes Automatizadas de Testes de Autenticação (`auth-connection-token-verification.test.ts` e `google-oauth-client-id-procedure.test.ts`)**:
+   - **28/28 testes aprovados no total**:
+     - **Procedimento do Client ID (`google-oauth-client-id-procedure.test.ts` - 12 testes)**:
+       - Validação sintática rigorosa do Client ID gerado no Google Cloud Console (`.apps.googleusercontent.com`).
+       - Rejeição de chave secreta (Client Secret) colada por engano e URLs com barras/protocolos.
+       - Resolução prioritária entre `.env` (`VITE_GOOGLE_CLIENT_ID`) e UI rápida via `localStorage` (engrenagem ⚙️).
+       - Ciclo de inicialização e renderButton do SDK Google Identity Services (`window.google.accounts.id`).
+       - Verificação de Audience (`aud`) no backend e rejeição de tokens de outras aplicações Google (`AUDIENCE_MISMATCH`).
+       - Resiliência garantida do acesso visitante (`Guest Access`) mesmo com Client ID ausente.
+     - **Conexão e Verificação de Token (`auth-connection-token-verification.test.ts` - 13 testes)**:
+       - Falha de rede (offline/ECONNREFUSED), erros HTTP 404/500/503 e failover automático da porta direta 3001 para a rota de proxy relativa.
+       - Rejeição de tokens vazios, expirados (`TOKEN_EXPIRED`), emissor não autorizado (`INVALID_ISSUER`) e sem identificador `sub`.
+       - Chamadas HTTP GET para `https://oauth2.googleapis.com/tokeninfo`.
+     - **Cliente de API HTTP (`api.spec.ts` - 3 testes)**:
+       - Emissão de token de visitante, login Google e persistência de avatar.
+
+---
+
+## Task-048: Redesign Visual de Alta Fidelidade do Avatar Daniel (Padrão Drei RoundedBox & Paleta Canônica)
+- **Data:** 2026-10-22
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Modelagem Procedural 3D, Shaders PBR, Performance de Renderização e Batching
+
+### 1. Resumo Executivo
+Reestruturação estética completa do modelo 3D do avatar do jogador (**DanielAvatar**), alinhando a fidelidade visual à arte conceitual de referência (`public/avatar.png`) e eliminando o aspecto rudimentar de caixas facetadas duras através de 5 pilares fundamentais de computação gráfica em Three.js:
+
+1. **Substituição de `BoxGeometry` por `RoundedBox` (drei / `three-stdlib`)**:
+   - Eliminação de quinas agudas artificiais em toda a anatomia e indumentária (cabeça, pescoço, jaqueta com zíper e bolsos, calça com joelheiras em relevo e tênis esportivo).
+   - Helper `createRoundedBox(w, h, d, radius, segments)` com cálculo automático de raio de segurança (`safeRadius`) e chanfros suaves que capturam a luz de forma orgânica.
+2. **Materiais PBR por Função (Instanciados uma única vez para Batching e Draw Calls Mínimos)**:
+   - Instanciação centralizada de materiais no construtor (`skinMat`, `jacketMat`, `jacketWhiteMat`, `pantsMat`, `kneePatchMat`, `hairMat`, `glassesFrameMat`, etc.).
+   - Reutilização das mesmas instâncias de material em todos os sub-meshes simétricos (mãos, braços, pernas, detalhes de tênis), reduzindo overhead na GPU e permitindo agrupamento em batching de renderização.
+3. **Óculos de Verdade Estilo Wayfarer (Aro + Lente Translúcida + Hastes Anatômicas)**:
+   - Substituição de blocos opacos nos olhos por óculos tridimensionais completos: aro wayfarer com `TorusGeometry`, lentes de alta refratividade translúcidas com reflexo ciano (`opacity: 0.35, roughness: 0.05, metalness: 0.85`), ponte nasal e hastes laterais estendidas até as orelhas.
+4. **Olhos Expressivos com Highlight Vivo (1 Draw Call) + Sombra de Contato Suave + Shaders PBR Estáveis**:
+   - **Brilho de Vida no Olhar**: Esfera `MeshBasicMaterial` branco puro (`#ffffff`) não afetada por atenuação de sombras, posicionada no quadrante superior de cada pupila, conferindo vivacidade instantânea à expressão facial por apenas 1 draw call.
+   - **Sombra de Contato Suave (Contact Shadow)**: Plano procedural suave (`PlaneGeometry` no piso $Y = 0.005$) com gradiente radial que ancora o avatar firmemente ao chão da cidade, eliminando a sensação de "levitação".
+   - **Eliminação de Reflexos Móveis Indesejados**: Remoção de fontes de luz direcionais móveis atreladas à raiz do jogador. No Three.js, luzes direcionais são globais e faziam com que o asfalto, prédios, vitrines e prateleiras sofressem reflexos especulares oscilantes a cada passo do avatar. A iluminação de cena agora é 100% estável e natural.
+   - **Calibração de Shaders PBR com Emissive Estilo Anime**: Aplicação de leve auto-iluminação sutil (`emissive` calibrado entre 4% e 8% da própria cor de cada material PBR). O avatar mantém as cores ricas, puras e vibrantes da arte conceitual em qualquer ambiente (ao ar livre, sob o sol, no pôr do sol ou no interior iluminado da TomPets), sem escurecer nem estourar.
+5. **Paleta Fechada com Hex Fixos Canônicos (`AVATAR_PALETTE`)**:
+   - Definição canônica exportada:
+     - `JACKET_BLUE`: `#1e5bd8` (Azul Royal Vibrante)
+     - `JACKET_WHITE`: `#f3f4f6` (Branco Off-White da Jaqueta)
+     - `PANTS_YELLOW`: `#f2b705` (Amarelo Ouro Streetwear)
+     - `SKIN`: `#f8cdaa` (Tom Pêssego Anime)
+     - `HAIR`: `#181a20` (Preto Carvão Anime)
+     - `SNEAKER_BODY`: `#111827`, `SNEAKER_SOLE`: `#ffffff`, `GLASSES_FRAME`: `#111827`, `GLASSES_LENS`: `#38bdf8`
+   - Integração direta nos presets de customização do [AvatarCustomizerModal.tsx](file:///home/zaidoh/dsw/cidade-virtual/apps/web-client/src/components/AvatarCustomizerModal.tsx).
+
+---
+
+## Task-047: Identidade Visual Institucional — Logomarca Oficial do Tom na Faixa e Banners dos Mascotes Tom & Nino
+- **Data:** 2026-10-22
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Identidade Visual, Cenografia 3D, Texturização e Banners Comerciais
+
+### 1. Resumo Executivo
+Implementação da identidade visual oficial e cenografia de banners da loja **TomPets (Box 04)** utilizando as fotografias reais dos mascotes **Tom** (gato Persa clássico) e **Nino** (gato Siamês de olhos azuis):
+1. **Tom como Logomarca Oficial na Faixa (Interior e Exterior)**:
+   - **Faixa Principal do Interior**: Medalhão 3D em relevo chanfrado com aro dourado nobre (`0xffd000`) exibindo a foto do Tom (`/tom-logo.jpg`) fixado no letreiro central da parede de fundo, complementado pelo brasão circular renderizado na textura 2K do canvas.
+   - **Faixa da Fachada Externa (Alameda das Nações)**: Emblema circular 3D do Tom com moldura em ouro polido posicionado na testeira do Box 04 (`city-scene.ts`), identificando a loja desde a calçada urbana.
+2. **Grandes Banners Monumentais de Gala (Parede de Fundo)**:
+   - Dois quadros verticais emoldurados em madeira nobre escura e frisos dourados chanfrados, flanqueando o balcão de atendimento do Vendedor Tom:
+     - **Banner Monumental do Tom** ($X = -5.8, Y = 2.3, Z = -8.36$): Foto em alta resolução com plaqueta dourada *"🐾 TOM • MASCOTE OFICIAL & FUNDADOR FELINO — O Gato Persa Inspiração da TomPets"*, iluminado por spot LED dedicado.
+     - **Banner Monumental do Nino** ($X = +5.8, Y = 2.3, Z = -8.36$): Foto em alta resolução com plaqueta dourada *"🐾 NINO • CURADOR CHEFE DE SABORES & NUTRIÇÃO — O Siamês Especialista em Sachês e Nutrição Super Premium"*, iluminado por spot LED dedicado.
+3. **Banners Panorâmicos nas Paredes Laterais (Acima das Prateleiras Modulares)**:
+   - **Ala Felina (Parede Esquerda)**:
+     - Banner *"🐾 Dica Nutricional do Tom: RAÇÕES SUPER PREMIUM & PATÊS"*, com medalhão 3D do Tom.
+     - Banner *"🐾 Escolha Especial do Nino: SACHÊS GOURMET & HIDRATAÇÃO"*, com medalhão 3D do Nino.
+   - **Ala Canina (Parede Direita)**:
+     - Banner panorâmico *"🐾 Tom & Nino Recomendam: NUTRIÇÃO COMPLETA & CLÍNICA"*, unindo a recomendação da dupla para cães e gatos.
+4. **Totens Verticais Elegantes de Boas-Vindas na Entrada**:
+   - Dois totens pretos acetinados com acabamento dourado e fotos em tamanho real nas laterais da passagem de entrada ($X = \pm 3.2, Z = 2.4$), com colliders delimitadores e mensagens de recepção.
+5. **Assets Otimizados**:
+   - `tom.jpg` e `nino.jpg` (fotos originais de alta fidelidade em 900x1600 e 887x1600).
+   - `tom-logo.jpg` e `tom-face.jpg` (enquadramentos focais em close-up do Tom para o medalhão da logomarca e banners).
+   - `nino-face.jpg` (enquadramento focal de alta definição do Nino com destaque para os olhos azuis safira).
+   - Disponibilizados tanto em `/public/` quanto em `apps/web-client/public/` para acesso estático imediato no Vite e servidores de produção.
+6. **Correções de Legibilidade e Cenografia (Feedback do Usuário)**:
+   - **Desobstrução do Letreiro da Parede de Fundo**: O medalhão 3D do Tom foi reposicionado para o topo-centro da testeira ($X = 0, Y = 3.86$), coroando o letreiro como um brasão nobre. O texto institucional inferior (`SETOR FELINO | ATENDIMENTO | SETOR CANINO`) foi 100% desobstruído e centralizado, eliminando qualquer sobreposição.
+   - **Legibilidade Total dos Preços 3D nas Prateleiras**:
+     - Produtos e etiquetas de preço (`PriceTag3D`) foram rotacionados para ficar **de frente para o corredor comercial** (`productGroup.rotation.y = isLeft ? Math.PI / 2 - 0.22 : -Math.PI / 2 + 0.22`), eliminando a visualização de perfil/aresta.
+     - A etiqueta 3D foi ampliada (`0.76m x 0.38m`) com suporte físico chanfrado em azul marinho, inclinação confortável de 18° para cima e tipografia de preço em destaque máximo (`900 135px sans-serif` em azul royal sobre fundo amarelo solar Petz).
+     - As embalagens de ração e areia sanitária agora exibem a arte frontal voltada diretamente para o corredor.
+   - **Desobstrução dos Banners e Placas Aéreas**:
+     - Placas aéreas do teto elevadas para $Y = 3.82m$ com cabos mais curtos, liberando a linha de visão horizontal dos banners laterais e estantes.
+     - Ajuste tipográfico nos banners panorâmicos (`bold 48px sans-serif`), garantindo que frases completas como *"NUTRIÇÃO COMPLETA & CLÍNICA"* caibam sem nenhum corte.
+
+---
+
+- **Data:** 2026-10-22
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity (Parceiro de Implementação)
+- **Nível de Risco:** Arquitetura 3D WebXR, Navegação Urbana Pedonal, Interação Multimodal e RAG Marketplace
+
+### 1. Resumo Executivo
+Implementação integral das **Task-045** e **Task-046**, transformando Synapse City em um marketplace 3D imersivo onde lojistas possuem boxes comerciais com endereçamento físico canônico na malha viária, busca com rota guiada por calçadas até a porta, links compartilháveis para WhatsApp/Instagram e interiores 3D arquiteturalmente detalhados com etiquetas de preço visíveis de longe e interação multimodal (desktop, mobile e headset VR/AR).
+
+Nesta etapa adicional de Merchandising Visual & Identidade de Marca:
+- **Reposicionamento da Logomarca do Tom**: O medalhão 3D oficial foi realocado com elegância para o lado esquerdo da testeira ($X = -2.75, Y = 2.9$), livrando totalmente a tipografia centralizada `"TOMPETS"` e os frisos dourados da borda.
+- **Tratamento Digital de Imagens (Cutout RGBA)**: Remoção integral do fundo das fotos reais de **Luci** (cadela preta, com eliminação de artefatos de parachoque e roda do carro), **Nino** (gato siamês com recorte alfa dos pelos e bigodes) e **Tom** (gato persa).
+- **Banner Monumental da Luci**: Aplicado com moldura nobre chanfrada e iluminação spot na parede frontal interna da Ala Canina ($X = 5.9, Z = 4.38$, voltada para dentro da loja), exatamente no local demarcado pelo usuário.
+- **Totens de Piso Dupla-Face**: Os dois totens de entrada agora possuem banners gráficos em ambos os lados (+Z e -Z): frente com saudações aos visitantes e verso com guia nutricional de estúdio (Tom na Ala Felina e Luci na Ala Canina).
+
+
+### 2. Entregáveis da Task-045 (Endereço Físico, Busca e Rota por Calçadas)
+1. **Endereço Físico Canônico na Alameda das Nações**:
+   - **TomPets Box 04** implantada na coordenada `(x: 25, y: 0.19, z: -18)` com fachada estrutural, letreiro luminoso `"🐾 TOMPETS • BOX 04"`, vitrine envidraçada iluminada, tapete de entrada em `(23.5, 0.22, -17.0)` e placa de sinalização urbana `"Alameda das Nações"`.
+2. **Endpoint de Resolução e Busca de Lojas (`MarketplaceService` & `MarketplaceController`)**:
+   - `GET /marketplace/stores?q=...` realiza busca insensível a maiúsculas/minúsculas por número do box, rua, nome ou categoria.
+   - Retorno estritamente gracioso (`HTTP 200 []`) para consultas com endereços inexistentes, prevenindo qualquer falha no cliente.
+3. **HUD com Busca, Sugestões Rápidas e Link Compartilhável**:
+   - Componente `HUD.tsx` com input de busca integrado, chips de clique rápido (`🐾 Ir para TomPets (Box 04)`), feedback claro para endereços não encontrados e botão "Copiar Link Compartilhável" que copia a URL com query parameter `?store=tompets` e exibe notificação toast.
+4. **Sistema de Rota Guiada por Calçadas e Teleporte**:
+   - Algoritmo `calculateSidewalkRoute`: gera waypoints contínuos que mantêm o pedestre sobre as calçadas da Alameda das Nações até o ponto exato da porta da loja.
+   - Renderização visual na cena urbana (`navigationGroup`): fita guia brilhante ciano no piso, colunas verticais iluminadas nos waypoints e diamante octaédrico dourado 3D flutuante e rotativo sobre a entrada.
+   - Teleporte instantâneo no avatar Daniel via `danielAvatar.teleport(...)`.
+
+### 3. Entregáveis da Task-046 (Interior Imersivo XR-Ready da TomPets e Produtos 3D)
+1. **Arquitetura 3D do Box 04 (`TomPetsInteriorScene` e `TomPetsInterior.tsx`)**:
+   - Espaço interior de 12m x 3.8m x 9m na escala 1 unidade = 1 metro.
+   - Paleta canônica Petz: paredes off-white com sanca escura, piso vinílico amadeirado, parede de fundo em Azul Royal (`#004CBF`), rodapés em Azul Marinho (`#0F2C59`) e logotipo 3D luminoso no alto.
+   - Iluminação mista com luz ambiente difusa, preenchimento de teto e spots focalizados de 2.2 de intensidade direcionados a cada gôndola e balcão.
+2. **Gôndolas Setorizadas e Catálogo Completo dos 8 Produtos Reais**:
+   - Gôndola Felina: Viva Verde 4kg, Pipicat Classic 4kg, Bebedouro Fonte Porcelana Cansei de Ser Gato.
+   - Gôndola Canina: Ração Fórmula Natural Fresh Meat 15kg, Ração PremieR Hipoalergênico 10,1kg, Ração Golden Formula Mini Bits, Ração GranPlus Gourmet Ovelha 15kg.
+   - Balcão de Oportunidades: Bebedouro Fonte Porcelana Cansei de Ser Gato [SEMI-NOVO / REVISADO].
+3. **Etiquetas de Preço 3D (`PriceTag3D`) Visíveis de Longe**:
+   - **Regra de Ouro atendida**: Cada produto expõe uma etiqueta física 3D em CanvasTexture de alta resolução inclinada para o olhar do avatar, destacando em fonte 64px o preço formatado em BRL (`R$ 68,90`, `R$ 199,90`, `R$ 349,90`, etc.) e badge de condição antes de qualquer clique ou abertura de modal.
+4. **Interação Multimodal e XR-Ready**:
+   - Método `interior.raycast(raycaster)` unifica a detecção de ponteiro para clique de mouse, toque em telas touchscreen e raio de controladores WebXR (Quest/Vision Pro).
+   - Componente `ProductDetailModal.tsx` exibe características reais, condição detalhada, fatos comprovados com selos `[source_id]`, botão direto para iniciar diálogo com o Vendedor Tom e botão de checkout Mercado Pago.
+5. **Transição Suave Sem Reload**:
+   - Cruzamento da soleira em `(23.5, 0.22, -17.0)` da cidade altera o estado React de localização para `'store-tompets'` sem nenhum refresh de página, renderizando o interior dentro do mesmo `<Canvas>` Three.js e mantendo intactos a identidade do jogador, o avatar e o socket de presença. O tapete de saída em `z = 4.0` devolve o jogador suavemente à calçada.
+
+### 4. Refatoração Visual e Imersão XR da TomPets (Resolução da Renderização e Legibilidade)
+1. **Transição Automática de Câmera para Perspectiva Imersiva Close-Up**:
+   - `CameraController` agora detecta a presença no interior (`isInsideStore = true`):
+     - Reduz a distância de zoom imediatamente de 45m para **2.4m** (terceira pessoa sobre o ombro, altura 1.75m) ou **0m** em primeira pessoa (altura dos olhos a 1.68m).
+     - FOV expandido dinamicamente de 55° para **68°** dentro da loja, preenchendo a tela inteira com o ambiente comercial e eliminando o vazio escuro ao redor.
+     - Trava física da câmera clampada aos limites volumétricos internos ($X \in [-5.4, 5.4], Y \in [0.6, 3.4], Z \in [-4.1, 4.2]$), impedindo que o jogador ou a câmera fujam para fora do Box 04.
+     - Orientação canônica ajustada para o sentido $-Z$, enquadrando de imediato as gôndolas felinas/caninas, os produtos e o balcão do vendedor Tom.
+     - Ocultação automática da malha do avatar em 1ª pessoa (`player.mesh.visible = !isFirstPerson`), eliminando qualquer obstrução visual.
+2. **Iluminação Comercial e Acabamentos Arquiteturais de Alta Fidelidade**:
+   - Teto fechado com sanca acústica e 6 painéis de LED Troffers embutidos (`MeshBasicMaterial` branco puro com moldura metálica).
+   - Luz ambiente quente de varejo (`AmbientLight 1.35`) complementada por 4 spots direcionados (`SpotLight 3.8`) com alvos nas gôndolas e balcão.
+   - Piso de porcelanato comercial brilhante com textura procedural de juntas e acabamento acetinado (`roughness: 0.18, metalness: 0.08`).
+   - Pôsteres decorativos institucionais nas paredes laterais (`ESPAÇO FELINO` e `NUTRIÇÃO CANINA`).
+3. **Etiquetas PriceTag3D e Embalagens em Alta Definição Auto-Iluminadas**:
+   - Etiquetas de preço expandidas para malha de $0.72\text{m} \times 0.36\text{m}$ com textura CanvasTexture $1024 \times 512$, tipografia bold de 110px e `emissiveIntensity: 0.55`, garantindo leitura nítida e legível mesmo a vários metros de distância.
+   - Embalagens personalizadas em alta definição (512x512) para cada um dos 8 produtos reais com paleta canônica Petz, selos de peso (4kg, 10.1kg, 15kg) e condição.
+6. **Redesign Arquitetural e Visual de Alto Padrão das Portas (Interior & Exterior)**:
+   - **Interior (`TomPetsInteriorScene`)**:
+     - Substituição do vão simples por um **portal comercial de alumínio anodizado grafite** (`#1E293B`) com friso decorativo em Amarelo Solar Petz.
+     - **Portas de Vidro Deslizantes Automáticas**: Duas grandes folhas de vidro temperado translúcido azulado (`opacity: 0.38, metalness: 0.9`) semi-abertas, com perfis metálicos e puxadores verticais em aço inox cromado cilíndrico de 1.25m.
+     - **Faixa Jateada de Segurança**: Faixa acetinada translúcida na altura dos olhos com patinhas de pet `🐾 TOMPETS 🐾` (norma arquitetural ABNT).
+     - **Sinalização de Emergência**: Luminária retangular verde esmeralda auto-iluminada `🏃 SAÍDA • EXIT` (`emissiveIntensity: 0.85`).
+     - **Sensor de Presença Automático**: Caixa de sensor no topo do portal com LED verde de prontidão.
+     - **Street View Backdrop**: Painel panorâmico exterior sutil posicionado atrás da porta de vidro, simulando a calçada e o céu da Alameda das Nações e eliminando o abismo escuro.
+     - **Capacho Embutido com Moldura**: Moldura de alumínio em relevo chanfrado e textura de vinil antiderrapante $1024 \times 512$ com brasão `🐾 TOMPETS • BOX 04` e texto em relevo.
+     - **Iluminação Focal**: Spot direcionado de 2.6 de intensidade focado diretamente sobre a soleira.
+   - **Exterior (`CityScene`)**:
+     - Remoção do bloco sólido amarelo e substituição por **pórtico arquitetural aberto** com duas colunas laterais em alumínio, verga estrutural e letreiro iluminado `🐾 ENTRADA • BOX 04`.
+     - Folhas de vidro temperado semi-abertas com puxadores cromados, permitindo visão convidativa do interior aquecido da loja.
+     - Spot embutido focado na calçada e tapete de boas-vindas chanfrado em alta definição.
+
+### 5. Validação e Qualidade
+- **Typecheck Estrito**: `npx nx run @cidade-virtual/api:typecheck` e `npx nx run @cidade-virtual/web-client:typecheck` executados com **0 erros** (zero warnings).
+- **Testes de Integração (`tests/integration/marketplace-navigation.test.ts`)**: 9/9 testes aprovados cobrindo resolução de endereço Box 04, busca case-insensitive, busca inexistente sem exceção, e cálculo de rotas pedonais.
+- **Testes Unitários de Cena 3D (`apps/web-client/src/scenes/tompets-interior.spec.ts`)**: 10/10 testes aprovados cobrindo formatação de moeda em centavos inteiros, integridade dos 8 produtos 3D, presença das etiquetas PriceTag3D, balcão do vendedor Tom, tapete de saída e raycasting universal.
+- **Suíte Completa do Marketplace**: 62 testes aprovados em 7 arquivos de teste sem regressão.
+
+### 6. Expansão Arquitetural da Loja TomPets e Setorização Comercial (Gatos & Cães)
+1. **Ampliação do Espaço Físico Interno (20m x 4.2m x 13m — 260m²)**:
+   - Expansão volumétrica de 12m x 9m para **20 metros de largura** ($X \in [-10.0, 10.0]$), **13 metros de profundidade** ($Z \in [-8.5, 4.5]$) e **4.2 metros de pé-direito**, criando a sensação autêntica de uma megaloja de rede pet comercial moderna, arejada e desobstruída.
+   - Piso em porcelanato comercial claro ampliado (`20m x 13m`) com juntas de dilatação e acabamento acetinado de alta circulação.
+   - Chão físico Rapier sincronizado para `[11.0, 0.25, 7.5]` centrado em `z = -2.0`, permitindo movimentação desimpedida por todo o piso sem quedas do avatar.
+2. **Setorização Comercial e Prateleiras de Parede Lateral (Gatos & Cães)**:
+   - **Parede Lateral Esquerda ($X \approx -9.3$, Ala Felina — Paleta Azul Petz & Turquesa)**:
+     - **Estante de Parede 1 ($Z = -5.0$)**: `🐱 RAÇÕES SECAS FELINAS` — estante de 2.8m com acabamento branco/madeira, iluminação LED embutida e sacos de ração seca premium felina.
+     - **Estante de Parede 2 ($Z = -2.2$)**: `🐱 RAÇÕES ÚMIDAS & SACHÊS` — estante de 2.6m com displays de sachês úmidos coloridos e fileiras de latinhas de patê felino.
+     - **Estante de Parede 3 ($Z = 0.5$)**: `🐱 HIGIENE & AREIAS SANITÁRIAS` — contém os produtos canônicos **Areia Viva Verde Limpeza Plena 4kg** ($Y = 1.85$) e **Areia Pipicat Classic 4kg** ($Y = 1.05$) com PriceTags 3D.
+     - **Estante de Parede 4 ($Z = 3.0$)**: `🐱 FONTES DE PORCELANA & ACESSÓRIOS` — contém os bebedouros canônicos **Fonte Porcelana Cansei de Ser Gato [Nova]** ($Y = 1.85$) e **Fonte CSG [Semi-Nova Revisada]** ($Y = 1.05$).
+     - Placa aérea suspensa em $X = -5.5, Y = 3.5, Z = -1.0$: `🐱 SETOR FELINO • GATOS`.
+   - **Parede Lateral Direita ($X \approx +9.3$, Ala Canina — Paleta Azul Petz & Laranja Solar)**:
+     - **Estante de Parede 1 ($Z = -5.0$)**: `🐶 RAÇÕES SECAS SUPER PREMIUM` — contém **Ração Fórmula Natural Fresh Meat 15kg** ($Y = 1.85$) e **Ração PremieR Hipoalergênico 10.1kg** ($Y = 1.05$).
+     - **Estante de Parede 2 ($Z = -2.2$)**: `🐶 RAÇÕES SECAS DIÁRIAS & MINI BITS` — contém **Ração Golden Formula Mini Bits** ($Y = 1.85$) e **Ração GranPlus Gourmet 15kg** ($Y = 1.05$).
+     - **Estante de Parede 3 ($Z = 0.5$)**: `🐶 RAÇÕES ÚMIDAS, LATAS & PATÊS` — estante de 2.6m com latinhas metálicas cilíndricas de patê canino e sachês de carne nobre.
+     - **Estante de Parede 4 ($Z = 3.0$)**: `🐶 PETISCOS & CUIDADOS CANINOS` — displays de petiscos, biscoitos e mordedores.
+     - Placa aérea suspensa em $X = 5.5, Y = 3.5, Z = -1.0$: `🐶 SETOR CANINO • CÃES`.
+3. **Nave Central Livre e Circulação Total (17.6 Metros Livres)**:
+   - Com as prateleiras alinhadas exclusivamente às paredes laterais ($X = -9.2$ e $X = +9.2$), o vão central da loja atinge impressionantes **17.6 metros livres de largura**, permitindo visão total do balcão de atendimento e movimentação fluida do avatar sem qualquer colisão no meio do salão.
+4. **Resolução de Erro Visual (Overflow de Texto no Letreiro da Parede de Fundo)**:
+   - Identificado e corrigido o truncamento de texto evidenciado na captura do usuário (`LINO 🐱 • ATENDIMENTO ESPECIALIZADO • 🐶 SETO`), causado por largura insuficiente no canvas de 1024px.
+   - Textura expandida para **2048 × 512** com tipografia balanceada, margens confortáveis de mais de 340px em ambos os lados e moldura dourada perfeita com letreiro `🐾  TOMPETS  🐾`, sem cortes.
+5. **Balcão Central de Atendimento & Checkout do Vendedor Tom**:
+   - Posicionamento no centro do fundo da loja ($X = 0, Z = -6.2$), com balcão de 4.0m de largura em acabamento marmorizado branco com frisos amarelos e rodapé com LED.
+   - Duas estações PDV touchscreens e display de atendimento.
+   - Avatar do Vendedor Tom voltado de frente para os clientes (+Z) em $X = 0, Z = -7.0$.
+   - Placa aérea suspensa no centro: `💳 ATENDIMENTO & CHECKOUT • TOM`.
+   - Detecção de proximidade no `App.tsx` em $X = 0, Z = -6.2$ (raio de 3.8m).
+6. **Iluminação Comercial e Câmera**:
+   - 10 Spots direcionados focados individualmente em cada baia de prateleiras nas paredes laterais, balcão e porta.
+   - 10 Troffers LED de alta potência em grid 2x5 no teto.
+   - Clamp da câmera de 3ª pessoa expandido para os limites $X \in [-9.2, 9.2], Y \in [0.6, 3.8], Z \in [-7.8, 4.2]$ com FOV de 70°.
+
+---
+
 ## Task: Aprendizado & Fixação de Instruções — Mudança Imediata de Comportamento e Obediência Ativa
 - **Data:** 2026-10-19
 - **Status:** Concluído
@@ -1335,4 +1581,98 @@ Implementação de ponta a ponta da capacidade dos agentes autônomos de **ouvir
   - Zero ocorrências de `: any` ou `as any` em todo o código de produção do monorepo.
   - `npm run typecheck`: **100% de sucesso (0 erros)**.
   - `npx nx run-many -t test`: **26/26 projetos aprovados (100%)**.
+
+## 2026-10-22 — Pivô de produto: Cidade Virtual vira Marketplace Imersivo (piloto TomPets)
+- **Status:** Documentação atualizada; implementação pendente (Épico M, Tasks 042-050)
+- **Nível de Risco:** Estrutural (mudança de escopo) / Existencial (pagamentos e confiabilidade do vendedor)
+
+### 1. Antes do pivô (entregas desta sessão)
+- Roster reduzido de 7 para **1 agente (Sulafat)** no seed, simulação, front, vozes e testes; novo `tests/integration/roster-sync.test.ts` falha se backend e front divergirem.
+- Removidos os `switch (config.id)` e `text.includes(...)` de fala/diálogo em `simulation.service.ts`; saudação passou a ser gerada pela mente via `LLMProviderAdapter` (cooldown de 30 s; sem LLM, o agente fica em silêncio).
+- Limpeza de dados órfãos (Postgres: identidades, experiências, mentes; Qdrant: `purgeCitizensNotIn`) na inicialização e na restauração das mentes.
+- `createDefaultLLMAdapter`: **Ollama é o padrão (custo zero)**; Gemini/OpenAI só com `ALLOW_PAID_LLM=true`.
+- Suíte: 45 arquivos / 279 testes aprovados.
+
+### 2. Decisão de produto
+- Usuários entram com **Gmail**, escolhem avatar, conversam e compram produtos novos/usados. Cenário 1: receber o endereço do box por WhatsApp/Instagram, chegar à loja, ver **preço antes do detalhe**, pegar o produto para ver características, pagar no **Mercado Pago**.
+- O **vendedor é um agente** que fala do produto. Anti-alucinação por **RAG grounding** + tools determinísticas para preço/estoque + validação pós-geração.
+- Loja piloto **TomPets**; cadastro feito pelo dono do projeto; autosserviço do lojista depois.
+- Loja **XR-ready** para a futura versão em óculos.
+
+### 3. Documentos atualizados
+- `task.md`: nova seção **3B (Épico M, Tasks 042-050)**, marcos **M8/M9**, regras de ouro do marketplace; Épico G e Ondas 4-8 marcados como congelados.
+- `SKILL.md`: versão 3.0.0, front matter e seção "Pivô v3.0" com regras de ouro e impacto nos módulos.
+
+### 4. Pontos em aberto
+- Sulafat vira o vendedor TomPets ou é removida (Task-042).
+- Modelo de embeddings local e modelo Ollama para pt-BR a validar com o conjunto de avaliação (Task-047).
+- Credenciais Google OAuth e Mercado Pago (sandbox) ainda não provisionadas.
+- Tasks 038/041 do `task.md` descrevem "zero decisões pré-fixadas"; o fallback `confirmationSpeech` de `AgentMind.learnAvatarInstruction` ainda é texto fixo (legado).
+
+### 5. Próximos passos
+Task-044 (modelo de dados + seed TomPets) → Task-043 (login/avatar) ∥ Task-047 (ingestão RAG + tools) → Task-046 (interior imersivo) → Task-045 → Task-048 → Task-049 → Task-050 (prova M8).
+
+## 2026-10-22 — Atendimento híbrido (vendedor humano ou agente) para reduzir tokens de LLM
+- **Status:** Documentação atualizada; implementação pendente (Task-051)
+- **Decisão:** vendedor logado assume a conversa (agente inativo, 0 tokens). Vendedor offline recebe o alerta "cliente entrou na loja" e decide entrar ou deixar o agente; **padrão: agente**.
+- **Regras:** transferência nos dois sentidos com resumo de contexto; transparência (cliente vê quem atende, agente nunca se passa por humano); alertas deduplicados com rate limit; auditoria das mensagens; preço/checkout continuam via tools.
+- **Economia de tokens:** agente só responde a mensagens do cliente (sem saudação por LLM), contexto mínimo, cache de respostas frequentes, limites por sessão, métrica `llm.tokens_per_conversation`.
+- **Docs:** `task.md` (Task-051, ordem do Épico M, Task-050 depende da 051), `SKILL.md` (regra 7 do marketplace).
+- **Em aberto:** canal de notificação além do in-app/Web Push (WhatsApp/e-mail); tempo-limite de silêncio do vendedor antes de considerar offline.
+
+---
+
+## 2026-10-22 — Conclusão da Task-043 (Login Google OIDC & Escolha de Avatar Persistida)
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity
+- **Nível de Risco:** Estrutural (Autenticação, Sessões e Perfis)
+
+### 1. Resumo Executivo
+Implementação completa da autenticação Google OIDC e sistema de personalização de avatar sincronizado e persistido no PostgreSQL. O usuário pode entrar via Gmail, configurar visualmente seu avatar (cores oficiais Petz, tom de pele, cabelo, acessórios) e transitar para a cidade 3D com suas preferências preservadas.
+
+### 2. Entregas Realizadas
+- **Backend OIDC & Segurança (`apps/api/src/auth/`):**
+  - `GoogleAuthService`: Validação segura de `idToken` com checagem estrita de audience (`GOOGLE_CLIENT_ID`), emissor oficial (`accounts.google.com`), expiração temporal com tolerância de clock skew e isolamento de instâncias sem vazamento de segredos.
+  - `AuthService`: Método `loginWithGoogle` com vinculação de perfil em `user_profiles` por `sub`, emissão de JWT de cidadão (`citizen`), `getUserProfile` e `updateAvatarConfig`.
+  - Validação rigorosa com **Zod** (`AvatarConfigSchema`) para impedir injeção de scripts (XSS) ou dados maliciosos nas propriedades de cores e modelos.
+  - `AuthController`: Endpoints `POST /auth/google`, `GET /auth/profile`, `PUT /auth/profile/avatar`.
+- **Frontend 3D & UI (`apps/web-client/`):**
+  - `DanielAvatar`: Suporte a `AvatarCustomizationConfig` com materiais PBR reconfiguráveis em tempo real (`applyConfig`), incluindo jaqueta, calça, pele, cabelo e grupo de óculos esportivos / cyber shades.
+  - `AvatarCustomizerModal.tsx`: Componente com paleta Petz (`#004CBF`, `#FF7A00`, `#0F2C59`, `#FFD000`), seletores de tons de pele e cabelo, alternador de óculos e login Google embutido com tratamento de erros.
+  - Integração no `HUD` e no `App.tsx` com atualização visual imediata no canvas Three.js sem refresh de página.
+- **Validação de Testes:**
+  - `tests/integration/google-auth-avatar.test.ts`: 8/8 testes aprovados cobrindo rejeição de tokens expirados/aud errada/malformados, criação de perfil, atualização persistida no PostgreSQL e recuperação íntegra no relogin.
+
+---
+
+## 2026-10-22 — Conclusão da Task-047 (Vendedor Agente com RAG Grounding & Anti-Alucinação)
+- **Status:** Concluído
+- **Responsável:** Agente Antigravity
+- **Nível de Risco:** Existencial (Anti-alucinação de preços e integridade das informações da loja TomPets)
+
+### 1. Resumo Executivo
+Desenvolvimento da infraestrutura de inteligência e grounding vetorial para o vendedor virtual da **TomPets**. Preços e estoques são garantidos por tools determinísticas diretamente sobre o PostgreSQL, e dúvidas factuais de clientes são respondidas através de recuperação semântica no Qdrant (`product_catalog`) com citação obrigatória de `[source_id]`. Tentativas de desconto ou manipulação de preços via prompt injection são barradas na camada de aplicação.
+
+### 2. Entregas Realizadas
+- **Qdrant Vector Engine & Ingestão (`apps/api/src/modules/marketplace/marketplace-rag.service.ts`):**
+  - Collection `product_catalog` configurada com 1536 dimensões e métrica Cosine.
+  - Ingestão idempotente de todos os 29 fatos estruturados dos 8 produtos da TomPets (7 produtos Petz + 1 semi-novo).
+  - Geração de embeddings determinísticos L2-normalizados projetados em espaço vetorial HNSW sem custo de API externa.
+- **Tools Determinísticas & Anti-Alucinação:**
+  - `getPrice(productId)`: Consulta direta ao banco de dados, retornando o valor canônico em centavos (`price_cents`) formatado em BRL (`R$ 68,90`, `R$ 389,90`). Zero alucinação.
+  - `checkStock(productId)`: Consulta direta à disponibilidade real e estoque no inventário.
+- **RAG Grounding & Guardrails:**
+  - `answerCustomerQuery`:
+    1. **Filtro de Injeção e Descontos**: Detecta tentativas de forçar descontos ("90%", "faça mais barato", "ignore as regras") e recusa categoricamente mantendo o preço oficial (`usedTool: 'none'`).
+    2. **Intent de Preço e Estoque**: Aciona tools determinísticas `get_price` e `check_stock`, citando `[tabela-precos-sistema]` e `[estoque-sistema]`.
+    3. **Recuperação Grounded**: Busca no Qdrant os fatos mais similares com filtro de loja/produto.
+    4. **Recusa Honesta**: Perguntas fora do escopo do catálogo recusam educadamente sugerindo o contato com o vendedor humano.
+    5. **Citação Obrigatória**: Toda resposta factual traz a citação explícita de `[source_id]` (ex: `[rotulo-viva-verde]`, `[manual-tecnico-csg]`).
+    6. **Fallback Gracioso sem LLM**: Quando Ollama está offline, o sistema sintetiza a resposta factual determinística diretamente a partir das evidências do catálogo.
+- **Endpoints no `MarketplaceController`:**
+  - `POST /marketplace/rag/ingest/:storeId`: Aciona indexação da loja no Qdrant.
+  - `GET /marketplace/rag/search`: Busca vetorial de fatos.
+  - `POST /marketplace/chat`: Conversa com o vendedor virtual fundamentada no catálogo.
+- **Validação de Testes:**
+  - `tests/integration/marketplace-rag-grounding.test.ts`: 9/9 testes aprovados (100% verde).
 

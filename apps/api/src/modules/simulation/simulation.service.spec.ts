@@ -65,7 +65,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     };
 
     mockAgentRepo = {
-      updateLocation: vi.fn().mockResolvedValue({ id: 'agent-vega' }),
+      updateLocation: vi.fn().mockResolvedValue({ id: 'agent-sulafat' }),
     };
 
     mockExpRepo = {
@@ -96,22 +96,18 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     vi.useRealTimers();
   });
 
-  it('deve inicializar todos os 7 agentes canônicos de Lira no runtime', async () => {
+  it('deve inicializar o único agente canônico (Sulafat) no runtime', async () => {
     await service.onModuleInit();
 
     const states = service.getAgentStates();
-    expect(states.size).toBe(7);
-    expect(states.has('agent-vega')).toBe(true);
+    expect(states.size).toBe(1);
     expect(states.has('agent-sulafat')).toBe(true);
-    expect(states.has('agent-sheliak')).toBe(true);
-    expect(states.has('agent-epsilon')).toBe(true);
-    expect(states.has('agent-chason')).toBe(true);
-    expect(states.has('agent-aladfar')).toBe(true);
-    expect(states.has('agent-xihe')).toBe(true);
   });
 
   it('deve avançar o tick e emitir agent.moved e agent.speech durante o passo de simulação quando jogador estiver próximo', async () => {
     mockWorldGateway.getClosestPlayer?.mockReturnValue({ distance: 2.1 });
+    // Fala gerada pela mente via LLM (sem texto pré-fixado no serviço)
+    mockCognitionService.generateConversationalDialogue?.mockResolvedValue('Olá Daniel, vim observar a praça.');
     await service.onModuleInit();
 
     await service.executeSimulationStep();
@@ -146,6 +142,15 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     );
   });
 
+  it('sem LLM disponível o agente permanece em silêncio (sem fala enlatada)', async () => {
+    mockWorldGateway.getClosestPlayer?.mockReturnValue({ distance: 2.1 });
+    mockCognitionService.generateConversationalDialogue?.mockResolvedValue(null);
+    await service.onModuleInit();
+    await service.executeSimulationStep();
+    const speech = mockWorldGateway.broadcastDomainEvent.mock.calls.filter((c: any[]) => c[0]?.name === 'agent.speech');
+    expect(speech).toHaveLength(0);
+  });
+
   it('não deve emitir agent.speech quando o avatar Daniel estiver distante (> 3.5m)', async () => {
     mockWorldGateway.getClosestPlayer?.mockReturnValue({ distance: 12.0 });
     await service.onModuleInit();
@@ -175,7 +180,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
   it('deve restaurar o estado hedônico e necessidades a partir do banco de dados no onModuleInit', async () => {
     mockAgentMindRepo.listAll.mockResolvedValue([
       {
-        agentId: 'agent-vega',
+        agentId: 'agent-sulafat',
         needs: { energy: 0.35, hunger: 0.8, social: 0.9, curiosity: 0.2, fun: 0.4 },
         memory: {
           lastVisitedAt: { 'cafe-bistro': 123456 },
@@ -190,7 +195,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
 
     await service.onModuleInit();
 
-    const vegaState = service.getAgentStates().get('agent-vega');
+    const vegaState = service.getAgentStates().get('agent-sulafat');
     expect(vegaState).toBeDefined();
     expect(vegaState?.mind.needs.energy).toBe(0.35);
     expect(vegaState?.mind.needs.hunger).toBe(0.8);
@@ -203,15 +208,15 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
   it('deve redefinir a mente do agente para os padrões de nascimento com resetMind', async () => {
     await service.onModuleInit();
 
-    const vegaState = service.getAgentStates().get('agent-vega');
+    const vegaState = service.getAgentStates().get('agent-sulafat');
     if (vegaState) {
       vegaState.mind.memory.placePreferences = { 'market-central': 0.99 };
     }
 
-    await service.resetMind('agent-vega');
+    await service.resetMind('agent-sulafat');
 
-    expect(mockAgentMindRepo.deleteByAgentId).toHaveBeenCalledWith('agent-vega');
-    const resetVega = service.getAgentStates().get('agent-vega');
+    expect(mockAgentMindRepo.deleteByAgentId).toHaveBeenCalledWith('agent-sulafat');
+    const resetVega = service.getAgentStates().get('agent-sulafat');
     expect(resetVega?.mind.memory.placePreferences?.['market-central']).toBeUndefined();
   });
 
@@ -219,7 +224,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     it('deve assimilar "vc deve evitar o café", recalcular rota para local seguro e emitir evento agent.target', async () => {
       await service.onModuleInit();
 
-      const result = await service.handlePlayerDialogue('agent-vega', 'Você deve evitar o café', 'avatar-daniel');
+      const result = await service.handlePlayerDialogue('agent-sulafat', 'Você deve evitar o café', 'avatar-daniel');
 
       expect(result.directive).toBeDefined();
       expect(result.directive?.directiveType).toBe('avoid_place');
@@ -234,7 +239,7 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
         expect.objectContaining({
           name: 'agent.target',
           payload: expect.objectContaining({
-            agentId: 'agent-vega',
+            agentId: 'agent-sulafat',
             action: 'reroute',
             targetPosition: expect.objectContaining({ x: -22, z: 18 }),
           }),
@@ -245,14 +250,14 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     it('deve assimilar "use a faixa de pedestre" e direcionar imediatamente para a faixa', async () => {
       await service.onModuleInit();
 
-      const result = await service.handlePlayerDialogue('agent-vega', 'Por favor use a faixa de pedestre', 'avatar-daniel');
+      const result = await service.handlePlayerDialogue('agent-sulafat', 'Por favor use a faixa de pedestre', 'avatar-daniel');
 
       expect(result.directive?.directiveType).toBe('use_crosswalk');
       expect(mockWorldGateway.broadcastDomainEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'agent.target',
           payload: expect.objectContaining({
-            agentId: 'agent-vega',
+            agentId: 'agent-sulafat',
             action: 'crosswalk',
           }),
         }),
@@ -262,14 +267,14 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     it('deve assimilar "vá para o mercado" e direcionar rota para o mercado central', async () => {
       await service.onModuleInit();
 
-      const result = await service.handlePlayerDialogue('agent-vega', 'Vá para o mercado agora', 'avatar-daniel');
+      const result = await service.handlePlayerDialogue('agent-sulafat', 'Vá para o mercado agora', 'avatar-daniel');
 
       expect(result.directive?.directiveType).toBe('go_to_place');
       expect(mockWorldGateway.broadcastDomainEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'agent.target',
           payload: expect.objectContaining({
-            agentId: 'agent-vega',
+            agentId: 'agent-sulafat',
             action: 'goto',
             targetPosition: expect.objectContaining({ z: -36 }),
           }),
@@ -280,16 +285,16 @@ describe('AutonomousSimulationService — Vida Urbana Autônoma', () => {
     it('deve assimilar "pare aí" e cancelar o destino ativo', async () => {
       await service.onModuleInit();
 
-      const result = await service.handlePlayerDialogue('agent-vega', 'Pare imediatamente', 'avatar-daniel');
+      const result = await service.handlePlayerDialogue('agent-sulafat', 'Pare imediatamente', 'avatar-daniel');
 
       expect(result.directive?.directiveType).toBe('wait_stop');
-      const agentState = service.getAgentStates().get('agent-vega');
+      const agentState = service.getAgentStates().get('agent-sulafat');
       expect(agentState?.targetDestination).toBeNull();
       expect(mockWorldGateway.broadcastDomainEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'agent.target',
           payload: expect.objectContaining({
-            agentId: 'agent-vega',
+            agentId: 'agent-sulafat',
             action: 'stop',
             targetPosition: null,
           }),
